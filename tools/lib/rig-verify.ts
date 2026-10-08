@@ -5,14 +5,10 @@
  */
 import {SOCKET_IDS} from '@csg/parts-schema';
 import {
-  compose,
-  decompose,
-  distance,
-  invert,
-  maxAbsDiff,
-  multiply,
   quatAngle,
-} from './mat4.js';
+  restWorldMatrices as rigWorldMatrices,
+} from '@csg/engine/rig';
+import {decompose, invert} from './mat4.js';
 import type {Quat, Vec3} from './mat4.js';
 
 /** Default tolerances (REQ-AST-004). */
@@ -304,9 +300,17 @@ function trsDeltas(
   b: {translation: Vec3; rotation: Quat; scale: Vec3},
 ) {
   return {
-    pos: distance(a.translation, b.translation),
+    pos: Math.hypot(
+      a.translation[0] - b.translation[0],
+      a.translation[1] - b.translation[1],
+      a.translation[2] - b.translation[2],
+    ),
     rot: quatAngle(a.rotation, b.rotation),
-    scale: maxAbsDiff(a.scale, b.scale),
+    scale: Math.max(
+      Math.abs(a.scale[0] - b.scale[0]),
+      Math.abs(a.scale[1] - b.scale[1]),
+      Math.abs(a.scale[2] - b.scale[2]),
+    ),
   };
 }
 
@@ -857,26 +861,38 @@ export function annotateSkeletonGroups(
   }
 }
 
-/** Forward-kinematics world matrices of the rest pose, by joint name. */
+/**
+ * Forward-kinematics world matrices of the rest pose, by joint name: the
+ * engine rig FK (`@csg/engine/rig`) under the glTF armature node. Joints may
+ * come in any order; a parent that is missing or cyclic is treated as a root.
+ */
 export function restWorldMatrices(
   joints: readonly JointRest[],
   armatureWorld: readonly number[],
 ): Map<string, number[]> {
   const byName = new Map(joints.map(j => [j.name, j]));
-  const out = new Map<string, number[]>();
-  const visit = (j: JointRest, depth: number): number[] => {
-    const done = out.get(j.name);
-    if (done) return done;
-    const local = compose(j.translation, j.rotation, j.scale);
-    const p =
-      j.parent !== null && depth < joints.length
-        ? byName.get(j.parent)
-        : undefined;
-    const w = multiply(p ? visit(p, depth + 1) : armatureWorld, local);
-    out.set(j.name, w);
-    return w;
+  // Parent-before-child order for the engine FK (glTF does not guarantee it).
+  const ordered: JointRest[] = [];
+  const state = new Map<string, 1 | 2>();
+  const visit = (j: JointRest): void => {
+    if (state.has(j.name)) return;
+    state.set(j.name, 1);
+    const p = j.parent !== null ? byName.get(j.parent) : undefined;
+    if (p && state.get(p.name) !== 1) visit(p);
+    state.set(j.name, 2);
+    ordered.push(p && state.get(p.name) === 2 ? j : {...j, parent: null});
   };
-  for (const j of joints) visit(j, 0);
+  for (const j of joints) visit(j);
+  const world = rigWorldMatrices(
+    {id: 'rig-verify', joints: ordered},
+    undefined,
+    armatureWorld,
+  );
+  const out = new Map<string, number[]>();
+  for (const j of joints) {
+    const m = world.get(j.name);
+    if (m) out.set(j.name, Array.from(m));
+  }
   return out;
 }
 

@@ -4,7 +4,7 @@ title: Animation (clip library, playback, frame sampling)
 status: draft
 owner: spec-writer
 depends_on: [constitution, 000-overview, 001-character-composer, 002-anatomy, 003-pixel-render-pipeline, 005-export, 008-custom-model-upload, 011-asset-pipeline]
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 ---
 
 # 004 – Animation
@@ -15,7 +15,7 @@ last_updated: 2026-10-08
 
 ## Context
 
-Sprites need animations: idle, walk, run, attack, hurt, death and more. The bundled source is the CC0 Quaternius **Universal Animation Library** (UAL). It has 120+ clips in the full set and 45 in the free Standard tier, covering 8-direction locomotion, jog, sprint, combat, deaths and emotes. It ships with root motion and without root motion. UAL v2.0 switched to a bone naming scheme that matches Quaternius' outfits and base characters. The research brief claims one shared 65-joint skeleton across all packs; this is **unverified until the M1 spike** (spec 011). Items marked *(M1-gated)* depend on it.
+Sprites need animations: idle, walk, run, attack, hurt, death and more. The bundled source is the CC0 Quaternius **Universal Animation Library** (UAL). It has 120+ clips in the full set and 45 in the free Standard tier, covering 8-direction locomotion, jog, sprint, combat, deaths and emotes. It ships with root motion and without root motion. UAL v2.0 switched to a bone naming scheme that matches Quaternius' outfits and base characters. The research brief claims one shared 65-joint skeleton across all packs; this is **unverified until the M1 spike** (spec 011). Items marked *(M1-gated)* depend on it. *(Amended 2026-10-09 (M1-33): the spike answered `mapped`: one shared rig, UAL clips in their own skeleton group, rest-pose retargeted at runtime (REQ-ANM-023, ADR-0008).)*
 
 This spec covers the clip library (data), choosing clips for export, deterministic frame sampling, per-direction behavior, root motion and preview playback. Uploaded and retargeted clips come from spec 008 through the hook in REQ-ANM-016. The camera, texel snapping and union-bounds framing belong to spec 003. Sheet layout and metadata files belong to spec 005.
 
@@ -176,6 +176,11 @@ This spec covers the clip library (data), choosing clips for export, determinist
 - **AC-ANM-023.3** Given a character whose rest pose equals the clip's source rest pose, When any frame is sampled, Then the retargeted local transforms equal the raw sampled ones (± 1e-6).
 - **AC-ANM-023.4** Given the `retarget/` module, When its imports are statically checked and its tests run in Node, Then it imports no `three` module and no DOM global, and the tests pass.
 
+*(Clarified 2026-10-09 (M1-33), matching the M1 implementation; no change to the formulas above.)* (0) *Amended 2026-10-09 (M1-33):* the clip's source rest pose (`q_sRest`, `t_sRest`, `L_s`) is the `restPose` of the `RigDefinition.skeletonGroups` entry named by the clip's `ClipEntry.skeletonGroup`, not the joint transforms read from the clip GLB. By REQ-AST-026 the two agree within the REQ-AST-004 tolerances (1e-4 m, 1e-3 rad), so retargeting needs no rest-pose parsing at load time; this is why `skeletonGroup` is required. Exception: a clip recorded with `defaultSkeletonGroup` because it matched no group (`AST_CLIP_GROUP_DEFAULTED`) is retargeted from that group's rest pose, which may differ from its file by more than the tolerance; the build warning makes this visible. (1) Scale tracks pass through unchanged, as written; anatomy (spec 002 REQ-ANA-009) multiplies them afterwards. (2) The formulas are applied per keyframe and the retargeted clip keeps the source key times, but its tracks are rebuilt with linear interpolation (spherical linear for rotations): keys authored with glTF `STEP` interpolation become interpolated between their key times. Bundled UAL clips use `LINEAR`, so they are unaffected; a `STEP` clip from another skeleton group may show in-between poses where it held a key. Sample times (REQ-ANM-007) and absolute seeking (REQ-ANM-008) are unaffected. A clip with `CUBICSPLINE` tracks cannot be retargeted and fails with `ANM_CLIP_LOAD_FAILED`, `reason: 'parse'`. (3) WHERE the clip's `skeletonGroup` equals the character skeleton group, or the retarget plan is the identity (every rest correction and `k` within 1e-7 of identity), the source clip is used unchanged, keeping its own interpolation (AC-ANM-023.3).
+
+- **AC-ANM-023.5** Given a fixture clip with a scale track on `hand_l` and a character in a different skeleton group, When frame 3 is sampled before anatomy, Then `hand_l`'s local scale equals the raw sampled scale (± 1e-6). *(Added 2026-10-09 (M1-33).)*
+- **AC-ANM-023.6** Given a fixture clip whose `lowerarm_l` rotation track uses `STEP` interpolation with keys at 0.0 s and 1.0 s, and a character in a different skeleton group, When `t = 0.5 s` is sampled, Then the retargeted rotation is the spherical-linear interpolation of the two retargeted keys at 0.5 (each component ± 1e-6, sign-normalized), not the 0.0 s key. *(Added 2026-10-09 (M1-33): documents the accepted linear-resampling behaviour.)*
+
 ## Edge cases
 
 - `frameCount = 1` → single pose at `s` (REQ-ANM-007).
@@ -190,6 +195,8 @@ This spec covers the clip library (data), choosing clips for export, determinist
 - Clip file missing, corrupt or without the named animation → `ANM_CLIP_LOAD_FAILED`, previous clip kept (REQ-ANM-022).
 - Clip rest pose differs from the character skeleton (different skeleton group) → rest-pose-corrected retargeting (REQ-ANM-023).
 - Bundled clips are already in place (M1 D5) → stripping is a no-op on them and is exercised by the fixture clip (AC-ANM-013.3).
+- `STEP`-interpolated clip from another skeleton group → retargeted with linear interpolation between its keys (REQ-ANM-023 clarification, AC-ANM-023.6). *(Added 2026-10-09 (M1-33).)*
+- Clip whose rest pose matched no skeleton group at build time → recorded with `defaultSkeletonGroup` and retargeted from that group's rest pose, with build warning `AST_CLIP_GROUP_DEFAULTED` (spec 011). All 43 bundled UAL clips match a declared group. *(Added 2026-10-09 (M1-33).)*
 
 ## Data & contracts
 
@@ -215,8 +222,13 @@ export interface ClipEntry {
   license?: AssetLicense;        // overrides pack license
   /** Added 2026-10-08 (M1 R6). Lowercase hex SHA-256 of `file`, written by build-parts (spec 011 REQ-AST-013); cache key with the URL. */
   sha256: string;
-  /** Added 2026-10-08 (M1). Computed skeleton group of the clip file (spec 011 REQ-AST-026); informational, retargeting reads the rest pose from the file. */
-  skeletonGroup?: string;
+  /** Added 2026-10-08 (M1). Computed skeleton group of the clip file (spec 011 REQ-AST-026).
+   *  Amended 2026-10-09 (M1-33): REQUIRED (was optional). `@csg/parts-schema` rejects a clip entry
+   *  without it, and the registry/retargeter use it to pick the clip's source rest pose and to
+   *  short-circuit identity plans (REQ-ANM-023). A clip whose rest pose matches no declared group
+   *  is recorded with `RigDefinition.defaultSkeletonGroup` and the build warns
+   *  `AST_CLIP_GROUP_DEFAULTED` (spec 011). */
+  skeletonGroup: string;
 }
 
 export interface ClipManifest {
@@ -289,14 +301,15 @@ Per-frame metadata handed to spec 005: `{ label, direction, frame, sourceFrame, 
 
 ## Open questions
 
-- [NEEDS CLARIFICATION: Do all UAL clips use the same skeleton and bind pose as the base characters and outfits? *(M1-gated)* Blocks REQ-ANM-002 data and the `rig` field values.]
-- [NEEDS CLARIFICATION: Bundle only the free Standard tier (45 clips) or the full CC0 library (120+)? Shared with spec 011.]
+- ~~[NEEDS CLARIFICATION: Do all UAL clips use the same skeleton and bind pose as the base characters and outfits? *(M1-gated)* Blocks REQ-ANM-002 data and the `rig` field values.]~~ Resolved 2026-10-09 (M1-33): same skeleton (rig `quaternius-ue5-65`, so REQ-ANM-002 lists them for every bundled body), different bind pose (skeleton group `ual`), retargeted at runtime (REQ-ANM-023). See spec 011 REQ-AST-007 and ADR-0008.
+- ~~[NEEDS CLARIFICATION: Bundle only the free Standard tier (45 clips) or the full CC0 library (120+)? Shared with spec 011.]~~ Resolved 2026-10-09 (M1-33), PM default after the 2026-10-08 user discussion: only the free Standard tier is bundled; the built `quaternius-ual` pack has 43 in-place clips, the number of animations in the Standard source file (the vendor page states 45). Paid tiers can be added locally as data (spec 011 REQ-AST-022).
 - ~~[NEEDS CLARIFICATION: Should UAL's separate "root motion disabled" export be the in-place source (REQ-ANM-014), or should we strip translation from one root-motion set to halve download size? Proposal: strip at build time in spec 011, keep `inPlaceVariant` for user packs.]~~ Resolved 2026-10-08 (M1 D5): M1 bundles only the in-place UAL file (`UAL1_Standard.glb`); the root-motion `_RM` file and bundled `inPlaceVariant` links are deferred with REQ-ANM-015 (P2). Runtime X/Z stripping (REQ-ANM-013) stays required and is tested on the fixture clip (AC-ANM-013.3); REQ-ANM-014 stays for packs that provide variants.
-- The first open question (shared skeleton) is partly answered 2026-10-08: UAL clips share bone names and hierarchy with the base characters and outfits but form their own bind-pose group; they are retargeted at runtime (REQ-ANM-023).
+- The first open question (shared skeleton) is partly answered 2026-10-08: UAL clips share bone names and hierarchy with the base characters and outfits but form their own bind-pose group; they are retargeted at runtime (REQ-ANM-023). Fully resolved 2026-10-09 (M1-33), see above.
 
 ## References
 
-- ADR-0001, ADR-0003; `docs/architecture.md` §2.1 (frame sampler), §3.4, §3.6, §4.1
+- ADR-0001, ADR-0003, ADR-0008 (M1 rig outcome, `docs/adr/0008-shared-rig-skeleton-groups-runtime-retarget.md`); `docs/architecture.md` §2.1 (frame sampler), §3.4, §3.6, §4.1
+- M1 implementation read for the 2026-10-09 (M1-33) clarifications: `packages/engine/src/animation/retarget-clip.ts` (identity short-circuit, linear rebuild of tracks), `packages/engine/src/registry/asset-registry.ts` (source rest pose from the clip's skeleton group), `packages/parts-schema/src/clip-manifest.ts` (`skeletonGroup` required)
 - `.tagconn/work/research.md` (2026-10-08)
 - Quaternius Universal Animation Library: https://quaternius.itch.io/universal-animation-library (accessed 2026-10-08): 120+ clips (45 in the Standard tier), CC0, root motion and root-motion-disabled variants, v2.0 bone naming matches the outfits and base characters
 - three.js `AnimationMixer.setTime` / `AnimationAction.time` (r186): https://threejs.org/docs/#api/en/animation/AnimationMixer (accessed 2026-10-08)

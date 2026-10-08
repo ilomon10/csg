@@ -270,20 +270,59 @@ describe('AC-AST-011.1 normalize', () => {
 
 describe('AC-AST-012 regions', () => {
   const item = {kind: 'part' as const, id: 'body', config: {slot: 'body'}};
-  it('AC-AST-012.1 / 025.1 writes u8 _REGION, hand_l vertices carry hands', () => {
+  function regionsOf(doc: Document) {
+    const prim = doc.getRoot().listMeshes()[0]!.listPrimitives()[0]!;
+    const acc = prim.getAttribute('_REGION')!;
+    const idx = prim.getIndices()!;
+    const tris: number[][] = [];
+    for (let t = 0; t < idx.getCount() / 3; t++) {
+      tris.push([0, 1, 2].map(k => acc.getScalar(idx.getScalar(t * 3 + k))));
+    }
+    return {prim, acc, idx, tris};
+  }
+  it('AC-AST-012.1 / 025.1 writes u8 _REGION, constant per triangle', () => {
     const doc = makeBody();
     expect(writeRegions(doc, item, rig()).written).toBe(true);
-    const acc = doc
-      .getRoot()
-      .listMeshes()[0]!
-      .listPrimitives()[0]!
-      .getAttribute('_REGION')!;
+    const {acc, tris} = regionsOf(doc);
     expect(acc.getComponentType()).toBe(5121);
     expect(acc.getType()).toBe('SCALAR');
     expect(acc.getNormalized()).toBe(false);
-    expect(acc.getCount()).toBe(BONES.length);
-    expect(acc.getScalar(4)).toBe(BODY_REGIONS.indexOf('hands'));
-    expect(acc.getScalar(3)).toBe(BODY_REGIONS.indexOf('head'));
+    expect(acc.getCount()).toBeGreaterThanOrEqual(BONES.length);
+    for (const t of tris) expect(new Set(t).size).toBe(1);
+  });
+  it('AC-AST-012.1 a triangle spanning regions 0 and 2 gets one region; only boundary vertices are duplicated', () => {
+    const doc = makeBody();
+    const prim = doc.getRoot().listMeshes()[0]!.listPrimitives()[0]!;
+    // Triangles (0,1,2) pelvis-ish and (2,3,4) head/torso/hands share vertex 2.
+    const before = prim.getAttribute('POSITION')!.getCount();
+    writeRegions(doc, item, rig());
+    const after = regionsOf(doc);
+    const count = after.acc.getCount();
+    expect(count).toBeGreaterThan(before);
+    expect(count).toBeLessThanOrEqual(before + 3);
+    for (const t of after.tris) expect(new Set(t).size).toBe(1);
+    // Duplicated vertices carry identical skinning/position attributes.
+    const pos = after.prim.getAttribute('POSITION')!;
+    const j = after.prim.getAttribute('JOINTS_0')!;
+    const w = after.prim.getAttribute('WEIGHTS_0')!;
+    expect(j.getCount()).toBe(count);
+    expect(w.getCount()).toBe(count);
+    const seenKey = new Map<string, string>();
+    for (let v = 0; v < count; v++) {
+      const key = pos.getElement(v, [0, 0, 0]).join(',');
+      const skin =
+        j.getElement(v, [0, 0, 0, 0]).join(',') +
+        '|' +
+        w.getElement(v, [0, 0, 0, 0]).join(',');
+      if (seenKey.has(key)) expect(seenKey.get(key)).toBe(skin);
+      seenKey.set(key, skin);
+    }
+    // Deterministic.
+    const again = makeBody();
+    writeRegions(again, item, rig());
+    expect(Array.from(regionsOf(again).acc.getArray()!)).toEqual(
+      Array.from(after.acc.getArray()!),
+    );
   });
   it('AC-AST-012.2 unmapped joint fails naming the joint', () => {
     expect(() => writeRegions(makeBody(), item, rig('hand_l'))).toThrow(

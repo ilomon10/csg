@@ -8,7 +8,10 @@
 import type {Camera, Scene} from 'three';
 import type {WebGPURenderer} from 'three/webgpu';
 import type {CharacterSpec, ClipRef, SlotRegistry} from '@csg/parts-schema';
-import {createCharacterAssembly} from '../composition/character-assembly';
+import {
+  ENGINE_DISPOSED,
+  createCharacterAssembly,
+} from '../composition/character-assembly';
 import type {
   AssemblyRegistry,
   CharacterAssembly,
@@ -48,7 +51,10 @@ export interface CharacterRendererOptions<
   readonly slots?: SlotRegistry;
   /** Renderer factory (tests); default `new WebGPURenderer(parameters)`. */
   readonly factory?: RendererFactory<R>;
-  /** Called with the error when `play()` cannot load or retarget its clip. */
+  /**
+   * Called with the error when `play()` / `playClip()` cannot load or retarget
+   * its clip. Never called after `dispose()`.
+   */
   readonly onError?: (error: EngineError) => void;
 }
 
@@ -72,11 +78,25 @@ export interface EngineCharacterRenderer<
    * `previewTimingFor` to step through the export frames.
    */
   setPreviewTiming(timing: PreviewTiming | null): void;
-  /** Like `play`, with an explicit root-motion mode (default `in-place`). */
+  /**
+   * Like `play`, with an explicit root-motion mode (default `in-place`): loads
+   * (and retargets) the clip, then starts the loop at clip time 0. A failure
+   * keeps the previous clip and pose (REQ-ANM-022). After `dispose()` the
+   * result is `ENGINE_DISPOSED`.
+   */
   playClip(
     clipId: ClipRef,
     rootMotion?: RootMotionMode,
   ): Promise<Result<void, EngineError>>;
+  /**
+   * Restarts the preview loop after `pause()` without reloading or
+   * re-retargeting the clip: playback continues from the paused time, or from
+   * the last `seek()` time (REQ-ANM-018).
+   *
+   * @returns `false` when there is nothing to resume (no clip played yet, or
+   *   disposed); `true` when the loop runs.
+   */
+  resume(): boolean;
   /** Resizes the drawing buffer (CSS pixels / `previewScale`). */
   resize(width: number, height: number): void;
   /** Poses and draws once at the current time. */
@@ -171,11 +191,31 @@ export async function createCharacterRenderer<
     draw();
   };
 
+  /** Whether a clip was bound by `playClip` (what `resume()` continues). */
+  let hasClip = false;
+
+  const startLoop = (): void => {
+    playing = true;
+    startMs = null;
+    renderer.setAnimationLoop(tick);
+  };
+
   const playClip = async (
     clipId: ClipRef,
     rootMotion: RootMotionMode = 'in-place',
   ): Promise<Result<void, EngineError>> => {
     const result = await assembly.setClip(clipId, rootMotion);
+    if (disposed) {
+      return result.ok
+        ? {
+            ok: false,
+            error: {
+              code: ENGINE_DISPOSED,
+              message: 'playClip: the renderer is disposed',
+            },
+          }
+        : result;
+    }
     if (!result.ok) {
       options.onError?.(result.error);
       return result;
@@ -185,11 +225,9 @@ export async function createCharacterRenderer<
       entry === undefined
         ? null
         : {durationSec: entry.durationSec, loop: entry.loop};
-    if (disposed) return result;
-    playing = true;
-    startMs = null;
+    hasClip = true;
     elapsedSec = 0;
-    renderer.setAnimationLoop(tick);
+    startLoop();
     return result;
   };
 
@@ -216,6 +254,12 @@ export async function createCharacterRenderer<
     },
 
     playClip,
+
+    resume(): boolean {
+      if (disposed || !hasClip) return false;
+      if (!playing) startLoop();
+      return true;
+    },
 
     pause(): void {
       playing = false;

@@ -31,7 +31,7 @@ function put(dir: string, rel: string, data: string | Uint8Array): void {
 }
 
 describe('AC-AST-024.1/.2/.3 tree hash', () => {
-  it('matches the spec formula and is order independent', async () => {
+  it('AC-AST-024.1: matches the spec formula and is order independent', async () => {
     const a = join(tmp, 'a');
     const b = join(tmp, 'b');
     put(a, 'a.txt', 'a');
@@ -42,7 +42,7 @@ describe('AC-AST-024.1/.2/.3 tree hash', () => {
     expect(await hashSourceTree(a)).toBe(expected);
     expect(await hashSourceTree(b)).toBe(expected);
   });
-  it('changes on edit/rename, not on empty dir', async () => {
+  it('AC-AST-024.2: changes on edit/rename, not on empty dir', async () => {
     const a = join(tmp, 'a');
     put(a, 'a.txt', 'a');
     put(a, 'sub/b.txt', 'b');
@@ -56,7 +56,7 @@ describe('AC-AST-024.1/.2/.3 tree hash', () => {
     rmSync(join(a, 'sub/b.txt'));
     expect(await hashSourceTree(a)).not.toBe(base);
   });
-  it('refuses symbolic links', async () => {
+  it('AC-AST-024.3: refuses symbolic links without reading the target', async () => {
     const a = join(tmp, 'a');
     put(a, 'a.txt', 'a');
     symlinkSync('/etc/hostname', join(a, 'link'));
@@ -337,6 +337,22 @@ describe('config and CLI', () => {
     expect(() =>
       parseAssetSources('{"packs":[{"packId":"x","dir":"a/b"}]}'),
     ).toThrow(/dir/);
+  });
+  it('a null element in the packs array is AST_CONFIG_INVALID with exit code 2', () => {
+    try {
+      parseAssetSources('{"packs":[null]}');
+      expect.unreachable();
+    } catch (e) {
+      expect(e).toBeInstanceOf(BuildError);
+      expect((e as BuildError).code).toBe('AST_CONFIG_INVALID');
+      expect((e as BuildError).exitCode).toBe(2);
+    }
+  });
+  it('config JSON with forbidden keys is AST_CONFIG_INVALID', () => {
+    expect(() =>
+      loadPackFromText('{"__proto__":{"x":1}}', 'x.json', []),
+    ).toThrow(/AST_CONFIG_INVALID/);
+    expect(() => parseAssetSources('[1]')).toThrow(/AST_CONFIG_INVALID/);
   });
   it('invalid config lists issues as AST_CONFIG_INVALID', () => {
     expect(() => loadPackFromText('{"format":"nope"}', 'x.json', [])).toThrow(

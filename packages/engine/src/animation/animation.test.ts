@@ -1,5 +1,14 @@
 import {readFileSync} from 'node:fs';
-import {Bone, Group, Quaternion, Skeleton} from 'three';
+import {
+  AnimationClip,
+  Bone,
+  Group,
+  InterpolateDiscrete,
+  Quaternion,
+  QuaternionKeyframeTrack,
+  Skeleton,
+  VectorKeyframeTrack,
+} from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {describe, expect, it} from 'vitest';
 import {
@@ -12,6 +21,7 @@ import {
 import type {BodySkeleton} from '../contracts/composition';
 import type {LoadedClip} from '../contracts/registry';
 import type {RestPose} from '../retarget';
+import {INTERPOLANT_BYTES_PER_CALL, heapGrowthPerCall} from './test-heap';
 import {
   RETARGET_CACHE_SIZE,
   computeSampleTimes,
@@ -273,6 +283,127 @@ describe('animation: retarget adapter (REQ-ANM-023)', () => {
   });
 });
 
+describe('animation: retarget adapter tracks (REQ-ANM-023, REQ-ANA-021)', () => {
+  /** The fixture clip with extra tracks appended, as a clip of group `fixture-b`. */
+  async function withTracks(
+    ...extra: Array<VectorKeyframeTrack | QuaternionKeyframeTrack>
+  ): Promise<LoadedClip> {
+    const clip = await loadFixtureClip();
+    return {
+      ...clip,
+      clip: new AnimationClip(clip.clip.name, clip.clip.duration, [
+        ...clip.clip.tracks.filter(t => !extra.some(e => e.name === t.name)),
+        ...extra,
+      ]),
+    };
+  }
+
+  it('AC-ANA-021.8: the retarget hip is socketBones.pelvis (pelvis, then spine_01)', async () => {
+    const clip = await withTracks(
+      new VectorKeyframeTrack(
+        'pelvis.position',
+        [0, 1],
+        [0, 0.92, 0, 0, 0.92, 0.2],
+      ),
+      new VectorKeyframeTrack(
+        'spine_01.position',
+        [0, 1],
+        [0, 0.1, 0, 0, 0.1, 0.2],
+      ),
+    );
+    const zEnd = (c: AnimationClip, name: string): number | undefined => {
+      const t = c.tracks.find(x => x.name === name);
+      return t === undefined
+        ? undefined
+        : (t.values[t.values.length - 1] as number);
+    };
+    const body = makeBody('fixture-a');
+    const viaPelvis = retargetClip(clip, body);
+    if (!viaPelvis.ok) throw new Error(viaPelvis.error.message);
+    // L_t / L_s with the hip at pelvis: 0.87 / 1.075.
+    expect(zEnd(viaPelvis.value.clip, 'pelvis.position')).toBeCloseTo(
+      0.2 * K,
+      6,
+    );
+    expect(zEnd(viaPelvis.value.clip, 'spine_01.position')).toBeUndefined();
+
+    const spineBody: BodySkeleton = {
+      ...body,
+      rig: {...rig, socketBones: {...rig.socketBones, pelvis: 'spine_01'}},
+    };
+    const viaSpine = retargetClip(clip, spineBody);
+    if (!viaSpine.ok) throw new Error(viaSpine.error.message);
+    // Hip at spine_01: 0.97 / 1.175; the pelvis translation is no longer the hip's.
+    expect(zEnd(viaSpine.value.clip, 'spine_01.position')).toBeCloseTo(
+      (0.2 * 0.97) / 1.175,
+      6,
+    );
+    expect(zEnd(viaSpine.value.clip, 'pelvis.position')).toBeUndefined();
+  });
+
+  it('AC-ANM-023.5: a scale track passes through retarget and the clip player unchanged', async () => {
+    const scale = new VectorKeyframeTrack(
+      'hand_l.scale',
+      [0, 0.5, 1],
+      [1, 1, 1, 1.5, 2, 0.5, 1, 1, 1],
+    );
+    const clip = await withTracks(scale);
+    const body = makeBody('fixture-a');
+    const player = createClipPlayer(body);
+    player.setClip(clip, 'metadata');
+    const t = FRAMES[3] as number;
+    player.seek(t);
+    // t = 0.375 is 3/4 of the way from the key at 0 to the key at 0.5.
+    const raw = [1 + 0.75 * 0.5, 1 + 0.75 * 1, 1 + 0.75 * -0.5];
+    const hand = body.bones.get('hand_l') as Bone;
+    expect(hand.scale.toArray()).toEqual(
+      expect.arrayContaining([
+        expect.closeTo(raw[0] as number, 6),
+        expect.closeTo(raw[1] as number, 6),
+        expect.closeTo(raw[2] as number, 6),
+      ]),
+    );
+    expect(hand.scale.x).toBeCloseTo(raw[0] as number, 6);
+    expect(hand.scale.y).toBeCloseTo(raw[1] as number, 6);
+    expect(hand.scale.z).toBeCloseTo(raw[2] as number, 6);
+  });
+
+  it('AC-ANM-023.6: STEP rotation keys become spherical-linear interpolated after retarget', async () => {
+    const q0 = new Quaternion();
+    const q1 = new Quaternion().setFromAxisAngle(
+      {x: 1, y: 0, z: 0} as never,
+      1,
+    );
+    const step = new QuaternionKeyframeTrack(
+      'lowerarm_l.quaternion',
+      [0, 1],
+      [...q0.toArray(), ...q1.toArray()],
+      InterpolateDiscrete,
+    );
+    const clip = await withTracks(step);
+    const body = makeBody('fixture-a');
+    const retargeted = retargetClip(clip, body);
+    if (!retargeted.ok) throw new Error(retargeted.error.message);
+    const track = retargeted.value.clip.tracks.find(
+      x => x.name === 'lowerarm_l.quaternion',
+    ) as QuaternionKeyframeTrack;
+    const a = new Quaternion().fromArray(track.values, 0);
+    const b = new Quaternion().fromArray(track.values, 4);
+    expect(angle(a, b)).toBeGreaterThan(0.5);
+    const expected = a.clone().slerp(b, 0.5);
+    const player = createClipPlayer(body);
+    player.setClip(clip, 'metadata');
+    player.seek(0.5);
+    const got = (body.bones.get('lowerarm_l') as Bone).quaternion;
+    const sign = got.dot(expected) < 0 ? -1 : 1;
+    for (const k of ['x', 'y', 'z', 'w'] as const) {
+      expect(got[k] * sign).toBeCloseTo(expected[k], 6);
+    }
+    // Not the held 0.0 s key.
+    expect(angle(got, a)).toBeGreaterThan(0.1);
+  });
+});
+
 describe('animation: clip player (REQ-ANM-008, 013, 014)', () => {
   it('AC-ANM-008.1: frame 3 is bit-identical sampled forward or backward', async () => {
     const clip = await loadFixtureClip();
@@ -368,11 +499,14 @@ describe('animation: clip player (REQ-ANM-008, 013, 014)', () => {
     );
   });
 
-  it('REQ-ANM-022: a clip that cannot be retargeted keeps the previous clip', async () => {
+  it('REQ-ANM-022: a clip that cannot be retargeted returns the error and keeps the previous clip', async () => {
     const clip = await loadFixtureClip();
     const body = makeBody('fixture-a');
     const player = createClipPlayer(body);
-    player.setClip(clip, 'metadata');
+    expect(player.setClip(clip, 'metadata')).toEqual({
+      ok: true,
+      value: undefined,
+    });
     player.seek(0.5);
     const before = (body.bones.get('pelvis') as Bone).position.toArray();
     const broken: LoadedClip = {
@@ -383,7 +517,10 @@ describe('animation: clip player (REQ-ANM-008, 013, 014)', () => {
         joints: clip.source.joints.filter(j => j.name !== 'pelvis'),
       },
     };
-    player.setClip(broken, 'metadata');
+    const result = player.setClip(broken, 'metadata');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('AST_RIG_MISMATCH');
+    // The log is diagnostics only; the Result above is the contract.
     expect(player.log.at(-1)).toBe('retarget:error:AST_RIG_MISMATCH');
     player.seek(0.5);
     expect((body.bones.get('pelvis') as Bone).position.toArray()).toEqual(
@@ -412,14 +549,12 @@ describe('animation: clip player (REQ-ANM-008, 013, 014)', () => {
     const clip = await loadFixtureClip();
     const player = createClipPlayer(makeBody('fixture-a'));
     player.setClip(clip, 'in-place');
-    const gc = (globalThis as {gc?: () => void}).gc;
-    for (let i = 0; i < 1000; i++) player.seek((i % 100) / 100);
-    gc?.();
-    const heap = () =>
-      (process as unknown as {memoryUsage(): {heapUsed: number}}).memoryUsage()
-        .heapUsed;
-    const before = heap();
-    for (let i = 0; i < 200_000; i++) player.seek((i % 100) / 100);
-    expect(heap() - before).toBeLessThan(8 * 1024 * 1024);
+    const {bytesPerCall, limit} = heapGrowthPerCall(
+      i => player.seek((i % 100) / 100),
+      200_000,
+      5_000,
+      INTERPOLANT_BYTES_PER_CALL,
+    );
+    expect(bytesPerCall).toBeLessThan(limit);
   });
 });

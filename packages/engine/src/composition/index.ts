@@ -51,6 +51,7 @@ export {
 export type {EquippedPartHides, HideState} from './region-mask';
 export {
   CHARACTER_ROOT_NAME,
+  ENGINE_DISPOSED,
   createCharacterAssembly,
 } from './character-assembly';
 export type {

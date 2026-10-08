@@ -4,7 +4,7 @@ title: Anatomy (proportions)
 status: draft
 owner: spec-writer
 depends_on: [constitution, 000-overview, 001-character-composer, 004-animation, 011-asset-pipeline]
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 ---
 
 # 002 – Anatomy
@@ -17,7 +17,7 @@ last_updated: 2026-10-08
 
 Realistic 3D proportions read badly at 32–64 px. Heads become 4 px blobs, forearms vanish and faces disappear (ADR-0001 "Bad" consequence). Anatomy controls let users push proportions toward readable stylizations (chibi, heroic) and vary characters. Proportions are applied as **bone scales with child compensation** on the shared skeleton, plus morph targets where the body provides them. All parts skinned to the skeleton and all socketed props follow automatically.
 
-**Dependency:** bone names, bone axes and `anatomyBones` mapping come from the `RigDefinition` produced and verified by the M1 asset spike (spec 011). Items marked *(M1-gated)* assume the shared Quaternius rig exists and that bone length runs along a single local axis. *(Amended 2026-10-08 (M1-01c): the committed rig `packages/parts-schema/rigs/quaternius-ue5-65.json` also carries the joint hierarchy (`parents`) and the fallback skeleton group (`defaultSkeletonGroup`), see REQ-ANA-021 and Data & contracts.)*
+**Dependency:** bone names, bone axes and `anatomyBones` mapping come from the `RigDefinition` produced and verified by the M1 asset spike (spec 011). Items marked *(M1-gated)* assume the shared Quaternius rig exists and that bone length runs along a single local axis. *(Amended 2026-10-08 (M1-01c): the committed rig `packages/parts-schema/rigs/quaternius-ue5-65.json` also carries the joint hierarchy (`parents`) and the fallback skeleton group (`defaultSkeletonGroup`), see REQ-ANA-021 and Data & contracts.)* *(Amended 2026-10-09 (M1-33): the spike confirmed one shared rig with `lengthAxis: 'y'` across all bundled files and committed the anatomy, region and socket lists (outcome `mapped`, ADR-0008); the *(M1-gated)* items REQ-ANA-002 and REQ-ANA-005 hold as written.)*
 
 ## Goals
 
@@ -75,9 +75,13 @@ Bone names in the "Affects" column are descriptive, written in UE5 style. The en
 
 **REQ-ANA-003 [P1]** WHEN a compensated parameter scales a bone THE SYSTEM SHALL scale only the geometry skinned to that bone, and child bones SHALL keep their world scale and orientation while their joint positions follow the parent's changed length (segment-scale-compensate semantics).
 
-- **AC-ANA-003.1** Given `armLength = 1.2`, When the bind pose is evaluated, Then `lowerarm_l` is 1.2× farther from `upperarm_l` (± 1e-4 m), and the world scale of `lowerarm_l` and `hand_l` is unchanged (± 1e-4).
+- **AC-ANA-003.1** Given `armLength = 1.2`, When the bind pose is evaluated, Then `lowerarm_l` is 1.2× farther from `upperarm_l` (± 1e-4 m), and the world scale of `lowerarm_l` and `hand_l` is unchanged (± 1e-4). *(Amended 2026-10-09 (M1-33): this text contradicted the parameter table, which lists `lowerarm_*` under `armLength`. Resolved to match the M1 implementation: each listed joint carries only its own factor, never its parent's on top. So `lowerarm_l`'s world scale is 1.2 along the length axis and 1 on the cross-section axes (not 1.44 and not 1), and `hand_l`, which is not listed, keeps world scale 1 on all axes. Tolerances: ± 1e-4 where the rest rotations of `upperarm_l`, `lowerarm_l` and `hand_l` relative to their parents are the identity; ± 1e-2 where they are not, see the residual-shear limitation under REQ-ANA-003.)*
 - **AC-ANA-003.2** Given `torsoWidth = 1.4`, When evaluated, Then `neck_01`, `Head` (the joint in `anatomyBones.head`), `clavicle_l` and `clavicle_r` keep world scale 1 (± 1e-4) and the head shows no shear (all three world axes stay orthogonal within 1e-4). *(Amended 2026-10-08 (M1 D1): joint `head` → `Head`, the source name.)*
 - **AC-ANA-003.3** Given `limbThickness = 1.5`, When evaluated, Then hand and foot world scales stay 1 and the limb vertices' distance from the bone axis grows 1.5× (± 1 %).
+
+*Known limitation (added 2026-10-09 (M1-33), accepted by the PM for M1 in M1-22):* compensation divides each joint's target world scale by its parent's per local axis, and a joint's scale is a diagonal (per-axis) scale. This is exact when a child's rest rotation relative to its parent is the identity. Where it is not (several Quaternius arm and leg joints, and fixture group `g-b`'s arms rotated 10°), a residual shear of about 0.5–0.7 % of the scaled length remains at the child. It is revisited if it becomes visible in the M2 golden images; a fix needs non-diagonal compensation (for example a scale applied in the parent's frame) and a spec amendment.
+
+- **AC-ANA-003.4** Given fixture group `g-b` (arm joints rotated 10° about local Z at rest) and `armLength = 1.25`, When the bind pose is evaluated, Then every world-scale component of `hand_l` is within 1 ± 1e-2, and the angle between any two of its world axes differs from 90° by ≤ 1°. *(Added 2026-10-09 (M1-33): bounds the accepted residual shear.)*
 
 **REQ-ANA-004 [P1]** WHEN a propagating parameter (`height`, `head`, `hands`, `feet`) scales a bone THE SYSTEM SHALL scale that bone's subtree uniformly, so hair, headwear, fingers and toes grow with it.
 
@@ -98,11 +102,21 @@ Bone names in the "Affects" column are descriptive, written in UE5 style. The en
 - **AC-ANA-007.1** Given a sword on socket `hand_r` and `hands = 1.75`, When rendered, Then the sword's world scale is unchanged and its grip stays at the hand socket joint `socketBones.hand_r` (± 1e-4 m plus the authored offset scaled by 1.0).
 - **AC-ANA-007.2** Given a static hat on socket `head` and `head = 1.5`, When rendered, Then the hat's world scale is 1.5× and its offset from the joint `socketBones.head` (`Head` in the fixture and Quaternius rigs) is scaled 1.5×. *(Amended 2026-10-08 (M1 D1): joint named.)*
 
+*(Clarified 2026-10-09 (M1-33), PM decision in M1-24.)* "Anatomy scale" here is the socket joint's full anatomy world scale, which includes `height` (the uniform scale on `rootBone`). So a prop with `inheritScale: false` also keeps its world scale and its unscaled offset when `height` changes; only its position follows the joint. A scale applied to the whole character's container object (outside the skeleton, for example by framing or a caller's transform) is not anatomy and scales every prop, inheriting or not.
+
+- **AC-ANA-007.3** Given a sword on socket `hand_r` (`inheritScale` absent, so false) and `height = 1.2`, When rendered, Then the sword's world scale is 1 (± 1e-4) and its grip is at the joint `socketBones.hand_r` plus the authored offset scaled by 1.0 (± 1e-4 m); Given a hat on socket `head` with `height = 1.2`, Then the hat's world scale is 1.2 (± 1e-4). *(Added 2026-10-09 (M1-33).)*
+- **AC-ANA-007.4** Given the character container object scaled by 2 and default anatomy, When rendered, Then both the sword and the hat have world scale 2 (± 1e-4). *(Added 2026-10-09 (M1-33).)*
+
 ### Grounding and animation
 
 **REQ-ANA-008 [P1]** WHEN anatomy changes THE SYSTEM SHALL shift the character vertically so that, in the bind pose, the lowest point of the feet stays at the ground plane (y = 0).
 
-- **AC-ANA-008.1** Given `legLength = 0.7` and `feet = 1.5`, When the bind pose is rendered, Then the lowest foot vertex is at y = 0 (± 1e-3 m) and the feet pivot row in the output equals `pivotRowPx` (spec 003).
+- **AC-ANA-008.1** Given `legLength = 0.7` and `feet = 1.5`, When the bind pose is rendered, Then the lowest foot vertex is at y = 0 (± 1e-3 m) and the feet pivot row in the output equals `pivotRowPx` (spec 003). *(Amended 2026-10-09 (M1-33), see the note below: "lowest foot vertex" reads "lowest feet joint".)*
+
+*(Amended 2026-10-09 (M1-33), PM-accepted in M1-22.)* "The lowest point of the feet" is joint-based: it is the lowest world-space joint origin among the joints in `RigDefinition.anatomyBones.feet` and their descendants (e.g. `ball_*`), evaluated on the character skeleton's rest pose (spec 001 REQ-CMP-037) with the anatomy scales applied. It is never read from mesh vertices, so it does not depend on which parts are equipped, costs no vertex pass, and stays within the < 16 ms budget (REQ-ANA-011). Consequence: the sole of a shoe or foot mesh can sit a few millimetres below or above y = 0 by the distance between the lowest joint and the lowest vertex of the source art; that distance is constant per body and is absorbed by `pivotRowPx` framing (spec 003).
+
+- **AC-ANA-008.2** Given the fixture rig in groups `g-a` and `g-b`, `legLength = 0.7` and `feet = 1.5`, When the ground offset is computed and added to the bind pose, Then the lowest world Y among `foot_l`, `foot_r` and their descendants is 0 (± 1e-3 m), and the offset is negative (shorter legs move the character down). *(Added 2026-10-09 (M1-33).)*
+- **AC-ANA-008.3** Given the fixture rig, whose lowest feet joint rests at y = 0, and default anatomy, When the ground offset is computed, Then it is exactly 0 (values below 1e-9 m snap to 0); Given the same anatomy twice, Then the same offset is returned (bit-identical). *(Added 2026-10-09 (M1-33). On the Quaternius rig the default offset is minus the rest height of its lowest feet joint, typically the `ball_leaf_*` toe tip.)*
 
 **REQ-ANA-009 [P1]** THE SYSTEM SHALL apply anatomy after animation sampling on every frame: clip rotation tracks are kept, clip translation of non-root bones is scaled by the parent's length factor, and clip scale tracks on anatomy bones are multiplied by the anatomy scale.
 
@@ -112,6 +126,10 @@ Bone names in the "Affects" column are descriptive, written in UE5 style. The en
 **REQ-ANA-010 [P1]** THE SYSTEM SHALL scale the root/pelvis vertical translation from animation clips by the leg-length factor `legLength`, and horizontal root translation (when root motion is kept, spec 004) by the same factor.
 
 - **AC-ANA-010.1** Given `legLength = 1.3` and the `walk` clip, When frames 0–7 are sampled, Then feet do not go below y = −0.01 m or float above the frame-0 ground contact by more than 0.02 m at contact frames, relative to `legLength = 1`.
+
+*(Clarified 2026-10-09 (M1-33), matching the M1 implementation.)* The factor is `legLength` only; `height` does not enter it. In detail: (1) the `rootBone`'s horizontal (X/Z) clip translation is multiplied by `legLength`; (2) the vertical clip translation of `rootBone` and of the joint `socketBones.pelvis` is scaled by `legLength` as a delta from its rest value: `v' = v_rest + (v − v_rest) · legLength`, where `v` is the component of the joint's local translation along the world up axis (+Y) expressed in the parent's space at rest (local Y on the fixture rig; local Z for `pelvis` on the Quaternius rig, whose `root` rest rotation is −90° about X); (3) `height` is the uniform scale on `rootBone` (REQ-ANA-001), so it scales everything below the root, including the pelvis translation, through the hierarchy, but not the root's own translation. A stride kept as root motion therefore grows with `legLength` but not with `height`; with the default in-place policy (spec 004 REQ-ANM-013) the root's horizontal translation is removed before this step and (1) has no visible effect. [NEEDS CLARIFICATION: should a kept root-motion stride also scale with `height` (factor `height · legLength`), so a taller character covers proportionally more ground? Matters only for `rootMotion: 'metadata'` (spec 004 REQ-ANM-015, P2). Owner: PM; not blocking M1.]
+
+- **AC-ANA-010.2** Given `legLength = 1.3`, `height = 1.2` and a fixture clip whose root moves +1.0 m in Z between frames 0 and 7, When the clip is sampled with root motion kept, Then the root's local Z displacement between frames 0 and 7 is 1.3 m (± 1e-6 m), and the pelvis's vertical local component at each frame equals `v_rest + (v_clip − v_rest) · 1.3` (± 1e-6 m); Given a fixture variant whose `root` rest rotation is −90° about X (Quaternius layout), Then the same holds with `v` = the pelvis local Z component, and the pelvis local Y component is the clip value unscaled. *(Added 2026-10-09 (M1-33).)*
 
 **REQ-ANA-011 [P1]** WHEN an anatomy value changes THE SYSTEM SHALL update the preview on the next rendered frame without reloading or rebinding parts and in < 16 ms of CPU time.
 
@@ -198,6 +216,8 @@ Bone names in the "Affects" column are descriptive, written in UE5 style. The en
 - Clip with scale tracks on anatomy bones → multiplied (REQ-ANA-009).
 - Root motion clips with long legs → stride scaled (REQ-ANA-010).
 - Props on scaled hands → not scaled (REQ-ANA-007).
+- `height` changed with a hand prop equipped → the prop keeps world scale 1; a `head` prop grows; a container scale grows both (REQ-ANA-007 clarification, AC-ANA-007.3/.4). *(Added 2026-10-09 (M1-33).)*
+- Child joint with a rotated rest pose under a length-scaled parent → small residual shear (≤ about 0.7 %), accepted for M1 (REQ-ANA-003 known limitation, AC-ANA-003.4). *(Added 2026-10-09 (M1-33).)*
 - User-uploaded character with its own rig → anatomy uses the bone map to canonical names (spec 008); unmapped anatomy bones disable that slider with a reason.
 - Morph names that collide across parts → same name, same weight (REQ-ANA-012).
 - Source joint names with mixed case (`Head` next to `hand_r`) → kept as-is and matched case-sensitively (REQ-ANA-020); sockets resolve through `socketBones` (REQ-ANA-019).
@@ -227,7 +247,8 @@ export type JointName = string;
 
 /** Semantic socket IDs (M1 D1). Not joint names; resolved through RigDefinition.socketBones. */
 export type SocketId = 'hand_r' | 'hand_l' | 'head' | 'spine_03' | 'pelvis';
-/** Kept for spec 001 and architecture §3.2; same set as SocketId. */
+/** Deprecated alias (amended 2026-10-09 (M1-33)): `SocketId` is the `@csg/parts-schema` name and
+ *  the one specs use. `SocketBone` is kept only so older text and architecture §3.2 still resolve. */
 export type SocketBone = SocketId;
 
 /** Local rest transform of one joint (parent space). */
@@ -303,12 +324,14 @@ Application order per frame (contract for engine and tests): 1) sample clip (spe
 ## Open questions
 
 - [NEEDS CLARIFICATION: Do the Quaternius bodies ship morph targets? The vendor pages do not mention shape keys. If none exist, REQ-ANA-012 applies only to uploads. Answered by the M1 spike.]
-- [NEEDS CLARIFICATION: Final bone lists per parameter and `lengthAxis` for the Quaternius rig. Blocks REQ-ANA-002/005 data, not the engine code. Answered by M1 `verify-rig`. Partly answered 2026-10-08: names, hierarchy and `lengthAxis` are identical across all 36 checked files (outcome `mapped` only for bind poses); the overlay lists remain to be committed (M1-14) and confirmed in the M1-33 pass.]
+- ~~[NEEDS CLARIFICATION: Final bone lists per parameter and `lengthAxis` for the Quaternius rig. Blocks REQ-ANA-002/005 data, not the engine code. Answered by M1 `verify-rig`. Partly answered 2026-10-08: names, hierarchy and `lengthAxis` are identical across all 36 checked files (outcome `mapped` only for bind poses); the overlay lists remain to be committed (M1-14) and confirmed in the M1-33 pass.]~~ Resolved 2026-10-09 (M1-33): `lengthAxis: 'y'`; the `anatomyBones`, `regionBones` and `socketBones` lists are committed in `tools/rigs/quaternius-ue5-65.overlay.json` and copied into `packages/parts-schema/rigs/quaternius-ue5-65.json` (e.g. `height` → `root`, `head` → `Head`, `feet` → `foot_l`, `foot_r`). Changes to these lists are data edits checked by REQ-ANA-021 and spec 011 `assets:check`.
+- The morph-target question above was not checked by the M1 spike (verify-rig does not inspect morph targets); it stays open. *(Note 2026-10-09 (M1-33).)*
 - [NEEDS CLARIFICATION: Does spec 003 own drawing the face decal layer (snapping, palette interaction)? This spec assumes yes and owns only selection and offset.]
 
 ## References
 
-- ADR-0001 (readability risk); `docs/architecture.md` §2.1 (assembly order), §3.2–3.3
+- ADR-0001 (readability risk), ADR-0008 (M1 rig outcome, `docs/adr/0008-shared-rig-skeleton-groups-runtime-retarget.md`); `docs/architecture.md` §2.1 (assembly order), §3.2–3.3
+- M1 implementation read for the 2026-10-09 (M1-33) clarifications: `packages/engine/src/anatomy/apply.ts` (compensation, ground offset, root/pelvis scaling, prop scale), `packages/engine/src/anatomy/anatomy.test.ts`, `packages/engine/src/composition/evaluate-pose.ts`
 - `.tagconn/work/research.md` (anatomy and readability notes, 2026-10-08)
 - Autodesk Maya joint attribute "Segment Scale Compensate" (concept reference for child compensation; Maya documentation, joint attributes)
 - three.js `SkinnedMesh` / `Skeleton` docs (r186): https://threejs.org/docs/#api/en/objects/SkinnedMesh (accessed 2026-10-08)

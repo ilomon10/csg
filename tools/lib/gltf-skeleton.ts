@@ -4,9 +4,10 @@
  * confined to the source file's folder, and image payloads are never read.
  * Uses `@gltf-transform/core` only (no three.js).
  */
-import {readFile, stat} from 'node:fs/promises';
+import {lstat, readFile} from 'node:fs/promises';
 import {dirname, resolve, sep} from 'node:path';
 import {Logger, NodeIO} from '@gltf-transform/core';
+import {parseJson} from '@csg/parts-schema';
 import type {Document} from '@gltf-transform/core';
 import type {Node as GltfNode} from '@gltf-transform/core';
 import {compose} from './mat4.js';
@@ -35,6 +36,17 @@ export class SourceReadError extends Error {
   }
 }
 
+function safeDecode(text: string, what: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    throw new SourceReadError(
+      'AST_SOURCE_FORMAT',
+      `${what} URI has invalid percent-encoding.`,
+    );
+  }
+}
+
 function decodeDataUri(uri: string): Uint8Array<ArrayBuffer> {
   const comma = uri.indexOf(',');
   if (comma < 0)
@@ -43,7 +55,34 @@ function decodeDataUri(uri: string): Uint8Array<ArrayBuffer> {
   const body = uri.slice(comma + 1);
   return meta.endsWith(';base64')
     ? new Uint8Array(Buffer.from(body, 'base64'))
-    : new Uint8Array(Buffer.from(decodeURIComponent(body)));
+    : new Uint8Array(Buffer.from(safeDecode(body, 'Data')));
+}
+
+/** Reads a regular file, refusing symbolic links (the link target is never read). */
+async function readRegularFile(
+  path: string,
+  what: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const info = await lstat(path);
+  if (info.isSymbolicLink()) {
+    throw new SourceReadError(
+      'AST_SOURCE_FORMAT',
+      `${what} is a symbolic link; refused.`,
+    );
+  }
+  if (!info.isFile()) {
+    throw new SourceReadError(
+      'AST_SOURCE_READ',
+      `${what} is not a regular file.`,
+    );
+  }
+  if (info.size > MAX_SOURCE_BYTES) {
+    throw new SourceReadError(
+      'AST_SOURCE_READ',
+      `${what} exceeds ${MAX_SOURCE_BYTES} bytes.`,
+    );
+  }
+  return new Uint8Array(await readFile(path));
 }
 
 async function readLocalResource(
@@ -57,14 +96,76 @@ async function readLocalResource(
       `Remote ${what.toLowerCase()} URI refused: ${uri.slice(0, 40)}`,
     );
   }
-  const target = resolve(baseDir, decodeURIComponent(uri));
-  if (!target.startsWith(baseDir + sep)) {
+  const base = resolve(baseDir);
+  const target = resolve(base, safeDecode(uri, what));
+  if (!target.startsWith(base + sep)) {
     throw new SourceReadError(
       'AST_SOURCE_FORMAT',
       `${what} URI escapes the source folder.`,
     );
   }
-  return new Uint8Array(await readFile(target));
+  return readRegularFile(target, what);
+}
+
+const COMPONENT_BYTES: Record<number, number> = {
+  5120: 1,
+  5121: 1,
+  5122: 2,
+  5123: 2,
+  5125: 4,
+  5126: 4,
+};
+const TYPE_COMPONENTS: Record<string, number> = {
+  SCALAR: 1,
+  VEC2: 2,
+  VEC3: 3,
+  VEC4: 4,
+  MAT2: 4,
+  MAT3: 9,
+  MAT4: 16,
+};
+
+/**
+ * Rejects accessors whose declared size cannot fit in the available binary payload, before any
+ * array is allocated from a hostile `count`.
+ */
+function capAccessorCounts(json: unknown, payloadBytes: number): void {
+  const accessors = (json as {accessors?: unknown}).accessors;
+  if (!Array.isArray(accessors)) return;
+  accessors.forEach((raw, index) => {
+    const a = (raw ?? {}) as {
+      count?: unknown;
+      type?: unknown;
+      componentType?: unknown;
+    };
+    const comps = TYPE_COMPONENTS[String(a.type)] ?? 16;
+    const bytes = COMPONENT_BYTES[Number(a.componentType)] ?? 4;
+    if (
+      typeof a.count !== 'number' ||
+      !Number.isInteger(a.count) ||
+      a.count < 0 ||
+      a.count * comps * bytes > payloadBytes
+    ) {
+      throw new SourceReadError(
+        'AST_SOURCE_FORMAT',
+        `accessor ${index} declares ${String(a.count)} elements, more than the file's binary data can hold.`,
+      );
+    }
+  });
+}
+
+/** Extracts the JSON chunk of a GLB (bounds checked) or null when malformed. */
+function glbJson(bytes: Uint8Array): unknown {
+  if (bytes.length < 20) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const len = view.getUint32(12, true);
+  if (view.getUint32(16, true) !== 0x4e4f534a || 20 + len > bytes.length) {
+    return null;
+  }
+  const parsed = parseJson(
+    Buffer.from(bytes.subarray(20, 20 + len)).toString('utf8'),
+  );
+  return parsed.ok ? parsed.value : null;
 }
 
 /**
@@ -80,14 +181,7 @@ export async function loadGltfDocument(
     onMissingImage?: (uri: string) => void;
   } = {},
 ): Promise<Document> {
-  const info = await stat(absPath);
-  if (info.size > MAX_SOURCE_BYTES) {
-    throw new SourceReadError(
-      'AST_SOURCE_READ',
-      `File exceeds ${MAX_SOURCE_BYTES} bytes.`,
-    );
-  }
-  const bytes = new Uint8Array(await readFile(absPath));
+  const bytes = await readRegularFile(absPath, 'Source file');
   const io = new NodeIO().setLogger(new Logger(Logger.Verbosity.ERROR));
   if (absPath.toLowerCase().endsWith('.glb')) {
     const magic = Buffer.from(bytes.subarray(0, 4)).toString('latin1');
@@ -97,18 +191,22 @@ export async function loadGltfDocument(
         'Missing glTF magic bytes.',
       );
     }
+    const head = glbJson(bytes);
+    if (head !== null) capAccessorCounts(head, bytes.length);
     return io.readBinary(bytes);
   }
-  let json: {
+  const parsedJson = parseJson(Buffer.from(bytes).toString('utf8'));
+  if (!parsedJson.ok) {
+    throw new SourceReadError(
+      'AST_SOURCE_FORMAT',
+      `Invalid glTF JSON: ${parsedJson.issues.map(i => i.message).join('; ')}`,
+    );
+  }
+  const json = parsedJson.value as {
     asset?: {version?: string};
     buffers?: Array<{uri?: string}>;
     images?: Array<{uri?: string}>;
-  };
-  try {
-    json = JSON.parse(Buffer.from(bytes).toString('utf8'));
-  } catch {
-    throw new SourceReadError('AST_SOURCE_FORMAT', 'Invalid glTF JSON.');
-  }
+  } | null;
   if (
     !json ||
     typeof json !== 'object' ||
@@ -116,7 +214,7 @@ export async function loadGltfDocument(
   ) {
     throw new SourceReadError('AST_SOURCE_FORMAT', 'Not a glTF 2.x document.');
   }
-  const baseDir = dirname(absPath);
+  const baseDir = resolve(dirname(absPath));
   const resources: Record<string, Uint8Array<ArrayBuffer>> = {};
   for (const buf of json.buffers ?? []) {
     const uri = buf.uri;
@@ -131,14 +229,7 @@ export async function loadGltfDocument(
         `Remote buffer URI refused: ${uri.slice(0, 40)}`,
       );
     }
-    const target = resolve(baseDir, decodeURIComponent(uri));
-    if (!target.startsWith(baseDir + sep)) {
-      throw new SourceReadError(
-        'AST_SOURCE_FORMAT',
-        'Buffer URI escapes the source folder.',
-      );
-    }
-    resources[uri] = new Uint8Array(await readFile(target));
+    resources[uri] = await readLocalResource(baseDir, uri, 'Buffer');
   }
   for (const img of json.images ?? []) {
     if (img.uri && !img.uri.startsWith('data:')) {
@@ -153,6 +244,8 @@ export async function loadGltfDocument(
       }
     } else if (img.uri) resources[img.uri] = decodeDataUri(img.uri);
   }
+  const total = Object.values(resources).reduce((n, r) => n + r.byteLength, 0);
+  capAccessorCounts(json, total);
   const doc = await io.readJSON({json: json as never, resources});
   if (opts.readImages) {
     // Drop textures whose image file is absent from the vendor pack (empty stub).

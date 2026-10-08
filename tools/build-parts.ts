@@ -10,7 +10,7 @@ import {NodeIO} from '@gltf-transform/core';
 import type {Document} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {MeshoptEncoder} from 'meshoptimizer';
-import {rigDefinitionSchema} from '@csg/parts-schema';
+import {parseJson, rigDefinitionSchema} from '@csg/parts-schema';
 import type {RigDefinition} from '@csg/parts-schema';
 import {loadPackConfigs} from './lib/build/config.js';
 import {checkSources} from './lib/build/sources.js';
@@ -98,7 +98,26 @@ async function loadRig(root: string, rigId: string): Promise<RigDefinition> {
       2,
     );
   }
-  return rigDefinitionSchema.parse(JSON.parse(text));
+  const json = parseJson(text);
+  if (!json.ok) {
+    throw new BuildError(
+      'AST_RIG_INVALID',
+      `rig "${rigId}": ${json.issues.map(i => i.message).join('; ')}`,
+      2,
+    );
+  }
+  const rig = rigDefinitionSchema.safeParse(json.value);
+  if (!rig.success) {
+    const lines = rig.error.issues.map(
+      i => `  - ${i.path.join('.')}: ${i.message}`,
+    );
+    throw new BuildError(
+      'AST_RIG_INVALID',
+      `rig "${rigId}" does not match the RigDefinition schema:\n${lines.join('\n')}`,
+      2,
+    );
+  }
+  return rig.data;
 }
 
 function countTriangles(doc: Document): number {

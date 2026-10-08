@@ -13,8 +13,17 @@ import {SCALE_MODES, planOf} from './plan';
 
 /** Result of one evaluation, cached per binding until the parameters change. */
 interface Evaluation {
+  /** Parameter values in `ANATOMY_PARAM_KEYS` order (the cache key). */
   readonly values: number[];
   readonly scales: Map<string, Vector3>;
+  /**
+   * The same scales as a flat list, iterated by index in the per-frame path
+   * (a `Map` iterator allocates its entries; REQ-ANM-008).
+   */
+  readonly scaleList: ReadonlyArray<{
+    readonly name: string;
+    readonly scale: Vector3;
+  }>;
   /** The same scales as tuples, the input of rig forward kinematics. */
   readonly tuples: Map<string, Vec3>;
   /** Target world scale per joint, xyz interleaved (see {@link applyAnatomy}). */
@@ -28,8 +37,13 @@ function valuesOf(params: AnatomyParams): number[] {
   return ANATOMY_PARAM_KEYS.map(key => params[key]);
 }
 
-function sameValues(a: readonly number[], b: readonly number[]): boolean {
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+/** Whether `params` equals the cached values; allocation-free (per-frame path). */
+function sameValues(values: readonly number[], params: AnatomyParams): boolean {
+  for (let i = 0; i < ANATOMY_PARAM_KEYS.length; i++) {
+    if (values[i] !== params[ANATOMY_PARAM_KEYS[i] as keyof AnatomyParams]) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -68,13 +82,14 @@ function worldScales(plan: AnatomyPlan, params: AnatomyParams): Float64Array {
 }
 
 function evaluate(binding: AnatomyBinding, params: AnatomyParams): Evaluation {
-  const values = valuesOf(params);
   const cached = CACHE.get(binding);
-  if (cached !== undefined && sameValues(cached.values, values)) return cached;
+  if (cached !== undefined && sameValues(cached.values, params)) return cached;
+  const values = valuesOf(params);
   const plan = planOf(binding);
   const world = worldScales(plan, params);
   const scales = new Map<string, Vector3>();
   const tuples = new Map<string, Vec3>();
+  const scaleList: Array<{name: string; scale: Vector3}> = [];
   for (let i = 0; i < plan.names.length; i++) {
     const p = plan.parent[i] as number;
     const l = new Vector3();
@@ -83,11 +98,13 @@ function evaluate(binding: AnatomyBinding, params: AnatomyParams): Evaluation {
       l.setComponent(a, p >= 0 ? w / (world[3 * p + a] as number) : w);
     }
     scales.set(plan.names[i] as string, l);
+    scaleList.push({name: plan.names[i] as string, scale: l});
     tuples.set(plan.names[i] as string, [l.x, l.y, l.z]);
   }
   const next: Evaluation = {
     values,
     scales,
+    scaleList,
     tuples,
     world,
     groundOffset: undefined,
@@ -157,25 +174,75 @@ export function resetBodyToRest(binding: AnatomyBinding): void {
   }
 }
 
-/** Rest heights of the root and pelvis joints, cached per binding (no per-frame lookup). */
-const REST_HEIGHTS = new WeakMap<
+/**
+ * World up (+Y) expressed in the rest-space of a joint's parent, with the
+ * joint's rest translation component along it (REQ-ANA-010 clarification).
+ */
+interface UpAxis {
+  /** Unit vector: world +Y in the parent's local frame at rest. */
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  /** Rest value `v_rest` of the translation component along the axis. */
+  readonly rest: number;
+}
+
+/** Up axes of the root and pelvis joints, cached per binding (no per-frame lookup). */
+const UP_AXES = new WeakMap<
   AnatomyBinding,
-  {readonly root: number; readonly pelvis: number}
+  {readonly root: UpAxis; readonly pelvis: UpAxis}
 >();
 
-function restHeightsOf(binding: AnatomyBinding): {
-  readonly root: number;
-  readonly pelvis: number;
-} {
-  let heights = REST_HEIGHTS.get(binding);
-  if (heights === undefined) {
-    const {rig, body} = binding;
-    const y = (name: string): number =>
-      body.rest.joints.find(j => j.name === name)?.translation[1] ?? 0;
-    heights = {root: y(rig.rootBone), pelvis: y(rig.socketBones.pelvis)};
-    REST_HEIGHTS.set(binding, heights);
+function upAxisOf(
+  binding: AnatomyBinding,
+  world: ReadonlyMap<string, ArrayLike<number>>,
+  name: string,
+): UpAxis {
+  const joint = binding.body.rest.joints.find(j => j.name === name);
+  if (joint === undefined) return {x: 0, y: 1, z: 0, rest: 0};
+  const m = joint.parent === null ? undefined : world.get(joint.parent);
+  let x = 0;
+  let y = 1;
+  let z = 0;
+  if (m !== undefined) {
+    // World up in the parent frame = row 1 of the parent's world rotation
+    // (columns normalized to drop scale; column-major elements).
+    const col = (c: number): number =>
+      Math.hypot(
+        m[4 * c] as number,
+        m[4 * c + 1] as number,
+        m[4 * c + 2] as number,
+      ) || 1;
+    x = (m[1] as number) / col(0);
+    y = (m[5] as number) / col(1);
+    z = (m[9] as number) / col(2);
+    const n = Math.hypot(x, y, z) || 1;
+    x /= n;
+    y /= n;
+    z /= n;
+    // Snap float noise of axis-aligned rest rotations (e.g. -90° about X).
+    if (Math.abs(x) < 1e-12) x = 0;
+    if (Math.abs(y) < 1e-12) y = 0;
+    if (Math.abs(z) < 1e-12) z = 0;
   }
-  return heights;
+  const t = joint.translation;
+  return {x, y, z, rest: t[0] * x + t[1] * y + t[2] * z};
+}
+
+function upAxesOf(binding: AnatomyBinding): {
+  readonly root: UpAxis;
+  readonly pelvis: UpAxis;
+} {
+  let axes = UP_AXES.get(binding);
+  if (axes === undefined) {
+    const world = restWorldMatrices(binding.body.rest);
+    axes = {
+      root: upAxisOf(binding, world, binding.rig.rootBone),
+      pelvis: upAxisOf(binding, world, binding.rig.socketBones.pelvis),
+    };
+    UP_AXES.set(binding, axes);
+  }
+  return axes;
 }
 
 /**
@@ -186,11 +253,14 @@ function restHeightsOf(binding: AnatomyBinding): {
  * - Scale: the sampled scale is multiplied by the anatomy scale (REQ-ANA-009).
  * - Non-root translation needs no change: a child's local position is scaled
  *   by its parent's world scale through the hierarchy (REQ-ANA-009).
- * - Root motion: the root joint's horizontal translation is multiplied by
- *   `legLength`, and the vertical translation of the root and the pelvis
- *   (`rig.socketBones.pelvis`) is scaled by `legLength` as a delta from the rest
- *   height, so the bind-pose ground offset keeps the feet on the ground
- *   (REQ-ANA-010).
+ * - Root motion (REQ-ANA-010): "vertical" is the component of a joint's local
+ *   translation along world up expressed in its parent's rest frame (local Y
+ *   on the fixture rig, local Z for the pelvis under the Quaternius root that
+ *   is rotated -90 degrees about X). The root's horizontal translation is
+ *   multiplied by `legLength`; the vertical translation of the root and the
+ *   pelvis (`rig.socketBones.pelvis`) is scaled by `legLength` as a delta from
+ *   its rest value, so the bind-pose ground offset keeps the feet on the
+ *   ground. The pelvis's horizontal components are kept.
  *
  * Allocation-free after the first call for a parameter set.
  */
@@ -202,18 +272,29 @@ export function applyAnatomyToPose(
   const lf = params.legLength;
   const root = body.bones.get(rig.rootBone);
   const pelvis = body.bones.get(rig.socketBones.pelvis);
-  const restY = restHeightsOf(binding);
+  const up = upAxesOf(binding);
   if (root !== undefined) {
-    const r = restY.root;
-    root.position.x *= lf;
-    root.position.z *= lf;
-    root.position.y = r + (root.position.y - r) * lf;
+    const u = up.root;
+    const p = root.position;
+    const v = p.x * u.x + p.y * u.y + p.z * u.z;
+    const scaledV = u.rest + (v - u.rest) * lf;
+    // Horizontal part (p - v·u) times legLength, plus the scaled vertical part.
+    p.set(
+      (p.x - v * u.x) * lf + scaledV * u.x,
+      (p.y - v * u.y) * lf + scaledV * u.y,
+      (p.z - v * u.z) * lf + scaledV * u.z,
+    );
   }
   if (pelvis !== undefined && pelvis !== root) {
-    const r = restY.pelvis;
-    pelvis.position.y = r + (pelvis.position.y - r) * lf;
+    const u = up.pelvis;
+    const p = pelvis.position;
+    const v = p.x * u.x + p.y * u.y + p.z * u.z;
+    const delta = (v - u.rest) * (lf - 1);
+    p.set(p.x + delta * u.x, p.y + delta * u.y, p.z + delta * u.z);
   }
-  for (const [name, scale] of evaluate(binding, params).scales) {
+  const list = evaluate(binding, params).scaleList;
+  for (let i = 0; i < list.length; i++) {
+    const {name, scale} = list[i] as (typeof list)[number];
     body.bones.get(name)?.scale.multiply(scale);
   }
 }

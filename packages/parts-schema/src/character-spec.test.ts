@@ -2,7 +2,9 @@ import {describe, expect, it} from 'vitest';
 import {
   CHARACTER_MIGRATIONS,
   characterSpecSchema,
+  DEFAULT_CHARACTER_DATA,
   createDefaultCharacterSpec,
+  defaultCharacterDataSchema,
   migrateCharacterSpec,
   parseCharacterSpec,
 } from './character-spec';
@@ -22,6 +24,21 @@ describe('character spec', () => {
     expect(spec.body.ref).toBe('builtin:quaternius-ubc/superhero-m');
     expect(spec.seed).toBe(0);
     expect(Object.values(spec.anatomy).every(v => v === 1)).toBe(true);
+  });
+
+  it('AC-CMP-036.3: the default data file validates and fills the six part slots', () => {
+    expect(
+      defaultCharacterDataSchema.safeParse(DEFAULT_CHARACTER_DATA).success,
+    ).toBe(true);
+    const spec = createDefaultCharacterSpec();
+    expect(Object.keys(spec.parts)).toHaveLength(6);
+    expect(spec.parts['hair']?.ref).toBe(
+      'builtin:quaternius-ubc/hair-simple-parted',
+    );
+    spec.parts['hair'] = {ref: 'builtin:x/y'};
+    expect(createDefaultCharacterSpec().parts['hair']?.ref).not.toBe(
+      'builtin:x/y',
+    );
   });
 
   it('AC-CMP-002.2: a spec with no body fails with CMP_BODY_MISSING', () => {

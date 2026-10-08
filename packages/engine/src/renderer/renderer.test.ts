@@ -7,6 +7,7 @@ import {
   fixtureSpec,
   ref,
 } from '../composition/assembly-test-env';
+import {ENGINE_DISPOSED} from '../composition/character-assembly';
 import {backendOf, createRendererBackend} from './backend';
 import type {RendererParameters} from './backend';
 import {createCharacterRenderer} from './character-renderer';
@@ -306,6 +307,105 @@ describe('character renderer (M1)', () => {
     expect(result.ok).toBe(false);
     expect(errors).toEqual(['ANM_CLIP_LOAD_FAILED']);
     expect(created.value.playing).toBe(false);
+  });
+
+  it('AC-ANM-022.3: a failing clip B keeps clip A playing; the next pose equals clip A bit-identically', async () => {
+    const registry = createTestRegistry();
+    const errors: string[] = [];
+    const {factory, made} = factoryOf(() => ({}));
+    const created = await createCharacterRenderer(CANVAS, {
+      registry,
+      factory,
+      onError: e => errors.push(e.code),
+    });
+    if (!created.ok) throw new Error('create failed');
+    const r = created.value;
+    const fake = made[0] as FakeRenderer;
+    await r.setCharacter(fixtureSpec());
+    expect((await r.playClip(ref('fixture-clip'), 'metadata')).ok).toBe(true);
+    fake.loop?.(1000);
+    fake.loop?.(1250);
+    const failed = await r.playClip(ref('no-such-clip'), 'metadata');
+    expect(failed.ok).toBe(false);
+    expect(errors).toEqual(['ANM_CLIP_LOAD_FAILED']);
+    // The player still names clip A and the loop keeps running.
+    expect(
+      r.assembly.player?.log.filter(l => l.startsWith('source:')).at(-1),
+    ).toBe(`source:${ref('fixture-clip')}`);
+    expect(r.playing).toBe(true);
+    fake.loop?.(1600); // next sample: elapsed 0.6 s
+    expect(r.timeSec).toBeCloseTo(0.6, 9);
+    const matrices = (x: typeof r) =>
+      x.assembly.body?.skeleton.bones.flatMap(b => b.matrixWorld.elements);
+    const played = matrices(r);
+    // Reference: clip A alone, seeked to the same time.
+    const ref2 = await createCharacterRenderer(CANVAS, {
+      registry: createTestRegistry(),
+      factory: factoryOf(() => ({})).factory,
+    });
+    if (!ref2.ok) throw new Error('create failed');
+    await ref2.value.setCharacter(fixtureSpec());
+    await ref2.value.assembly.setClip(ref('fixture-clip'), 'metadata');
+    ref2.value.seek(r.timeSec);
+    expect(played).toEqual(matrices(ref2.value));
+  });
+
+  it('REQ-ANM-018: resume() after pause continues from the paused time without reloading the clip', async () => {
+    const {renderer, fake, registry} = await create();
+    await renderer.setCharacter(fixtureSpec());
+    expect(renderer.resume()).toBe(false); // nothing played yet
+    await renderer.playClip(ref('fixture-clip'), 'metadata');
+    fake.loop?.(1000);
+    fake.loop?.(1300);
+    renderer.pause();
+    expect(renderer.timeSec).toBeCloseTo(0.3, 9);
+    const clipLoads = registry.resolveClipCalls.length;
+    const playerLog = renderer.assembly.player?.log.length;
+    expect(renderer.resume()).toBe(true);
+    expect(renderer.playing).toBe(true);
+    // Wall clock jumped while paused; playback continues from 0.3 s.
+    fake.loop?.(9000);
+    expect(renderer.timeSec).toBeCloseTo(0.3, 9);
+    fake.loop?.(9200);
+    expect(renderer.timeSec).toBeCloseTo(0.5, 9);
+    // Pause, seek, resume: continues from the seek time.
+    renderer.pause();
+    renderer.seek(0.75);
+    expect(renderer.resume()).toBe(true);
+    fake.loop?.(20_000);
+    fake.loop?.(20_100);
+    expect(renderer.timeSec).toBeCloseTo(0.85, 9);
+    // No reload and no re-retarget.
+    expect(registry.resolveClipCalls.length).toBe(clipLoads);
+    expect(renderer.assembly.player?.log.length).toBe(playerLog);
+    renderer.dispose();
+    expect(renderer.resume()).toBe(false);
+  });
+
+  it('dispose during an in-flight playClip resolves to ENGINE_DISPOSED, starts no loop and calls no onError', async () => {
+    const registry = createTestRegistry();
+    const errors: string[] = [];
+    const {factory, made} = factoryOf(() => ({}));
+    const created = await createCharacterRenderer(CANVAS, {
+      registry,
+      factory,
+      onError: e => errors.push(e.code),
+    });
+    if (!created.ok) throw new Error('create failed');
+    const r = created.value;
+    await r.setCharacter(fixtureSpec());
+    const pending = r.playClip(ref('fixture-clip'));
+    const spec = r.setCharacter(fixtureSpec());
+    r.dispose();
+    const [played, set] = await Promise.all([pending, spec]);
+    expect(played).toMatchObject({ok: false, error: {code: ENGINE_DISPOSED}});
+    expect(set).toMatchObject({ok: false, error: {code: ENGINE_DISPOSED}});
+    expect(errors).toEqual([]);
+    expect(made[0]?.loop).toBeNull();
+    expect(r.playing).toBe(false);
+    // play() after dispose does not throw or reject.
+    expect(() => r.play(ref('fixture-clip'))).not.toThrow();
+    await Promise.resolve();
   });
 
   it('dispose stops the loop, detaches the character and disposes the renderer', async () => {

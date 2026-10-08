@@ -4,7 +4,7 @@ title: Character composer
 status: draft
 owner: spec-writer
 depends_on: [constitution, 000-overview, 002-anatomy, 004-animation, 011-asset-pipeline]
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 ---
 
 # 001 – Character composer
@@ -17,7 +17,7 @@ last_updated: 2026-10-08
 
 The composer is where a user builds a character. They pick a body, fill slots with parts (hair, outfit pieces, props), mix and match across packs, recolor through tint slots, randomize, and save or share the result as a `CharacterSpec`. Every downstream feature (anatomy 002, pixel pipeline 003, animation 004, export 005) reads the `CharacterSpec` this spec defines.
 
-Relevant decisions: ADR-0001 (rigged 3D parts rendered to pixels), ADR-0005 (user uploads appear as `user:<uuid>` refs), `docs/architecture.md` §3.2–3.3 (draft contracts refined here). Bundled sources are the CC0 Quaternius packs (research brief). **Dependency:** skinned parts are rebound by bone name on the assumption that every bundled pack shares one skeleton. That assumption is unverified until the M1 asset spike (`tools/verify-rig.ts`, spec 011) reports. Requirements marked *(M1-gated)* may change after the spike.
+Relevant decisions: ADR-0001 (rigged 3D parts rendered to pixels), ADR-0005 (user uploads appear as `user:<uuid>` refs), `docs/architecture.md` §3.2–3.3 (draft contracts refined here). Bundled sources are the CC0 Quaternius packs (research brief). **Dependency:** skinned parts are rebound by bone name on the assumption that every bundled pack shares one skeleton. That assumption is unverified until the M1 asset spike (`tools/verify-rig.ts`, spec 011) reports. Requirements marked *(M1-gated)* may change after the spike. *(Amended 2026-10-09 (M1-33): the spike reported `mapped` (spec 011 REQ-AST-007, ADR-0008): one shared rig with several skeleton groups; REQ-CMP-008 and REQ-CMP-037 are final for M1.)*
 
 ## Goals
 
@@ -93,6 +93,12 @@ Relevant decisions: ADR-0001 (rigged 3D parts rendered to pixels), ADR-0005 (use
 - **AC-CMP-008.1** Given body `regular-f` with `bodyType: 'regular'` and an outfit with `bodyTypes: ['superhero']`, When compatibility is computed, Then the outfit is incompatible with reason `body-type`.
 - **AC-CMP-008.2** Given a skinned part with `rig: 'other-rig'`, When compatibility is computed against a `quaternius-ue5-65` body, Then it is incompatible with reason `rig`.
 - **AC-CMP-008.3** Given a static prop with no `bodies`/`bodyTypes`, When compatibility is computed against any body, Then it is compatible.
+
+*(Clarified 2026-10-09 (M1-33), confirming the M1 implementation and the PM decision of M1-20.)* The three rules are checked in the order (a), (b), (c), and the first failing rule gives the reason: `rig`, `body` or `body-type`. Compatibility does **not** consider skeleton groups (`skeletonGroup`, `characterSkeletonGroup`): a part from another skeleton group of the same rig is compatible, because rebinding (REQ-CMP-037) and retargeting (spec 004 REQ-ANM-023) absorb rest-pose differences. Gender pairing of the bundled outfits (male parts on `superhero-m`, female parts on `superhero-f`) is expressed only through `bodies` (rule b).
+
+- **AC-CMP-008.4** Given body `superhero-m` and the part `male-ranger-torso` restricted with `bodies: ['superhero-m']`, When compatibility is computed against body `superhero-f`, Then it is incompatible with reason `body`; against `superhero-m`, Then it is compatible. *(Added 2026-10-09 (M1-33).)*
+- **AC-CMP-008.5** Given a body and a skinned part on the same rig whose `skeletonGroup` values differ (e.g. body `superhero-m` in group `superhero-m` and a part in group `female`), and no `bodies`/`bodyTypes` restriction, When compatibility is computed, Then it is compatible. *(Added 2026-10-09 (M1-33).)*
+- **AC-CMP-008.6** Given a skinned part with `rig: 'other-rig'` and `bodies` not containing the body's ID, When compatibility is computed, Then the reason is `rig` (rule (a) is reported first). *(Added 2026-10-09 (M1-33).)*
 
 **REQ-CMP-009 [P1]** WHILE "Show incompatible" is off (default) THE SYSTEM SHALL hide incompatible parts in the part picker; WHILE it is on THE SYSTEM SHALL show them disabled with a text reason.
 
@@ -251,6 +257,9 @@ Relevant decisions: ADR-0001 (rigged 3D parts rendered to pixels), ADR-0005 (use
 
 - **AC-CMP-036.1** Given the built bundled packs, When the default `CharacterSpec` is validated and every ref is looked up in the registry, Then every ref is registered and every part is compatible with `superhero-m`.
 - **AC-CMP-036.2** Given the default `CharacterSpec`, When `setCharacter` is called on the engine, Then the result is `ok: true` on both WebGPU and WebGL2 (`forceWebGL`).
+- **AC-CMP-036.3** Given the default `CharacterSpec`, When it is serialized, Then its body, `parts` refs (6 slots: `hair`, `eyebrows`, `torso`, `arms`, `legs`, `feet`) and 7 tint values equal the table in Data & contracts exactly. *(Added 2026-10-09 (M1-33).)*
+
+*(Note 2026-10-09 (M1-33): in the M1 code the default is not yet one data file. `createDefaultCharacterSpec()` in `@csg/parts-schema` returns the body, anatomy and tints with empty `parts`; the six part refs are added in `apps/web/src/app/default-character.ts`; `tools/lib/check/default-set.ts` repeats the list for the size check. This requirement is unchanged: the follow-up is one shipped data file that all three read.)*
 
 **REQ-CMP-037 [P1]** WHEN a body is equipped THE SYSTEM SHALL build the character skeleton from the rest pose of the body's `characterSkeletonGroup` (or, if absent, its own `skeletonGroup`; if both are absent, the group `RigDefinition.defaultSkeletonGroup`, spec 002 REQ-ANA-021), and SHALL rebind every skinned part, including the body, to that skeleton by joint name while keeping each mesh's own inverse bind matrices. *(Added 2026-10-08, M1 PM rig update a: bind poses form skeleton groups (spec 011 REQ-AST-026); the male outfit group drives male characters and the Superhero body is shown head-only under outfits, per the vendor readme. Amended 2026-10-08 (M1-01c): the last fallback was "the rest pose stored in the body file"; PM decision: it is now `RigDefinition.defaultSkeletonGroup`.)*
 
@@ -274,7 +283,7 @@ Relevant decisions: ADR-0001 (rigged 3D parts rendered to pixels), ADR-0005 (use
 - Oversized or decompression-bomb `#c=` fragment → rejected before or during decoding (REQ-CMP-034).
 - `#c=` link opened while editing → confirmation, new unsaved project, fragment cleared (REQ-CMP-035).
 - Offline and part never cached → REQ-GEN-004.
-- Shared skeleton turns out false → compatibility rule (a) excludes cross-rig skinned parts until a retarget/bone-map path exists (spec 011 fallback). *(M1-gated)*
+- Shared skeleton turns out false → compatibility rule (a) excludes cross-rig skinned parts until a retarget/bone-map path exists (spec 011 fallback). *(M1-gated. M1 result 2026-10-09 (M1-33): all bundled files share rig `quaternius-ue5-65`; only bind poses differ (skeleton groups), which never affect compatibility, AC-CMP-008.5.)*
 
 ## Data & contracts
 
@@ -292,7 +301,7 @@ export interface SlotDefinition {
   required: boolean;                // true only for 'body'
   /** Default socket for static parts in this slot. A semantic socket ID, resolved to a joint
    *  through RigDefinition.socketBones (spec 002 REQ-ANA-019; amended 2026-10-08, M1 D1). */
-  defaultSocket?: SocketBone;     // SocketBone = SocketId (spec 002)
+  defaultSocket?: SocketId;       // spec 002; was `SocketBone` (deprecated alias), renamed 2026-10-09 (M1-33) to the schema name
   randomize: { emptyChance: number }; // 0..1; body = 0
 }
 
@@ -327,7 +336,7 @@ export interface PartEntry {
   /** Slots this part also fills (e.g. robe: torso + legs). */
   alsoOccupies?: SlotId[];
   tintSlots: Array<{ material: string; slot: TintSlot; mode?: 'multiply' | 'replace' }>;
-  socket?: { bone: SocketBone; offset: TransformOffset; inheritScale?: boolean }; // spec 002; `bone` is a socket ID, not a joint name (M1 D1)
+  socket?: { bone: SocketId; offset: TransformOffset; inheritScale?: boolean }; // spec 002; `bone` is a socket ID, not a joint name (M1 D1); type renamed from `SocketBone` 2026-10-09 (M1-33)
   bodies?: string[];               // body part IDs; empty/absent = all
   bodyTypes?: string[];            // body fit groups; empty/absent = all
   /** Added 2026-10-08 (M1). Computed by build-parts: the skeleton group of this file (spec 011 REQ-AST-026). Skinned parts only. */
@@ -366,6 +375,26 @@ Refinements versus architecture §3:
 
 Default `CharacterSpec` (shipped data): body `builtin:quaternius-ubc/superhero-m`, hair and basic outfit (proposed: `hair-simple-parted`, `eyebrows-regular`, Ranger torso, arms, legs and boots; final part IDs come from the M1-14 pack configs), all anatomy values 1, `seed: 0`. *(Amended 2026-10-08 (M1 D4): was `regular-m`; see REQ-CMP-036.)*
 
+*(Amended 2026-10-09 (M1-33): final values, fixed by the M1-14 pack configs and the M1-04 schema defaults.)* The default `CharacterSpec` is exactly:
+
+| Field | Value |
+|-------|-------|
+| `name` | `New character` |
+| `seed` | `0` |
+| `body.ref` | `builtin:quaternius-ubc/superhero-m` |
+| `parts.hair.ref` | `builtin:quaternius-ubc/hair-simple-parted` |
+| `parts.eyebrows.ref` | `builtin:quaternius-ubc/eyebrows-regular` |
+| `parts.torso.ref` | `builtin:quaternius-outfits/male-ranger-torso` |
+| `parts.arms.ref` | `builtin:quaternius-outfits/male-ranger-arms` |
+| `parts.legs.ref` | `builtin:quaternius-outfits/male-ranger-legs` |
+| `parts.feet.ref` | `builtin:quaternius-outfits/male-ranger-boots` |
+| `anatomy` | every value `1` |
+| `morphs` | `{}` |
+| `tints` | `skin #e0ac8a`, `hair #4a3222`, `eyes #3b5b8c`, `primary #5b7fa6`, `secondary #a65b5b`, `metal #a8afb5`, `leather #7a5230` |
+| `face` | absent |
+
+The default clips are not part of the `CharacterSpec` (refinement 4). The default `RenderSettings.animations` selection is `builtin:quaternius-ual/idle` then `builtin:quaternius-ual/walk` (spec 004), and the default-set size budget (spec 011 AC-AST-016.2) covers these 7 files plus the 2 clips. The tint values were chosen by the developer in M1-04 and confirmed by this amendment; they are initial values, adjustable in data with a spec amendment.
+
 Refinement 6 (2026-10-08, M1): `PartEntry.skeletonGroup` and `characterSkeletonGroup` added (REQ-CMP-037); `socket.bone` / `defaultSocket` hold semantic socket IDs resolved through `RigDefinition.socketBones` (spec 002). Architecture §3.2 is synced in M1-32.
 
 ## Non-functional
@@ -377,13 +406,14 @@ Refinement 6 (2026-10-08, M1): `PartEntry.skeletonGroup` and `characterSkeletonG
 
 ## Open questions
 
-- [NEEDS CLARIFICATION: Final body/part IDs and `bodyType` groups depend on which Quaternius tiers are bundled (spec 011 open question). Blocks the default `CharacterSpec` only.]
+- ~~[NEEDS CLARIFICATION: Final body/part IDs and `bodyType` groups depend on which Quaternius tiers are bundled (spec 011 open question). Blocks the default `CharacterSpec` only.]~~ Resolved 2026-10-09 (M1-33): free tiers only (spec 011); bodies `superhero-m` and `superhero-f` (`bodyType: 'superhero'`); the default `CharacterSpec` is fixed in Data & contracts.
 - [NEEDS CLARIFICATION: Can Quaternius outfits fit all three body proportions (Superhero/Regular/Teen), or only some? Decides how `bodyTypes` is filled in pack configs. Answered by the M1 spike. Partly answered 2026-10-08 (M1 D4): M1 ships Superhero bodies only, with outfits restricted by `bodies` (male parts → `superhero-m`, female → `superhero-f`) and tuned `hides`. Extracting Regular bodies is reopened only if the M1 visual review finds seams `hides` cannot cover.]
 - [NEEDS CLARIFICATION: Should a user be able to mirror handedness (props in the left hand by default)? Proposal: P3, a `handedness` field later.]
 
 ## References
 
-- ADR-0001, ADR-0005; `docs/architecture.md` §2.1, §3.2–3.3, §4.1–4.3
+- ADR-0001, ADR-0005, ADR-0008 (M1 rig outcome, `docs/adr/0008-shared-rig-skeleton-groups-runtime-retarget.md`); `docs/architecture.md` §2.1, §3.2–3.3, §4.1–4.3
+- M1 implementation read for the 2026-10-09 (M1-33) amendments: `packages/engine/src/registry/compatibility.ts`, `packages/parts-schema/src/character-spec.ts`, `apps/web/src/app/default-character.ts`, `assets/packs/quaternius-{ubc,outfits}/manifest.json`
 - `.tagconn/work/research.md` (2026-10-08)
 - Quaternius Modular Character Outfits – Fantasy: https://quaternius.itch.io/modular-character-outfits-fantasy (accessed 2026-10-08)
 - Quaternius Universal Base Characters: https://quaternius.itch.io/universal-base-characters (accessed 2026-10-08)

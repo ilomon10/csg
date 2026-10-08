@@ -5,31 +5,37 @@
 import {existsSync} from 'node:fs';
 import {readdir, readFile} from 'node:fs/promises';
 import {join} from 'node:path';
-import {parsePackConfig} from '@csg/parts-schema';
+import {parseJson, parsePackConfig} from '@csg/parts-schema';
 import type {SchemaIssue} from '@csg/parts-schema';
 import {BuildError} from './types.js';
 import type {LoadedPack, SourcePackInfo} from './types.js';
 
 /** Parses the `packs` array of `asset-sources.json` text; throws {@link BuildError} when malformed. */
 export function parseAssetSources(text: string): SourcePackInfo[] {
-  let json: {packs?: unknown};
-  try {
-    json = JSON.parse(text) as {packs?: unknown};
-  } catch {
+  const parsed = parseJson(text);
+  if (!parsed.ok) {
     throw new BuildError(
       'AST_CONFIG_INVALID',
-      'asset-sources.json is not JSON.',
+      `asset-sources.json is not valid JSON: ${parsed.issues.map(i => i.message).join('; ')}`,
       2,
     );
   }
-  if (!Array.isArray(json.packs)) {
+  const json = parsed.value as {packs?: unknown} | null;
+  if (json === null || typeof json !== 'object' || !Array.isArray(json.packs)) {
     throw new BuildError(
       'AST_CONFIG_INVALID',
       'asset-sources.json has no "packs" array.',
       2,
     );
   }
-  return (json.packs as SourcePackInfo[]).map(p => {
+  return (json.packs as Array<SourcePackInfo | null>).map((p, index) => {
+    if (p === null || typeof p !== 'object') {
+      throw new BuildError(
+        'AST_CONFIG_INVALID',
+        `asset-sources.json: packs[${index}] is not an object.`,
+        2,
+      );
+    }
     if (
       typeof p.packId !== 'string' ||
       (p.dir !== undefined &&
@@ -54,17 +60,15 @@ export function loadPackFromText(
   configPath: string,
   sources: readonly SourcePackInfo[],
 ): LoadedPack {
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch {
+  const json = parseJson(text);
+  if (!json.ok) {
     throw new BuildError(
       'AST_CONFIG_INVALID',
-      `${configPath} is not valid JSON.`,
+      `${configPath} is not valid JSON: ${json.issues.map(i => i.message).join('; ')}`,
       2,
     );
   }
-  const parsed = parsePackConfig(json);
+  const parsed = parsePackConfig(json.value);
   if (!parsed.ok) {
     const lines = parsed.issues.map(i => `  - ${formatIssue(i)}`);
     throw new BuildError(

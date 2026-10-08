@@ -4,7 +4,7 @@ title: Asset pipeline (ingestion, rig verification, manifests, licensing)
 status: draft
 owner: spec-writer
 depends_on: [constitution, 000-overview, 001-character-composer, 002-anatomy, 004-animation]
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 ---
 
 # 011 – Asset pipeline
@@ -17,7 +17,7 @@ last_updated: 2026-10-08
 
 Bundled characters come from CC0 Quaternius packs: Universal Base Characters (UBC), Modular Character Outfits – Fantasy and the Universal Animation Library (UAL), plus CC0 Quaternius/KayKit props. Raw packs are large (UBC Source ≈ 600 MB, Outfits Standard ≈ 280 MB), come in several formats and are not in the shape the engine needs: one optimized file per part, a manifest, thumbnails and license records. The pipeline turns local source packs into committed, optimized, licensed, data-driven packs that the composer (001), anatomy (002) and animation (004) consume.
 
-The pipeline is also how the riskiest assumption gets tested. The research brief cites a third-party claim that all packs share one 65-joint UE5-style skeleton with identical bind poses. **That claim is unverified.** `tools/verify-rig.ts` is the **M1 spike** that confirms or refutes it, and its result gates the final contracts of 001/002/004 (ADR-0001 risk, architecture §7).
+The pipeline is also how the riskiest assumption gets tested. The research brief cites a third-party claim that all packs share one 65-joint UE5-style skeleton with identical bind poses. **That claim is unverified.** `tools/verify-rig.ts` is the **M1 spike** that confirms or refutes it, and its result gates the final contracts of 001/002/004 (ADR-0001 risk, architecture §7). *(Amended 2026-10-09 (M1-33): the spike answered **mapped** (REQ-AST-007, ADR-0008): names and hierarchy are shared, bind poses form 4 skeleton groups.)*
 
 ## Goals
 
@@ -54,7 +54,7 @@ Script names (consistency review 2026-10-08): `pnpm assets:build`, `assets:check
 
 - **AC-AST-001.1** Given the repository, When `git check-ignore assets-src/x` runs, Then the path is ignored.
 - **AC-AST-001.2** Given an unzipped source pack folder `assets-src/<dir>/` whose tree hash (REQ-AST-024) differs from `treeSha256` in `asset-sources.json`, When any asset tool that reads sources runs, Then it stops with `AST_SOURCE_HASH_MISMATCH` and exit code 2, naming the pack, the expected hash and the actual hash. *(Amended 2026-10-08 (M1 D3): was the archive SHA-256.)*
-- **AC-AST-001.3** Given `assets-src/` is missing a listed pack, When a tool runs without `--pack`, Then it prints download instructions (vendor URL, tier, target folder) for that pack and exits with code 2.
+- **AC-AST-001.3** Given `assets-src/` is missing a listed pack, When a tool runs without `--pack`, Then it prints download instructions (vendor URL, tier, target folder) for that pack and exits with code 2. *(Amended 2026-10-09 (M1-33): the error code is `AST_SOURCE_MISSING`.)*
 
 **REQ-AST-002 [P1]** THE SYSTEM SHALL accept glTF 2.0 (`.gltf`/`.glb`) sources only. Other source formats (FBX, BLEND) SHALL be converted by the contributor with Blender, following a documented recipe in `docs/contributing/assets.md`.
 
@@ -90,6 +90,8 @@ Script names (consistency review 2026-10-08): `pnpm assets:build`, `assets:check
 
 - **AC-AST-007.1** Given the M1 milestone exit review, When `docs/adr/` is checked, Then an ADR records the outcome and links `assets/reports/rig-report.md`, and specs 001/002/004 have their *(M1-gated)* open questions resolved or re-scoped in the same PR.
 
+*(Amended 2026-10-09 (M1-33): outcome final.)* The M1 outcome is **mapped**, final for the bundled packs `quaternius-ubc`, `quaternius-outfits` and `quaternius-ual`: one rig `quaternius-ue5-65`; skeleton groups `superhero-m`, `male`, `female` and `ual` (the rig's `defaultSkeletonGroup` is `superhero-m`); no bone map is needed (names match); the fallback to KayKit is not taken. The decision record is [ADR-0008](../docs/adr/0008-shared-rig-skeleton-groups-runtime-retarget.md), and the *(M1-gated)* open questions of specs 000, 001, 002 and 004 were resolved on 2026-10-09 (M1-33), which satisfies AC-AST-007.1 once ADR-0008 is merged. A later change of outcome (for example adding a pack that needs a bone map) needs a new ADR that supersedes ADR-0008 and a new report.
+
 **REQ-AST-008 [P2]** WHERE verify-rig finds name mismatches THE SYSTEM SHALL suggest a bone map per failing file using the DOM-free auto-map heuristic of spec 008, written to the report as `suggestedBoneMap`.
 
 - **AC-AST-008.1** Given the fixture with `Hand_R`, When verify-rig runs, Then `suggestedBoneMap` maps `Hand_R` → `hand_r`.
@@ -106,19 +108,33 @@ Script names (consistency review 2026-10-08): `pnpm assets:build`, `assets:check
 - **AC-AST-010.1** Given a built part, When inspected, Then it uses `EXT_meshopt_compression`, declares neither `KHR_texture_basisu` nor `KHR_draco_mesh_compression`, every `images[].mimeType` is `image/png` with width and height ≤ the REQ-AST-010 limit for its kind, and all node and bone names equal the source names (case-sensitive, e.g. `Head` stays `Head`). *(Amended 2026-10-08 (M1 D1, D2): was "uses `KHR_texture_basisu`".)*
 - **AC-AST-010.2** Given a fixture clip, When resampled, Then every sampled bone transform at 30 Hz differs from the source by ≤ 1e-4 (position m, quaternion components).
 
+*(Amended 2026-10-09 (M1-33), PM-accepted in M1-16.)* The sizes above are maxima. The bundled Quaternius packs are built with smaller limits: **512² for bodies and 256² for every other part and prop**, set in `tools/build-parts.ts`. Reason: the repository budget (built packs ≤ 30 MB in git, M1 R1; the M1 build is 18 MB in 80 files, the default set 3.74 MB). These sizes are enough for 32–128 px sprites, where a texel of a 256² texture is already below one output pixel. A community pack may use the maxima. Texture budget handling: a file with more than 4 textures (REQ-AST-016) drops secondary maps by kind, first normal maps, then occlusion, then metallic-roughness (each kind in material order), stopping as soon as 4 remain, and the build warns `AST_TEXTURES_DROPPED` with the counts before and after and the dropped maps; base color and emissive maps are never dropped, so a file still over 4 fails `assets:check` with `AST_BUDGET_TEXTURES`. An image referenced by a source glTF but missing from the source folder is dropped with warning `AST_SOURCE_IMAGE_MISSING`, and the build continues.
+
+- **AC-AST-010.3** Given the bundled packs built by `pnpm assets:build`, When every built GLB is inspected, Then every image of a body part is ≤ 512 px on its longer side and every image of any other part or prop is ≤ 256 px. *(Added 2026-10-09 (M1-33).)*
+- **AC-AST-010.4** Given a fixture source mesh whose material uses 5 textures (base color, normal, occlusion, metallic-roughness, emissive), When built, Then the output has 4 textures, the normal map is the one removed, base color and emissive are kept, and the build prints `AST_TEXTURES_DROPPED` naming the part with `before: 5, after: 4`. *(Added 2026-10-09 (M1-33).)*
+- **AC-AST-010.5** Given a fixture `.gltf` source whose `images[0].uri` names a file that does not exist, When built, Then the build exits 0, prints `AST_SOURCE_IMAGE_MISSING` naming the URI, and the output contains no reference to that image. *(Added 2026-10-09 (M1-33).)*
+
 **REQ-AST-011 [P1]** THE SYSTEM SHALL normalize outputs to meters, +Y up and the character facing +Z, and SHALL bake any armature-root transform so that `RigDefinition` bind poses hold. *(M1-gated: the source orientation is confirmed by verify-rig.)*
 
 - **AC-AST-011.1** Given a fixture exported at 100× scale facing −Z, When built, Then the body's bounding box height is within 1 % of the reference and its forward vector is +Z.
+- **AC-AST-011.2** Given a fixture whose armature root has scale `[1, 1, 1.01]` (non-uniform by more than 1e-4 relative), When built, Then the build bakes the uniform mean scale (cube root of the product, ≈ 1.00332), exits 0 and prints `AST_NORMALIZE_NONUNIFORM` naming the armature. *(Added 2026-10-09 (M1-33): the M1 build's handling of non-uniform armature scale; non-uniform scale cannot be baked into a skeleton without shear.)*
 
 **REQ-AST-012 [P1]** THE SYSTEM SHALL write a per-vertex body-region attribute `_REGION` (unsigned byte, `BodyRegion` index as fixed by REQ-AST-025) on body parts, assigning each vertex to the region of its highest-weight joint via `RigDefinition.regionBones`, so the engine can hide regions (spec 001 REQ-CMP-011) without separate meshes.
 
 - **AC-AST-012.1** Given the fixture body, When built, Then every vertex has a `_REGION` value, and vertices weighted ≥ 0.5 to `hand_l` carry the `hands` index.
 - **AC-AST-012.2** Given a joint not listed in any `regionBones` entry, When built, Then the build fails with `AST_REGION_UNMAPPED` naming the joint.
+- **AC-AST-012.3** Given a fixture body with a primitive that has no `JOINTS_0`/`WEIGHTS_0`, or a vertex whose 4 weights are all 0, When built, Then the build fails with `AST_REGION_UNWEIGHTED` naming the body (and the vertex index in the second case). *(Added 2026-10-09 (M1-33): the error code the M1 build uses when no highest-weight joint exists.)*
+
+*(Amended 2026-10-09 (M1-33), PM decision H1 from the M1 review: region per triangle.)* The region is assigned per **triangle**, not per vertex, and `_REGION` is constant over each triangle: a triangle's region is the one with the largest summed joint weight over its three vertices (each vertex's weights are summed per region through `regionBones`); ties go to the lower `BODY_REGIONS` index. A vertex shared by triangles of different regions is duplicated, one copy per region, with every other attribute, morph target and skin weight copied; the index buffer is rewritten, so the vertex count can grow but the triangle count does not change. Reason: a per-vertex value is interpolated across a boundary triangle, which made the hide mask cut through triangles and leave slivers or holes. AC-AST-012.1 and AC-AST-025.1 read "triangles whose three vertices are weighted ≥ 0.5 to `hand_l`" instead of "vertices weighted ≥ 0.5 to `hand_l`".
+
+- **AC-AST-012.4** Given the fixture body, When built, Then for every triangle the three `_REGION` values of its corners are equal, the triangle count equals the source's, and every vertex position of the source appears in the output. *(Added 2026-10-09 (M1-33).)*
+- **AC-AST-012.5** Given a fixture triangle whose vertices have summed weights 1.2 to `lower-arms` joints and 1.8 to `hands` joints, and a neighbouring triangle sharing two of its vertices whose region is `lower-arms`, When built, Then the first triangle's corners hold 6 (`hands`), the second's hold 5, and each of the two shared vertices exists twice in the output (once per value) with identical position, normal, `JOINTS_0` and `WEIGHTS_0`. *(Added 2026-10-09 (M1-33).)*
 
 **REQ-AST-013 [P1]** THE SYSTEM SHALL generate `assets/packs/<packId>/manifest.json` (`PartManifest`, spec 001) and, for animation packs, `clips.json` (`ClipManifest`, spec 004), filling computed fields (`file`, `rig`, `sha256`, `stats.triangles`, `stats.textures`, `durationSec`, `hasRootMotion`, `thumbnail`, `skeletonGroup`) from the outputs and authored fields (`id`, `name`, `slot`, `hides`, `tintSlots`, `alsoOccupies`, `bodyType(s)`, `bodies`, `characterSkeletonGroup`, `tags`, `socket`, `license`) from `pack.config.json`. The manifest embeds a copy of `packages/parts-schema/rigs/<rigId>.json` in `rigs[]`, and `assets:check` fails with `AST_MANIFEST_STALE` when the copy differs. *(Amended 2026-10-08 (M1 PM rig update a): `skeletonGroup`, `characterSkeletonGroup`, `bodies` and the embedded rig copy added; clip entries also get `sha256`, spec 004.)*
 
 - **AC-AST-013.1** Given a build, When `manifest.json` is validated with `@csg/parts-schema`, Then it passes, and each entry's `sha256` equals the SHA-256 of its file.
 - **AC-AST-013.2** Given `manifest.json` is edited by hand, When `pnpm assets:check` runs, Then it fails with `AST_MANIFEST_STALE` and says to edit `pack.config.json` instead.
+- **AC-AST-013.3** Given a `pack.config.json` whose `rig` names a rig with no file `packages/parts-schema/rigs/<rigId>.json`, When `pnpm assets:build` runs, Then it exits 2 with `AST_RIG_MISSING` naming the rig ID and the expected path; When `pnpm assets:check` runs, Then it fails with `AST_RIG_MISSING` for that pack. *(Added 2026-10-09 (M1-33).)*
 
 **REQ-AST-014 [P1]** THE SYSTEM SHALL make builds deterministic: running the build twice on the same sources with the same tool versions SHALL produce byte-identical outputs (single-threaded texture encoding, sorted iteration, no timestamps).
 
@@ -136,6 +152,10 @@ Script names (consistency review 2026-10-08): `pnpm assets:build`, `assets:check
 - **AC-AST-016.1** Given a fixture part with 10,001 triangles, When `assets:check` runs, Then it fails with `AST_BUDGET_TRIANGLES` naming the part and the limit.
 - **AC-AST-016.2** Given the default `CharacterSpec` (spec 001) and default clips, When the sizes of their files are summed, Then the total is ≤ 15 MB (architecture §4.3).
 
+*(Amended 2026-10-09 (M1-33), recording the M1 implementation.)* `assets:check` reports a default set over 15 MB as error `AST_BUDGET_SIZE` (the default set is the 7 part files and 2 clip files of spec 001 Data & contracts; 3.74 MB in M1). `assets:build` additionally warns `AST_BUDGET_FILE_SIZE` for any single built file over 3 MiB (3,145,728 bytes), a repository-size guard (M1 R1: built packs ≤ 30 MB in git) that does not fail the build.
+
+- **AC-AST-016.3** Given a built clip of 3,145,729 bytes, When `pnpm assets:build` runs, Then it exits 0 and prints `AST_BUDGET_FILE_SIZE` naming the clip ID, its size and the 3,145,728-byte limit. *(Added 2026-10-09 (M1-33).)*
+
 **REQ-AST-017 [P1]** THE SYSTEM SHALL require a license record (`license`, `author`, `sourceUrl`) for every pack and accept only `CC0-1.0` or `CC-BY-4.0` for bundled assets; any other license SHALL fail the check (P-02, REQ-GEN-008).
 
 - **AC-AST-017.1** Given a pack config with license `CC-BY-SA-4.0`, When `assets:check` runs, Then it fails with `AST_LICENSE_NOT_ALLOWED`.
@@ -149,6 +169,7 @@ Script names (consistency review 2026-10-08): `pnpm assets:build`, `assets:check
 
 - **AC-AST-019.1** Given a part ID removed from `pack.config.json` but not added to `retired-ids.json`, When `assets:check` runs, Then it fails with `AST_ID_REMOVED` naming the ID.
 - **AC-AST-019.2** Given a new part whose ID is in `retired-ids.json`, When checked, Then it fails with `AST_ID_REUSED`.
+- **AC-AST-019.3** Given a `retired-ids.json` that is not `{"format": "sprite-retired-ids", "version": 1, "ids": [<strings>]}` (e.g. a bare array, or `{"parts": [...]}`), When `pnpm assets:check` runs, Then it fails with `AST_RETIRED_IDS_INVALID` naming the pack. *(Added 2026-10-09 (M1-33): file format fixed in Data & contracts.)*
 
 **REQ-AST-020 [P1]** THE SYSTEM SHALL provide `pnpm assets:check`, which runs without `assets-src/` and validates all built packs: schema validity, files exist and hashes match, no orphan files, budgets (REQ-AST-016), licenses (REQ-AST-017, -018), ID stability (REQ-AST-019), every skinned part and clip against its committed `RigDefinition` (verify-rig in `--built` mode), and thumbnails present (missing = warning).
 
@@ -185,6 +206,8 @@ Script names (consistency review 2026-10-08): `pnpm assets:build`, `assets:check
 
 - **AC-AST-025.1** Given the fixture body, When built, Then the `_REGION` accessor has `componentType` 5121, `type` `SCALAR`, `normalized` absent or false, and vertices weighted ≥ 0.5 to `hand_l` hold value 6.
 - **AC-AST-025.2** Given `BODY_REGIONS`, When the engine computes the hide mask for `['hands', 'feet']`, Then the mask is `1088` (bit 6 + bit 10).
+*(Amended 2026-10-09 (M1-33).)* The encoding is unchanged; the values are constant per triangle (REQ-AST-012 amendment), so the engine's `regionId` (REQ-AST-028) is the same at all three corners of a triangle and the hide test never sees an interpolated region value.
+
 - **AC-AST-025.3** Given a built body whose `_REGION` holds a value ≥ 11, When `pnpm assets:check` runs, Then it fails with `AST_REGION_INVALID` naming the part and the number of invalid vertices.
 
 **REQ-AST-026 [P1]** THE SYSTEM SHALL classify every skinned mesh and clip whose bone names, parents, joint count, `lengthAxis`, armature root transform, unit scale, up axis and clip targets match the `RigDefinition` (REQ-AST-003 a, b, e–h, "structurally compatible") into the rig's **skeleton groups**: sets of files whose rest poses agree within the REQ-AST-004 tolerances. In `assets:build` and in `assets:check` (verify-rig `--built` mode), a bind-pose difference between a structurally compatible file and the reference SHALL be reported as `warn` naming the file's skeleton group, and SHALL NOT fail the command; a structural difference SHALL fail with `AST_RIG_MISMATCH`. Standalone `pnpm assets:verify-rig` keeps per-item statuses against the reference file (AC-AST-003.3) and reports the groups and the outcome `mapped`. *(Added 2026-10-08, M1 PM rig update a.)*
@@ -194,6 +217,10 @@ Script names (consistency review 2026-10-08): `pnpm assets:build`, `assets:check
 - **AC-AST-026.3** Given verify-rig `--write-canonical` on the fixtures, When the rig JSON is written, Then `skeletonGroups` holds one entry per group whose ID comes from the overlay, with a rest-pose local transform (translation, rotation quaternion, scale) for every bone in `bones`.
 - **AC-AST-026.4** Given a structurally compatible part whose rest pose matches no declared group, When built, Then the build succeeds with warning `AST_SKELETON_GROUP_UNMATCHED` naming the part, and its manifest entry has no `skeletonGroup`.
 - **AC-AST-026.5** Given the committed `assets/reports/rig-report.json`, When validated, Then it has `outcome`, `referenceFile` and `skeletonGroups`, and every `skinned-mesh` item's file appears in exactly one group.
+
+*(Amended 2026-10-09 (M1-33), matching the M1 implementation and spec 004's required `ClipEntry.skeletonGroup`.)* AC-AST-026.4 applies to parts only. A structurally compatible **clip** whose rest pose matches no declared group (or matches more than one, which is treated as no match) is recorded with `skeletonGroup` = `RigDefinition.defaultSkeletonGroup`, and the build warns `AST_CLIP_GROUP_DEFAULTED` naming the clip and the recorded group; the build continues. All 43 bundled UAL clips match group `ual`.
+
+- **AC-AST-026.6** Given a fixture clip whose rest pose matches neither `g-a` nor `g-b`, When built, Then the build exits 0, prints `AST_CLIP_GROUP_DEFAULTED` naming the clip and `g-a` (the fixture rig's `defaultSkeletonGroup`), and the clip's `clips.json` entry has `skeletonGroup: 'g-a'`. *(Added 2026-10-09 (M1-33).)*
 
 **REQ-AST-027 [P1]** WHEN a source mesh has vertices with more than 4 non-zero joint influences THE SYSTEM SHALL keep the 4 largest weights per vertex (ties broken by the lower joint index), renormalize them to sum 1 (± 1e-6 before quantization), write a single `JOINTS_0`/`WEIGHTS_0` set, and emit the warning `AST_INFLUENCES_LIMITED` naming the part and the number of affected vertices; the build SHALL continue. *(Added 2026-10-08, M1 PM rig update e: two Female_Ranger meshes have 5 influences.)*
 
@@ -249,7 +276,7 @@ Script names (consistency review 2026-10-08): `pnpm assets:build`, `assets:check
 }
 ```
 
-*(Example amended 2026-10-08 (M1 D4): M1 bundles only the free Superhero male and female bodies (`bodyType: 'superhero'`); outfit parts fit them through `bodies` and tuned `hides` (the vendor readme uses only the head of the body under outfits); extracting the Regular bodies from the combined outfit files is deferred. Exact `hides` lists are tuned during M1 visual review. A body entry may set `characterSkeletonGroup` (REQ-AST-026, spec 001 REQ-CMP-037), e.g. `"characterSkeletonGroup": "male-outfits"` on `superhero-m`.)*
+*(Example amended 2026-10-08 (M1 D4): M1 bundles only the free Superhero male and female bodies (`bodyType: 'superhero'`); outfit parts fit them through `bodies` and tuned `hides` (the vendor readme uses only the head of the body under outfits); extracting the Regular bodies from the combined outfit files is deferred. Exact `hides` lists are tuned during M1 visual review. A body entry may set `characterSkeletonGroup` (REQ-AST-026, spec 001 REQ-CMP-037), e.g. `"characterSkeletonGroup": "male-outfits"` on `superhero-m`. Amended 2026-10-09 (M1-33): the committed group ID is `male`, so the M1 config has `"characterSkeletonGroup": "male"` on `superhero-m` and `"female"` on `superhero-f`.)*
 
 `tools/asset-sources.json` (authored, committed; M1 D3 and PM rig update c):
 
@@ -351,6 +378,18 @@ Overlay addition (M1-01c): `defaultSkeletonGroup` (a key of the overlay's `skele
 
 Error codes use the `AST_` prefix: `AST_SOURCE_HASH_MISMATCH`, `AST_SOURCE_FORMAT`, `AST_SOURCE_READ`, `AST_CONFIG_UNMATCHED`, `AST_REGION_UNMAPPED`, `AST_REGION_INVALID`, `AST_MANIFEST_STALE`, `AST_BUDGET_TRIANGLES`, `AST_BUDGET_TEXTURES`, `AST_BUDGET_INFLUENCES`, `AST_LICENSE_NOT_ALLOWED`, `AST_ID_REMOVED`, `AST_ID_REUSED`, `AST_ORPHAN_FILE`, `AST_RIG_MISMATCH`. Report and warning codes (non-fatal unless noted): `AST_BIND_POSE_WITHIN_TOLERANCE` (info, AC-AST-004.1), `AST_WEIGHTS_UNNORMALIZED` (warn; error when a weight sum is off by > 1e-2), `AST_CLIP_TARGETS` (info: clip and channel counts), `AST_INFLUENCES_LIMITED` (warn, REQ-AST-027), `AST_SKELETON_GROUP_UNMATCHED` (warn, REQ-AST-026). *(List amended 2026-10-08, M1.)*
 
+*(Amended 2026-10-09 (M1-33): codes used by the M1 tools.)* Build and check codes added: `AST_SOURCE_MISSING` (error, exit 2: a listed source folder is absent; prints download instructions, AC-AST-001.3), `AST_RIG_MISSING` (error: the pack's rig JSON is missing or unreadable; exit 2 in `assets:build`, AC-AST-013.3), `AST_REGION_UNWEIGHTED` (error: a body primitive or vertex has no joint weights, so no region can be assigned, AC-AST-012.3), `AST_RETIRED_IDS_INVALID` (error, AC-AST-019.3), `AST_BUDGET_SIZE` (error: default set over 15 MB, AC-AST-016.2). Warnings added (the command continues): `AST_TEXTURES_DROPPED` (secondary maps removed to meet the 4-texture budget, REQ-AST-010 amendment, AC-AST-010.4), `AST_SOURCE_IMAGE_MISSING` (an image referenced by a source glTF is absent; texture dropped, AC-AST-010.5), `AST_CLIP_GROUP_DEFAULTED` (clip recorded with `defaultSkeletonGroup`, AC-AST-026.6), `AST_BUDGET_FILE_SIZE` (one built file over 3 MiB, AC-AST-016.3), `AST_NORMALIZE_NONUNIFORM` (non-uniform armature scale baked as its mean, AC-AST-011.2), `AST_BIND_POSE_DIFFERS` (the REQ-AST-026 `warn` naming a file's skeleton group), `AST_THUMBNAIL_MISSING` (REQ-AST-020: missing thumbnail = warning). Report info: `AST_SKELETON_GROUP` (group of an item). The M1 tools also use these codes, listed here for completeness: `AST_USAGE` (bad CLI arguments, exit 2), `AST_CONFIG_INVALID`, `AST_CONFIG_MISSING` (pack config fails its schema or is absent), `AST_MANIFEST_INVALID`, `AST_MANIFEST_DUPLICATE`, `AST_MANIFEST_MISSING`, `AST_MANIFEST_UNKNOWN`, `AST_MANIFEST_RIG` (manifest assembly: schema failure, duplicate ID, authored entry without output, output without authored entry, rig ID or embedded rig mismatch), `AST_FILE_MISSING`, `AST_HASH_MISMATCH` (REQ-AST-020: a listed file is absent or its SHA-256 differs), `AST_RIG_INVALID` (rig JSON fails REQ-ANA-021), `AST_LICENSE_MISSING` (REQ-AST-017 record incomplete), `AST_LICENSES_STALE` (REQ-AST-018 diff).
+
+`assets/packs/<packId>/retired-ids.json` (written by `assets:build`, read by `assets:check`; format fixed 2026-10-09 (M1-33)). One ID namespace per pack: an ID in `ids` is retired for parts and clips alike. IDs are sorted and never removed from the list.
+
+```json
+{
+  "format": "sprite-retired-ids",
+  "version": 1,
+  "ids": ["cape-99"]
+}
+```
+
 Output layout: `assets/packs/<packId>/{manifest.json, clips.json?, parts/*.glb, clips/*.glb, thumbnails/*.webp, presets/**/*.json, retired-ids.json}`.
 
 ## Non-functional
@@ -362,18 +401,19 @@ Output layout: `assets/packs/<packId>/{manifest.json, clips.json?, parts/*.glb, 
 
 ## Open questions
 
-- [NEEDS CLARIFICATION: Which Quaternius tiers do we bundle? The free Standard tiers are limited: UBC Standard has 2 bodies and 5 hairstyles, the Outfits page says only Ranger and Peasant are free, and UAL Standard has 45 clips. Paid tiers (UBC Source $19.99, Outfits Source $20, UAL Pro $9.99) are also CC0, so redistribution is legal, but bundling paid content is a courtesy and community question. Blocks the content list and the default character, not the tools. Owner: project owner.]
-- [NEEDS CLARIFICATION: Do built packs (tens of MB of GLB/KTX2) go in git directly, in Git LFS, or in release artifacts fetched at build time? Affects clone size and the "no proprietary tool" rule (P-11). Owner: maintainers.]
-- [NEEDS CLARIFICATION: Allow `CC-BY-4.0` for bundled assets (REQ-AST-017), or CC0 only? CC-BY adds an attribution duty to users' games (handled by CREDITS.txt). Proposal: allow, with an export warning. Owner: project owner.]
+- ~~[NEEDS CLARIFICATION: Which Quaternius tiers do we bundle? The free Standard tiers are limited: UBC Standard has 2 bodies and 5 hairstyles, the Outfits page says only Ranger and Peasant are free, and UAL Standard has 45 clips. Paid tiers (UBC Source $19.99, Outfits Source $20, UAL Pro $9.99) are also CC0, so redistribution is legal, but bundling paid content is a courtesy and community question. Blocks the content list and the default character, not the tools. Owner: project owner.]~~ Resolved 2026-10-09 (M1-33), PM default recorded 2026-10-08 after the owner left it open: bundle only the free tiers (UBC Standard, Outfits Ranger and Peasant, UAL Standard). Paid packs stay out of the repository out of respect for the vendor; users can build them locally from `assets-src/` because packs are data (REQ-AST-022).
+- ~~[NEEDS CLARIFICATION: Do built packs (tens of MB of GLB/KTX2) go in git directly, in Git LFS, or in release artifacts fetched at build time? Affects clone size and the "no proprietary tool" rule (P-11). Owner: maintainers.]~~ Resolved 2026-10-09 (M1-33), PM decision 2026-10-08: plain git, no LFS, under a size budget (built packs ≤ 30 MB; per-file warning above 3 MiB, AC-AST-016.3). The M1 build is 18 MB in 80 files with no file over 3 MiB.
+- ~~[NEEDS CLARIFICATION: Allow `CC-BY-4.0` for bundled assets (REQ-AST-017), or CC0 only? CC-BY adds an attribution duty to users' games (handled by CREDITS.txt). Proposal: allow, with an export warning. Owner: project owner.]~~ Resolved 2026-10-09 (M1-33), PM decision 2026-10-08: allowed, with credits (REQ-AST-017 as written; `CREDITS.txt`, spec 005). All M1 bundled packs are CC0.
 - [NEEDS CLARIFICATION: If KTX2 (Basis) encoding is not byte-deterministic even single-threaded, should REQ-AST-014 exempt texture bytes and compare decoded pixels instead? Deferred with KTX2 (REQ-AST-010 as amended 2026-10-08, M1 D2); reopen when KTX2 returns.]
 - [NEEDS CLARIFICATION: Spec 008 AC-UPL-054.1 says no Meshopt decoder file is requested in a page that equips stored user assets outside the upload worker. Bundled packs now need the in-thread Meshopt decoder on the main thread (REQ-AST-029), so a session with a bundled body and user parts would request it. Proposal: scope AC-UPL-054.1 to the user-asset loader (it must not register the decoder) rather than the whole page. Owner: spec-writer for 008 with the security reviewer; blocks nothing in M1, must be settled before M5.]
 - [NEEDS CLARIFICATION: When KTX2 returns, which same-origin transcoder setup is used (a self-hosted `worker-src 'self'` module worker, or calling the Basis WASM on the main thread)? Shared with spec 000 / 008 open questions on `KTX2Loader` blob workers. Owner: asset-pipeline-engineer; not blocking (PNG in M1).]
 - M1 D4 (2026-10-08): fit groups for M1 are answered as "Superhero bodies only, outfits restricted with `bodies` and tuned `hides`". Whether to add Regular bodies extracted from the combined outfit files is reopened only if the M1 visual review shows neck, wrist or ankle seams that `hides` cannot cover (spec 001 open question).
-- [NEEDS CLARIFICATION: The vendor pages give different counts (Outfits: 62 vs 82 parts; UBC: 6 vs 8 bodies). verify-rig output becomes the authoritative inventory.]
+- ~~[NEEDS CLARIFICATION: The vendor pages give different counts (Outfits: 62 vs 82 parts; UBC: 6 vs 8 bodies). verify-rig output becomes the authoritative inventory.]~~ Resolved 2026-10-09 (M1-33): the authoritative inventory is the committed `assets/reports/rig-report.json` (files checked) and the generated `manifest.json` / `clips.json` (what is bundled); vendor page counts are not used.
 
 ## References
 
-- ADR-0001 (shared-skeleton risk and fallbacks), ADR-0005 (user assets separate), `docs/architecture.md` §1.1, §4.3, §4.8, §5 (M1), §7
+- ADR-0001 (shared-skeleton risk and fallbacks), ADR-0005 (user assets separate), ADR-0008 (M1 rig outcome `mapped`, `docs/adr/0008-shared-rig-skeleton-groups-runtime-retarget.md`), `docs/architecture.md` §1.1, §4.3, §4.8, §5 (M1), §7
+- M1 implementation read for the 2026-10-09 (M1-33) amendments: `tools/build-parts.ts`, `tools/lib/build/{textures,split,normalize,region,sources,emit}.ts`, `tools/lib/check/{ids,budgets,run}.ts`, `packages/parts-schema/rigs/quaternius-ue5-65.json`, `assets/packs/*/manifest.json`, `assets/packs/quaternius-ual/clips.json`
 - `.tagconn/work/research.md` (2026-10-08)
 - Quaternius Universal Base Characters: https://quaternius.itch.io/universal-base-characters (accessed 2026-10-08)
 - Quaternius Modular Character Outfits – Fantasy: https://quaternius.itch.io/modular-character-outfits-fantasy (accessed 2026-10-08)

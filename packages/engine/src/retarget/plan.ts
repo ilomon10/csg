@@ -1,6 +1,6 @@
 /** Retarget plan construction (REQ-ANM-023, m1-plan section 2.6). */
 import {legLength} from './fk';
-import {quatInvert, quatMultiply, quatNormalize} from './quat';
+import {quatInvert, quatMultiply, quatNormalize} from '../rig';
 import type {
   JointRestTRS,
   RestPose,

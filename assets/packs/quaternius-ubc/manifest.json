@@ -256,7 +256,7 @@
       "kind": "skinned",
       "name": "Superhero (female)",
       "rig": "quaternius-ue5-65",
-      "sha256": "a78fc03cdaf35f0a27da67882f2847dc39f49d83848d039e174de82e3e4db7d8",
+      "sha256": "139b9a5f7ee0f04602c546f971d791c674cf6d2ade2cf55aad77894e748f6391",
       "skeletonGroup": "female",
       "slot": "body",
       "stats": {
@@ -295,7 +295,7 @@
       "kind": "skinned",
       "name": "Superhero (male)",
       "rig": "quaternius-ue5-65",
-      "sha256": "47542719767791a7aacd27712cffbb2a4db7f1f67020e7adc19e905d664200a5",
+      "sha256": "312857192b9069e7054b4a0711091e7cfe4bf3fef78e5fa771dd90c58d025bca",
       "skeletonGroup": "superhero-m",
       "slot": "body",
       "stats": {

@@ -75,40 +75,81 @@ describe('rigDefinitionSchema', () => {
     ).toContain('"head"');
   });
 
-  it('REQ-AST-005: a parent listed after its child fails naming parents.<bone>', () => {
+  it('AC-ANA-021.1: the committed rig validates with root, Head and default group', () => {
+    const file = new URL('../rigs/quaternius-ue5-65.json', import.meta.url);
+    const rig = JSON.parse(readFileSync(file, 'utf8'));
+    const result = rigDefinitionSchema.safeParse(rig);
+    expect(result.success ? [] : result.error.issues).toEqual([]);
+    expect(rig.parents.root).toBeNull();
+    expect(rig.parents.Head).toBe('neck_01');
+    expect(rig.defaultSkeletonGroup).toBe('superhero-m');
+  });
+
+  it('AC-ANA-021.2: zero or two null parents fail with an exactly-one-root issue under parents', () => {
+    for (const edit of [
+      (r: ReturnType<typeof makeRig>) => (r.parents['pelvis'] = null),
+      (r: ReturnType<typeof makeRig>) => (r.parents['root'] = 'pelvis'),
+    ]) {
+      const rig = makeRig();
+      edit(rig);
+      const result = rigDefinitionSchema.safeParse(rig);
+      const issues = result.success ? [] : result.error.issues;
+      expect(
+        issues.some(
+          i =>
+            i.path[0] === 'parents' &&
+            i.message.includes('exactly one root is required'),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('AC-ANA-021.3: rootBone differing from the null-parent joint fails naming rootBone', () => {
     const rig = makeRig();
-    rig.parents['pelvis'] = 'Head';
-    expect(paths(rig)).toContain('parents.pelvis');
+    rig.rootBone = 'pelvis';
+    expect(paths(rig)).toContain('rootBone');
   });
 
-  it('REQ-AST-005: reordered bones put a parent after its child', () => {
+  it('AC-ANA-021.4: a parent listed after its child, or not in bones, fails naming parents.<bone>', () => {
+    const later = makeRig();
+    later.parents['pelvis'] = 'Head';
+    expect(paths(later)).toContain('parents.pelvis');
+    const unknown = makeRig();
+    unknown.parents['pelvis'] = 'Pelvis';
+    expect(paths(unknown)).toContain('parents.pelvis');
+    const reordered = makeRig();
+    [reordered.bones[1], reordered.bones[2]] = [
+      reordered.bones[2]!,
+      reordered.bones[1]!,
+    ];
+    expect(paths(reordered)).toContain('parents.spine_03');
+  });
+
+  it('AC-ANA-021.5: a missing or extra parents entry fails naming that joint', () => {
+    const missing = makeRig();
+    delete missing.parents['hand_l'];
+    expect(paths(missing)).toContain('parents.hand_l');
+    const extra = makeRig();
+    extra.parents['tail_01'] = 'root';
+    expect(paths(extra)).toContain('parents.tail_01');
+  });
+
+  it('AC-ANA-021.6: an unknown or missing defaultSkeletonGroup fails naming it', () => {
+    const unknown = makeRig();
+    unknown.defaultSkeletonGroup = 'g-c';
+    expect(paths(unknown)).toContain('defaultSkeletonGroup');
+    const missing = makeRig() as Record<string, unknown>;
+    delete missing['defaultSkeletonGroup'];
+    expect(paths(missing)).toContain('defaultSkeletonGroup');
+  });
+
+  it('AC-ANA-021.7: a group rest pose missing a joint, or a duplicate group id, fails with the group path', () => {
     const rig = makeRig();
-    [rig.bones[1], rig.bones[2]] = [rig.bones[2]!, rig.bones[1]!];
-    expect(paths(rig)).toContain('parents.spine_03');
-  });
-
-  it('REQ-AST-005: zero or two null parents fail', () => {
-    const none = makeRig();
-    none.parents['root'] = 'pelvis';
-    expect(paths(none)).toContain('parents.root');
-    const two = makeRig();
-    two.parents['Head'] = null;
-    expect(paths(two)).toContain('parents.Head');
-  });
-
-  it('AC-AST-026.3: every group needs a rest pose for every bone', () => {
-    const rig = makeRig();
-    delete rig.skeletonGroups[1]!.restPose['Head'];
-    expect(paths(rig)).toContain('skeletonGroups.1.restPose.Head');
-  });
-
-  it('AC-AST-026.3: duplicate group ids and an unknown default group fail', () => {
+    delete rig.skeletonGroups[1]!.restPose['hand_l'];
+    expect(paths(rig)).toContain('skeletonGroups.1.restPose.hand_l');
     const dup = makeRig();
     dup.skeletonGroups[1]!.id = 'g-a';
     expect(paths(dup)).toContain('skeletonGroups.1.id');
-    const bad = makeRig();
-    bad.defaultSkeletonGroup = 'nope';
-    expect(paths(bad)).toContain('defaultSkeletonGroup');
   });
 
   it('AC-AST-026.3: group ids must match [a-z0-9-]{1,32}', () => {
@@ -117,7 +158,7 @@ describe('rigDefinitionSchema', () => {
     expect(rigDefinitionSchema.safeParse(rig).success).toBe(false);
   });
 
-  it('REQ-AST-005: the committed Quaternius rig validates', () => {
+  it('REQ-AST-005: the committed Quaternius rig has no hipBone and 4 groups', () => {
     const file = new URL('../rigs/quaternius-ue5-65.json', import.meta.url);
     const rig = JSON.parse(readFileSync(file, 'utf8'));
     const result = rigDefinitionSchema.safeParse(rig);

@@ -9,6 +9,7 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import {dirname, join, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {format, resolveConfig} from 'prettier';
+import {parseJson} from '@csg/parts-schema';
 import {readRigFile, SourceReadError} from './lib/gltf-skeleton.js';
 import {checkDefaultSkeletonGroup} from './lib/check/default-group.js';
 import {
@@ -57,6 +58,28 @@ interface Options {
 }
 
 class UsageError extends Error {}
+
+/** Reads and parses a JSON file through `parseJson`; any failure is a {@link UsageError}. */
+function readJsonFile<T>(path: string, label: string): T {
+  let text: string;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch (e) {
+    throw new UsageError(
+      `${label} unreadable: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+  const parsed = parseJson(text);
+  if (!parsed.ok) {
+    throw new UsageError(
+      `${label} is invalid: ${parsed.issues.map(i => i.message).join('; ')}`,
+    );
+  }
+  if (parsed.value === null || typeof parsed.value !== 'object') {
+    throw new UsageError(`${label} must be a JSON object.`);
+  }
+  return parsed.value as T;
+}
 
 function parseArgs(argv: string[]): Options {
   const o: Options = {
@@ -173,9 +196,13 @@ async function formatJson(path: string, value: unknown): Promise<string> {
 
 async function main(): Promise<number> {
   const opts = parseArgs(process.argv.slice(2));
-  const cfg = JSON.parse(
-    readFileSync(join(REPO_ROOT, 'tools/asset-sources.json'), 'utf8'),
-  ) as SourcesConfig;
+  const cfg = readJsonFile<SourcesConfig>(
+    join(REPO_ROOT, 'tools/asset-sources.json'),
+    'tools/asset-sources.json',
+  );
+  if (!Array.isArray(cfg.packs) || !cfg.rig) {
+    throw new UsageError('tools/asset-sources.json lacks "packs" or "rig".');
+  }
   const refPack = cfg.packs.find(p => p.packId === cfg.rig.referencePack);
   if (!refPack)
     throw new UsageError('Reference pack missing in asset-sources.json.');
@@ -196,7 +223,10 @@ async function main(): Promise<number> {
   if (!existsSync(overlayPath)) {
     throw new UsageError(`Overlay missing: ${overlayPath}`);
   }
-  const overlay = JSON.parse(readFileSync(overlayPath, 'utf8')) as RigOverlay;
+  const overlay = readJsonFile<RigOverlay>(
+    overlayPath,
+    relative(REPO_ROOT, overlayPath),
+  );
   const declared: SkeletonGroupInput[] = [];
   for (const [id, rel] of Object.entries(overlay.skeletonGroups ?? {})) {
     const abs = join(opts.src, rel);
@@ -263,11 +293,9 @@ async function main(): Promise<number> {
   }
 
   const nodeVersion = process.version;
-  const pkg = JSON.parse(
-    readFileSync(join(REPO_ROOT, 'tools/package.json'), 'utf8'),
-  ) as {
+  const pkg = readJsonFile<{
     devDependencies?: Record<string, string>;
-  };
+  }>(join(REPO_ROOT, 'tools/package.json'), 'tools/package.json');
   const grouped = groupBySkeletonGroups(
     ref,
     declared,

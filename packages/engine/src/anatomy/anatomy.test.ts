@@ -13,6 +13,7 @@ import {
   resetBodyToRest,
   socketPropScale,
 } from './index';
+import {heapGrowthPerCall} from '../animation/test-heap';
 import {createTestBody, loadFixtureRig} from './test-skeleton';
 
 // Spec ACs say `g-a`/`g-b`; the fixtures use `fixture-a`/`fixture-b` (same meaning).
@@ -261,7 +262,7 @@ describe('AC-ANA-004.1: propagating head', () => {
     const a = size(hair);
     const b = size(grown);
     for (const k of ['x', 'y', 'z'] as const)
-      expect(b[k] / a[k]).toBeCloseTo(1.8, 2);
+      expect(b[k] / a[k]).toBeCloseTo(1.8, 9);
     // Scaling is about the head joint, and the neck is untouched.
     expect(worldPos(body, 'Head').distanceTo(head)).toBeLessThan(1e-9);
     expect(worldPos(body, 'neck_01').distanceTo(neckBefore)).toBeLessThan(1e-9);
@@ -306,7 +307,7 @@ describe('AC-ANA-008.1: ground offset from the character skeleton rest', () => {
         worldPos(body, 'foot_l').y,
         worldPos(body, 'foot_r').y,
       );
-      expect(lowest + offset).toBeCloseTo(0, 3);
+      expect(lowest + offset).toBeCloseTo(0, 9);
       // Shorter legs lift the feet, so the character is shifted down.
       expect(offset).toBeLessThan(0);
     },
@@ -413,6 +414,108 @@ describe('AC-ANA-010.1: clip vertical and root translation scale with legLength'
     // Horizontal root translation scales too.
     lowestFoot(long, 5);
     expect(body.bones.get('root')?.position.z).toBeCloseTo(0.5 * 1.3, 9);
+  });
+});
+
+/** The fixture rig with its `root` rotated -90 degrees about X (Quaternius layout). */
+function rotatedRootRig(): RigDefinition {
+  const r = structuredClone(rig);
+  const h = Math.SQRT1_2;
+  for (const group of r.skeletonGroups) {
+    const root = group.restPose['root'];
+    const pelvis = group.restPose['pelvis'];
+    if (root === undefined || pelvis === undefined) throw new Error('fixture');
+    root.r = [-h, 0, 0, h];
+    // World up (pelvis height) is the root's local Z; +90 degrees about X on
+    // the pelvis restores the rest of the skeleton's world orientation.
+    pelvis.t = [pelvis.t[0], -pelvis.t[2], pelvis.t[1]];
+    pelvis.r = [h, 0, 0, h];
+  }
+  return r;
+}
+
+describe('AC-ANA-010.2: root/pelvis vertical is along world up; root horizontal scales by legLength only', () => {
+  const p = params({legLength: 1.3, height: 1.2});
+  // Clip: root moves +1.0 m in Z over frames 0..7; the pelvis bobs vertically
+  // and sways sideways/forward in its parent's horizontal plane.
+  const bob = (f: number) => 0.02 * (1 - Math.cos((2 * Math.PI * f) / 4));
+  const sway = (f: number) => 0.01 * Math.sin((2 * Math.PI * f) / 8);
+
+  it.each([
+    ['fixture rig (root identity, vertical = local Y)', false],
+    ['root rotated -90 degrees about X (vertical = pelvis local Z)', true],
+  ] as const)('%s', (_label, rotated) => {
+    const r = rotated ? rotatedRootRig() : rig;
+    const {body, binding} = bind(r);
+    const pelvisRest = binding.body.rest.joints.find(j => j.name === 'pelvis')
+      ?.translation as readonly [number, number, number];
+    const vAxis = rotated ? 2 : 1;
+    const fwdAxis = rotated ? 1 : 2;
+    const vRest = pelvisRest[vAxis] as number;
+    const rootZ: number[] = [];
+    for (let f = 0; f < 8; f++) {
+      resetBodyToRest(binding);
+      const root = body.bones.get('root');
+      const pelvis = body.bones.get('pelvis');
+      if (root === undefined || pelvis === undefined) throw new Error('bones');
+      root.position.set(0, 0, f / 7);
+      const clip = [...pelvisRest] as [number, number, number];
+      clip[vAxis] = vRest + bob(f);
+      clip[fwdAxis] = (clip[fwdAxis] as number) + sway(f);
+      clip[0] = clip[0] + sway(f);
+      pelvis.position.fromArray(clip);
+      applyAnatomyToPose(binding, p);
+      rootZ.push(root.position.z);
+      // Vertical component: v_rest + (v_clip - v_rest) * legLength.
+      expect(pelvis.position.getComponent(vAxis)).toBeCloseTo(
+        vRest + bob(f) * 1.3,
+        9,
+      );
+      // Horizontal components of the pelvis are the clip values, unscaled.
+      expect(pelvis.position.getComponent(fwdAxis)).toBeCloseTo(
+        (pelvisRest[fwdAxis] as number) + sway(f),
+        12,
+      );
+      expect(pelvis.position.x).toBeCloseTo(pelvisRest[0] + sway(f), 12);
+      // The root has no vertical clip motion: it stays at its rest height.
+      expect(root.position.y).toBeCloseTo(0, 12);
+    }
+    // Root displacement frames 0..7: 1.0 m * legLength (height does not enter).
+    expect((rootZ[7] as number) - (rootZ[0] as number)).toBeCloseTo(1.3, 6);
+  });
+
+  it('the rotated-root rig has the same world rest pose and ground offset as the fixture rig', () => {
+    const a = bind(rig);
+    const b = bind(rotatedRootRig());
+    const q = params({legLength: 0.7, feet: 1.5});
+    pose(a.body, a.binding, q);
+    pose(b.body, b.binding, q);
+    for (const n of ['pelvis', 'foot_l', 'Head', 'hand_r']) {
+      expect(worldPos(b.body, n).distanceTo(worldPos(a.body, n))).toBeLessThan(
+        1e-9,
+      );
+    }
+    // REQ-ANA-008 reads world Y, so a rotated root does not change grounding.
+    expect(computeGroundOffset(b.binding, q)).toBeCloseTo(
+      computeGroundOffset(a.binding, q),
+      9,
+    );
+  });
+});
+
+describe('REQ-ANM-008 / REQ-ANA-011: anatomy evaluation allocates nothing per frame', () => {
+  it('applyAnatomyToPose, computeGroundOffset and socketPropScale reuse the cached evaluation', () => {
+    const {body, binding} = bind(rig);
+    const p = params({legLength: 1.2, head: 1.3, hands: 1.5, height: 1.1});
+    const pelvis = body.bones.get('pelvis');
+    const {bytesPerCall, limit} = heapGrowthPerCall(i => {
+      resetBodyToRest(binding);
+      if (pelvis !== undefined) pelvis.position.y += (i % 7) * 0.001;
+      applyAnatomyToPose(binding, p);
+      computeGroundOffset(binding, p);
+      socketPropScale(binding, p, 'hand_r');
+    }, 100_000);
+    expect(bytesPerCall).toBeLessThan(limit);
   });
 });
 

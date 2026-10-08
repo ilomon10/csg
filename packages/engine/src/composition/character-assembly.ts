@@ -53,6 +53,13 @@ import {
 /** Name of {@link CharacterAssembly.root}. */
 export const CHARACTER_ROOT_NAME = 'character';
 
+/**
+ * Error code of a call on a disposed assembly or renderer, including a call that
+ * was in flight when `dispose()` ran (its result is dropped and nothing it built
+ * stays attached).
+ */
+export const ENGINE_DISPOSED = 'ENGINE_DISPOSED';
+
 /** The registry calls the assembly needs (an `EngineAssetRegistry` fits). */
 export interface AssemblyRegistry {
   /** Loads a part with its parsed scene; never throws. */
@@ -126,14 +133,21 @@ export interface CharacterAssembly {
    * `ok: false` and the previous character is untouched (AC-CMP-033.2). A spec
    * without a body yields `CMP_BODY_MISSING` (AC-CMP-002.2); a part whose
    * `slot` differs from its slot key yields `CMP_SLOT_MISMATCH` (REQ-CMP-003).
+   * On a body change the selected clip is retargeted onto the new skeleton
+   * before the commit; if that fails, the retarget error is returned (with
+   * `details.reason: 'retarget'`) and the previous character is kept. After
+   * {@link CharacterAssembly.dispose} (also when it runs while this call is
+   * loading) the result is {@link ENGINE_DISPOSED}; it never throws for that.
    */
   setCharacter(spec: CharacterSpec): Promise<Result<void, EngineError>>;
   /**
    * Selects the clip to play (`null` clears it). With `in-place` (default),
    * a clip with an `inPlaceVariant` is replaced by that variant before it
    * reaches the player (REQ-ANM-014); otherwise the player strips root motion
-   * (REQ-ANM-013). Load failures return `ANM_CLIP_LOAD_FAILED` and keep the
-   * previous clip. The selection survives body changes.
+   * (REQ-ANM-013). Load failures return `ANM_CLIP_LOAD_FAILED` and a clip that
+   * cannot be retargeted returns the player's retarget error; both keep the
+   * previous clip (REQ-ANM-022). The selection survives body changes. After
+   * {@link CharacterAssembly.dispose} the result is {@link ENGINE_DISPOSED}.
    */
   setClip(
     ref: ClipRef | null,
@@ -163,6 +177,13 @@ function failure(
     ok: false,
     error: details === undefined ? {code, message} : {code, message, details},
   };
+}
+
+function disposedFailure(call: string): {ok: false; error: EngineError} {
+  return failure(
+    ENGINE_DISPOSED,
+    `${call}: the character assembly is disposed`,
+  );
 }
 
 function sameSocket(a: PartSocket | undefined, b: PartSocket | undefined) {
@@ -349,6 +370,8 @@ export function createCharacterAssembly(
       })),
     ];
     const loaded = await loadAll(wanted);
+    // dispose() may have run while loading: build nothing (M1-31 M2).
+    if (disposed) return disposedFailure('setCharacter');
     if (!loaded.ok) return loaded;
     const bodyPart = loaded.value.get('body') as LoadedPartInternal;
     const rig = bodyPart.rig;
@@ -375,6 +398,27 @@ export function createCharacterAssembly(
       built.push(assembled.value);
     }
 
+    // The selected clip must retarget onto the new skeleton before anything is
+    // committed; otherwise the previous character (and clip) stays (REQ-ANM-022).
+    const player = createClipPlayer(body.value);
+    if (clip !== null) {
+      const bound = player.setClip(clip.loaded, clip.rootMotion);
+      if (!bound.ok) {
+        for (const done of built) detach(done);
+        body.value.skeleton.dispose();
+        return failure(
+          bound.error.code,
+          `clip "${clip.loaded.ref}" cannot be retargeted onto "${body.value.skeletonGroupId}": ${bound.error.message}`,
+          {
+            ...bound.error.details,
+            ref: clip.loaded.ref,
+            skeletonGroup: body.value.skeletonGroupId,
+            reason: 'retarget',
+          },
+        );
+      }
+    }
+
     // Commit: drop the old character, then install the new one.
     const old = pose;
     for (const assembled of parts.values()) detach(assembled);
@@ -387,7 +431,6 @@ export function createCharacterAssembly(
     }
     for (const assembled of built) parts.set(assembled.slot, assembled);
     root.add(body.value.root);
-    const player = createClipPlayer(body.value);
     pose = {
       body: body.value,
       player,
@@ -398,7 +441,6 @@ export function createCharacterAssembly(
     rebuildProps(pose);
     log.push(`body:rebuild:${body.value.skeletonGroupId}`);
     for (const assembled of built) log.push(`part:attach:${assembled.slot}`);
-    if (clip !== null) player.setClip(clip.loaded, clip.rootMotion);
     return {ok: true, value: undefined};
   };
 
@@ -424,6 +466,7 @@ export function createCharacterAssembly(
     );
     if (changed.length > 0 || removed.length > 0) {
       const loaded = await loadAll(changed);
+      if (disposed) return disposedFailure('setCharacter');
       if (!loaded.ok) return loaded;
       const built: AssembledPart[] = [];
       for (const {slot, selection} of changed) {
@@ -473,7 +516,7 @@ export function createCharacterAssembly(
 
     setCharacter(next) {
       return serialize(async () => {
-        if (disposed) throw new Error('setCharacter: assembly is disposed');
+        if (disposed) return disposedFailure('setCharacter');
         const bodyRef = (next as Partial<CharacterSpec>).body?.ref;
         if (bodyRef === undefined || bodyRef === '') {
           return failure('CMP_BODY_MISSING', 'the character has no body');
@@ -491,7 +534,7 @@ export function createCharacterAssembly(
 
     setClip(ref, rootMotion = 'in-place') {
       return serialize(async (): Promise<Result<void, EngineError>> => {
-        if (disposed) throw new Error('setClip: assembly is disposed');
+        if (disposed) return disposedFailure('setClip');
         if (ref === null) {
           clip = null;
           pose?.player.setClip(null, rootMotion);
@@ -504,15 +547,20 @@ export function createCharacterAssembly(
             ? inPlaceVariantRef(ref, entry)
             : undefined;
         const loaded = await registry.resolveClip(variant ?? ref);
+        if (disposed) return disposedFailure('setClip');
         if (!loaded.ok) return loaded;
         if (pose !== null) {
-          pose.player.setClip(loaded.value, rootMotion);
-          const last = pose.player.log[pose.player.log.length - 1] ?? '';
-          if (last.startsWith('retarget:error:')) {
+          const bound = pose.player.setClip(loaded.value, rootMotion);
+          if (!bound.ok) {
             return failure(
-              last.slice('retarget:error:'.length),
-              `clip "${loaded.value.ref}" cannot be retargeted onto "${pose.body.skeletonGroupId}"`,
-              {ref: loaded.value.ref},
+              bound.error.code,
+              `clip "${loaded.value.ref}" cannot be retargeted onto "${pose.body.skeletonGroupId}": ${bound.error.message}`,
+              {
+                ...bound.error.details,
+                ref: loaded.value.ref,
+                skeletonGroup: pose.body.skeletonGroupId,
+                reason: 'retarget',
+              },
             );
           }
         }

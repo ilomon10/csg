@@ -1,4 +1,4 @@
-import {mkdtemp, rm, writeFile} from 'node:fs/promises';
+import {mkdtemp, rm, symlink, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {Document, NodeIO} from '@gltf-transform/core';
@@ -124,6 +124,77 @@ describe('gltf-skeleton reader', () => {
     );
     await expect(readRigFile(p, 'remote.gltf', 'test')).rejects.toThrow(
       /Remote buffer/,
+    );
+  });
+
+  it('hardening: invalid percent-encoding in a buffer URI is a SourceReadError', async () => {
+    const p = join(dir, 'pct.gltf');
+    await writeFile(
+      p,
+      JSON.stringify({
+        asset: {version: '2.0'},
+        buffers: [{uri: '%E0%A4%A.bin', byteLength: 4}],
+      }),
+    );
+    await expect(readRigFile(p, 'pct.gltf', 'test')).rejects.toBeInstanceOf(
+      SourceReadError,
+    );
+  });
+
+  it('hardening: buffer URIs that escape the source folder are refused', async () => {
+    const p = join(dir, 'esc.gltf');
+    await writeFile(
+      p,
+      JSON.stringify({
+        asset: {version: '2.0'},
+        buffers: [{uri: '../outside.bin', byteLength: 4}],
+      }),
+    );
+    await expect(readRigFile(p, 'esc.gltf', 'test')).rejects.toThrow(/escapes/);
+  });
+
+  it('hardening: symbolic links are refused', async () => {
+    const real = join(dir, 'real.bin');
+    await writeFile(real, new Uint8Array(4));
+    await symlink(real, join(dir, 'link.bin'));
+    const p = join(dir, 'sym.gltf');
+    await writeFile(
+      p,
+      JSON.stringify({
+        asset: {version: '2.0'},
+        buffers: [{uri: 'link.bin', byteLength: 4}],
+      }),
+    );
+    await expect(readRigFile(p, 'sym.gltf', 'test')).rejects.toThrow(
+      /symbolic link/,
+    );
+  });
+
+  it('hardening: accessor counts beyond the binary payload are refused before allocation', async () => {
+    const p = join(dir, 'big.gltf');
+    await writeFile(
+      p,
+      JSON.stringify({
+        asset: {version: '2.0'},
+        buffers: [
+          {uri: 'data:application/octet-stream;base64,AAAAAA==', byteLength: 4},
+        ],
+        bufferViews: [{buffer: 0, byteLength: 4}],
+        accessors: [
+          {bufferView: 0, componentType: 5126, count: 1e9, type: 'VEC3'},
+        ],
+      }),
+    );
+    await expect(readRigFile(p, 'big.gltf', 'test')).rejects.toThrow(
+      /accessor 0/,
+    );
+  });
+
+  it('hardening: forbidden JSON keys in a .gltf are rejected', async () => {
+    const p = join(dir, 'proto.gltf');
+    await writeFile(p, '{"asset":{"version":"2.0"},"__proto__":{"x":1}}');
+    await expect(readRigFile(p, 'proto.gltf', 'test')).rejects.toBeInstanceOf(
+      SourceReadError,
     );
   });
 });

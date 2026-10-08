@@ -4,7 +4,7 @@ title: Pixel render pipeline
 status: draft
 owner: spec-writer (review: graphics-engineer)
 depends_on: [constitution, 000-overview, 001-character-composer, 002-anatomy, 004-animation]
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 ---
 
 # 003 – Pixel render pipeline
@@ -78,6 +78,10 @@ Defaults for every setting are listed in the Data & contracts section. "Cell" me
 - **AC-PIX-005.2** Given 4 directions, Then labels are `e, n, w, s`. Given 2 directions, Then labels are `e, w`.
 - **AC-PIX-005.3** Given 1 direction and `singleFacing = 's'`, Then the single direction faces the camera (yaw 270°) and has label `s`.
 - **AC-PIX-005.4** Given 3 or 6 directions, When validated, Then validation fails with `PIX_INVALID_DIRECTIONS`.
+
+*(Clarified 2026-10-09 (M1-33), after the M1 preview showed direction `e` facing the camera.)* "Model yaw" in AC-PIX-005.1 is the **facing angle** of the character, not the raw rotation applied to it. Built models face +Z (spec 011 REQ-AST-011), and the default camera looks along −Z, so a model with no rotation faces the camera (`s`, facing angle 270°). The rotation about +Y applied to the character's parent is therefore `facing angle + 90°` (mod 360°): 90° for `e`, 0° for `s`. The preview and the export use the same mapping.
+
+- **AC-PIX-005.5** Given 8 directions and a fixture model facing +Z, When direction index 0 (`e`) is rendered, Then the model's forward vector in view space points to screen-right (± 1e-6), and for index 6 (`s`) it points toward the camera; the applied rotation about +Y is 90° and 0° respectively. *(Added 2026-10-09 (M1-33).)*
 
 **REQ-PIX-006 [P2]** WHERE `mirrorWest` is enabled THE SYSTEM SHALL produce each west-facing direction (`w`, `nw`, `sw`) by flipping the matching east-facing frame (`e`, `ne`, `se`) horizontally around the pivot column, instead of rendering it.
 

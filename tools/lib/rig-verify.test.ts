@@ -2,7 +2,8 @@ import {existsSync, readFileSync} from 'node:fs';
 import {join, resolve} from 'node:path';
 import {readRigFile} from './gltf-skeleton.js';
 import {describe, expect, it} from 'vitest';
-import {compose, decompose, invert, multiply, quatAngle} from './mat4.js';
+import {quatAngle} from '@csg/engine/rig';
+import {compose, decompose, invert, multiply} from './mat4.js';
 import {
   analyzeVertexWeights,
   buildReport,
@@ -578,6 +579,9 @@ describe('real packs (skipped without assets-src)', () => {
     '../rigs/quaternius-ue5-65.overlay.json',
   );
   const have = existsSync(root) && existsSync(overlayPath);
+  if (!have) {
+    console.info('skipped: no assets-src (real-pack rig-verify tests)');
+  }
   it.skipIf(!have)(
     'AC-AST-026.3: FK of rest TRS equals inverse(IBM) for each group representative',
     async () => {

@@ -16,13 +16,14 @@ import type {
   Vec3,
 } from './index';
 import {
+  restWorldMatrices,
   quatAngle,
   quatDot,
   quatInvert,
   quatMultiply,
   quatNormalize,
   quatRotateVec3,
-} from './quat';
+} from '../rig';
 
 // Placeholder-friendly requirement tag: rename here if the spec ID changes.
 const REQ = 'REQ-ANM-023';
@@ -240,6 +241,35 @@ describe('retarget quaternion and FK helpers', () => {
   });
 });
 
+describe('retarget leg length over rig FK', () => {
+  // pelvis (y = 3) -> thigh (scale 1,2,1) -> shin (X 90°) -> foot (0,0,1).
+  // Full matrices: foot = pelvis + S · Rx90 · (0,0,1) = pelvis + (0,-2,0), so
+  // L = 2. The old component-wise scale approximation gave (0,-1,0), L = 1.
+  const joint = (
+    name: string,
+    parent: string | null,
+    translation: Vec3,
+    rotation: Quat = IDENT,
+    scale: Vec3 = ONE,
+  ): JointRestTRS => ({name, parent, translation, rotation, scale});
+
+  it(`AC-ANM-023.2: leg length of a rotated, non-uniformly scaled chain uses full FK matrices (${REQ})`, () => {
+    const pose: RestPose = {
+      id: 'skew',
+      joints: [
+        joint('pelvis', null, [0, 3, 0]),
+        joint('thigh', 'pelvis', [0, 0, 0], IDENT, [1, 2, 1]),
+        joint('shin', 'thigh', [0, 0, 0], axisAngle([1, 0, 0], Math.PI / 2)),
+        joint('foot', 'shin', [0, 0, 1]),
+      ],
+    };
+    expect(restWorldPositions(pose).get('foot')?.[1]).toBeCloseTo(1, 12);
+    expect(legLength(pose, 'pelvis', ['foot'])).toBeCloseTo(2, 12);
+    // Agrees with the rig matrices that anatomy and verify-rig use.
+    expect(restWorldMatrices(pose).get('foot')?.[13]).toBeCloseTo(1, 12);
+  });
+});
+
 describe('retarget plan and tracks', () => {
   it(`AC-ANM-023.3: identical rest poses give plan.identity and output equals input (${REQ} test 1)`, () => {
     const rand = mulberry32(7);
@@ -428,7 +458,7 @@ describe('retarget plan and tracks', () => {
     }
   });
 
-  it(`${REQ} test 5: non-hip/root translation and unmapped tracks are dropped and reported; scale passes through`, () => {
+  it('AC-ANM-023.5: non-hip/root translation and unmapped tracks are dropped and reported; scale passes through', () => {
     const source = makePose({id: 'g-a'});
     const target = makePose({id: 'g-b', legScale: 1.1});
     const plan = planOf(source, target);
@@ -602,8 +632,9 @@ describe('retarget plan and tracks', () => {
       ].map(m => m[1] as string);
       for (const s of specs) {
         expect(s, `${f} imports ${s}`).not.toMatch(/^(three|@csg\/|react)/);
+        // Relative only: this folder and the DOM-free sibling `../rig`.
         if (!f.endsWith('.test.ts') && !f.endsWith('.d.ts'))
-          expect(s, `${f} imports ${s}`).toMatch(/^\.\//);
+          expect(s, `${f} imports ${s}`).toMatch(/^\.\.?\//);
       }
       if (!f.endsWith('.test.ts')) {
         const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');

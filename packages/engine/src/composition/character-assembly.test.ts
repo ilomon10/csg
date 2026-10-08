@@ -1,12 +1,18 @@
 import {describe, expect, it} from 'vitest';
 import {Color, Matrix4, Vector3} from 'three';
 import type {Bone, Material, Mesh, Object3D, SkinnedMesh} from 'three';
+import {BODY_REGIONS} from '@csg/parts-schema';
 import type {CharacterSpec} from '@csg/parts-schema';
 import {computeGroundOffset} from '../anatomy/apply';
-import {createCharacterAssembly} from './character-assembly';
-import type {CharacterAssembly} from './character-assembly';
+import {
+  INTERPOLANT_BYTES_PER_CALL,
+  heapGrowthPerCall,
+} from '../animation/test-heap';
+import {ENGINE_DISPOSED, createCharacterAssembly} from './character-assembly';
+import type {AssemblyRegistry, CharacterAssembly} from './character-assembly';
 import {createTestRegistry, fixtureSpec, ref} from './assembly-test-env';
-import {regionMaskOf} from './region-mask';
+import type {TestRegistry} from './assembly-test-env';
+import {REGION_ID_ATTRIBUTE, isRegionHidden, regionMaskOf} from './region-mask';
 import {TINT_SLOT_USER_DATA} from './tint-material';
 
 // Spec ACs say `g-a`/`g-b`; the fixtures use `fixture-a`/`fixture-b` (same meaning).
@@ -389,17 +395,28 @@ describe('character assembly (M1-25)', () => {
     );
   });
 
-  it('REQ-ANM-008: evaluate allocates nothing per frame once anatomy is evaluated', async () => {
-    const {assembly} = await built();
+  it('REQ-ANM-008: evaluate (clip, anatomy, ground, sockets) allocates nothing per frame', async () => {
+    const {assembly, spec} = await built();
     await assembly.setClip(ref('fixture-clip'), 'metadata');
-    for (let i = 0; i < 2000; i++) assembly.evaluate((i % 100) / 100);
-    const gc = (globalThis as {gc?: () => void}).gc;
-    gc?.();
-    const before = process.memoryUsage().heapUsed;
-    for (let i = 0; i < 50_000; i++) assembly.evaluate((i % 100) / 100);
-    expect(process.memoryUsage().heapUsed - before).toBeLessThan(
-      8 * 1024 * 1024,
+    // Non-default anatomy so every anatomy path (scales, root/pelvis, ground, props) runs.
+    await assembly.setCharacter(
+      withSpec(spec, {
+        anatomy: {
+          ...spec.anatomy,
+          legLength: 1.2,
+          head: 1.3,
+          hands: 1.5,
+          height: 1.1,
+        },
+      }),
     );
+    const {bytesPerCall, limit} = heapGrowthPerCall(
+      i => assembly.evaluate((i % 100) / 100),
+      50_000,
+      5_000,
+      INTERPOLANT_BYTES_PER_CALL,
+    );
+    expect(bytesPerCall).toBeLessThan(limit);
   });
 
   it('dispose detaches everything and restores the registry-owned materials', async () => {
@@ -413,5 +430,217 @@ describe('character assembly (M1-25)', () => {
         (mesh.material as Material).userData[TINT_SLOT_USER_DATA],
       ).toBeUndefined();
     }
+  });
+});
+
+/** A registry whose part and clip loads wait for `open()` (in-flight calls). */
+function gatedRegistry() {
+  const registry = createTestRegistry();
+  let open!: () => void;
+  const gate = new Promise<void>(resolve => {
+    open = resolve;
+  });
+  let closed = false;
+  const gated: AssemblyRegistry = {
+    async resolve(r) {
+      if (closed) await gate;
+      return registry.resolve(r);
+    },
+    async resolveClip(r) {
+      if (closed) await gate;
+      return registry.resolveClip(r);
+    },
+    clipEntry: r => registry.clipEntry(r),
+  };
+  return {
+    registry,
+    gated,
+    close: () => {
+      closed = true;
+    },
+    open: () => open(),
+  };
+}
+
+/** A registry that serves `builtin:fixture-pack/broken`: the fixture clip without a pelvis joint in its source rest pose (retargets only onto its own group). */
+function brokenClipRegistry(): AssemblyRegistry & {inner: TestRegistry} {
+  const inner = createTestRegistry();
+  return {
+    inner,
+    resolve: r => inner.resolve(r),
+    async resolveClip(r) {
+      if (r !== ref('broken')) return inner.resolveClip(r);
+      const loaded = await inner.resolveClip(ref('fixture-clip'));
+      if (!loaded.ok) return loaded;
+      return {
+        ok: true,
+        value: {
+          ...loaded.value,
+          ref: ref('broken'),
+          source: {
+            ...loaded.value.source,
+            joints: loaded.value.source.joints.filter(j => j.name !== 'pelvis'),
+          },
+        },
+      };
+    },
+    clipEntry: r =>
+      inner.clipEntry(r === ref('broken') ? ref('fixture-clip') : r),
+  };
+}
+
+describe('character assembly: dispose races (M1-31 M2)', () => {
+  it('dispose during the first setCharacter returns ENGINE_DISPOSED and attaches nothing', async () => {
+    const {gated, close, open, registry} = gatedRegistry();
+    const assembly = createCharacterAssembly({registry: gated});
+    close();
+    const pending = assembly.setCharacter(fixtureSpec());
+    // Let the serialized run reach the gated load.
+    await Promise.resolve();
+    await Promise.resolve();
+    assembly.dispose();
+    open();
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe(ENGINE_DISPOSED);
+    expect(assembly.root.children).toHaveLength(0);
+    expect(assembly.parts.size).toBe(0);
+    expect(assembly.body).toBeNull();
+    // Registry-owned part scenes were never tinted.
+    const body = await registry.resolve(ref('fixture-body'));
+    if (!body.ok) throw new Error('fixture body');
+    for (const mesh of meshes(body.value.scene)) {
+      expect(
+        (mesh.material as Material).userData[TINT_SLOT_USER_DATA],
+      ).toBeUndefined();
+    }
+  });
+
+  it('dispose during a part swap or a clip load returns ENGINE_DISPOSED; no unhandled rejection', async () => {
+    const {gated, close, open} = gatedRegistry();
+    const assembly = createCharacterAssembly({registry: gated});
+    const spec = fixtureSpec();
+    expect((await assembly.setCharacter(spec)).ok).toBe(true);
+    close();
+    const swap = assembly.setCharacter(
+      withSpec(spec, {
+        parts: {...spec.parts, torso: {ref: ref('fixture-shirt-b')}},
+      }),
+    );
+    const clip = assembly.setClip(ref('fixture-clip'));
+    await Promise.resolve();
+    await Promise.resolve();
+    assembly.dispose();
+    open();
+    const [a, b] = await Promise.all([swap, clip]);
+    for (const r of [a, b]) {
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.code).toBe(ENGINE_DISPOSED);
+    }
+    expect(assembly.parts.size).toBe(0);
+    expect(assembly.root.children).toHaveLength(0);
+  });
+
+  it('setCharacter and setClip after dispose resolve to ENGINE_DISPOSED instead of throwing', async () => {
+    const {assembly, spec} = await built();
+    assembly.dispose();
+    const a = await assembly.setCharacter(spec);
+    const b = await assembly.setClip(ref('fixture-clip'));
+    expect(a).toMatchObject({ok: false, error: {code: ENGINE_DISPOSED}});
+    expect(b).toMatchObject({ok: false, error: {code: ENGINE_DISPOSED}});
+  });
+});
+
+describe('character assembly: retarget failures are Results (M1-31 M5)', () => {
+  it('REQ-ANM-022: setClip returns the retarget error and keeps the previous clip', async () => {
+    const registry = brokenClipRegistry();
+    const assembly = createCharacterAssembly({registry});
+    // Body group fixture-a, clip group fixture-b: the clip must be retargeted.
+    expect((await assembly.setCharacter(fixtureSpec())).ok).toBe(true);
+    expect((await assembly.setClip(ref('fixture-clip'), 'metadata')).ok).toBe(
+      true,
+    );
+    const source = assembly.player?.log.at(-1);
+    const result = await assembly.setClip(ref('broken'), 'metadata');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('AST_RIG_MISMATCH');
+      expect(result.error.details).toMatchObject({
+        ref: ref('broken'),
+        reason: 'retarget',
+        skeletonGroup: 'fixture-a',
+      });
+    }
+    expect(
+      assembly.player?.log.filter(l => l.startsWith('source:')).at(-1),
+    ).toBe(source);
+  });
+
+  it('REQ-CMP-033 / REQ-ANM-022: a body switch whose skeleton the selected clip cannot retarget onto fails and keeps the previous character', async () => {
+    const registry = brokenClipRegistry();
+    const assembly = createCharacterAssembly({registry});
+    const spec = withSpec(fixtureSpec(), {body: {ref: ref('fixture-body-b')}});
+    expect((await assembly.setCharacter(spec)).ok).toBe(true);
+    // Same skeleton group as the clip (fixture-b): no retarget needed, so it binds.
+    expect((await assembly.setClip(ref('broken'), 'metadata')).ok).toBe(true);
+    const skeleton = assembly.body?.skeleton;
+    const player = assembly.player;
+    const parts = [...assembly.parts.values()].map(p => p.attached);
+    const result = await assembly.setCharacter(
+      withSpec(spec, {body: {ref: ref('fixture-body')}}),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('AST_RIG_MISMATCH');
+      expect(result.error.details).toMatchObject({reason: 'retarget'});
+    }
+    expect(assembly.spec).toBe(spec);
+    expect(assembly.body?.skeleton).toBe(skeleton);
+    expect(assembly.body?.skeletonGroupId).toBe('fixture-b');
+    expect(assembly.player).toBe(player);
+    expect([...assembly.parts.values()].map(p => p.attached)).toEqual(parts);
+    for (const part of parts) expect(part.object.parent).not.toBeNull();
+  });
+});
+
+describe('character assembly: region hides (REQ-AST-028)', () => {
+  it('AC-AST-028.2 (engine part): with a torso part hiding torso, every body torso vertex is discarded by the shared mask node and no other region is', async () => {
+    const {assembly} = await built();
+    const torsoIndex = BODY_REGIONS.indexOf('torso');
+    expect(assembly.regionMask.value).toBe(regionMaskOf(['torso']));
+    const body = assembly.parts.get('body')?.attached.object as Object3D;
+    const bodyMeshes = meshes(body);
+    expect(bodyMeshes.length).toBeGreaterThan(0);
+    let torsoVertices = 0;
+    let otherVertices = 0;
+    for (const mesh of bodyMeshes) {
+      const material = mesh.material as Material & {maskNode?: unknown};
+      // One TSL node material (no backend-specific GLSL/WGSL), so WebGPU and
+      // WebGL2 compile the same discard condition from the same uniform.
+      expect((material as {isNodeMaterial?: boolean}).isNodeMaterial).toBe(
+        true,
+      );
+      expect(material.maskNode).toBeDefined();
+      const nodes: unknown[] = [];
+      (
+        material.maskNode as {traverse(cb: (n: unknown) => void): void}
+      ).traverse(n => nodes.push(n));
+      expect(nodes).toContain(assembly.regionMask);
+      const region = mesh.geometry.getAttribute(REGION_ID_ATTRIBUTE);
+      expect(region.array).toBeInstanceOf(Float32Array);
+      for (let i = 0; i < region.count; i++) {
+        const id = region.getX(i);
+        const hidden = isRegionHidden(assembly.regionMask.value, id);
+        if (Math.round(id) === torsoIndex) {
+          torsoVertices++;
+          expect(hidden).toBe(true);
+        } else {
+          otherVertices++;
+          expect(hidden).toBe(false);
+        }
+      }
+    }
+    expect(torsoVertices).toBeGreaterThan(0);
+    expect(otherVertices).toBeGreaterThan(0);
   });
 });

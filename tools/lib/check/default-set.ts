@@ -4,6 +4,7 @@
  */
 import {stat} from 'node:fs/promises';
 import {join} from 'node:path';
+import {DEFAULT_CHARACTER_DATA} from '@csg/parts-schema';
 import type {LicensePack} from './licenses-md.js';
 
 /** A bundled part or clip the default set needs. */
@@ -13,17 +14,22 @@ export interface DefaultSetRef {
   id: string;
 }
 
-/** Default `CharacterSpec` parts and default clips (M1-14 pack configs). */
+/** Splits `builtin:<packId>/<id>` into its pack and entry IDs. */
+function splitRef(ref: string): {packId: string; id: string} {
+  const [packId = '', id = ''] = ref.slice('builtin:'.length).split('/');
+  return {packId, id};
+}
+
+/** Default `CharacterSpec` parts and default clips, read from the shared default character data. */
 export const DEFAULT_SET: readonly DefaultSetRef[] = [
-  {packId: 'quaternius-ubc', kind: 'part', id: 'superhero-m'},
-  {packId: 'quaternius-ubc', kind: 'part', id: 'hair-simple-parted'},
-  {packId: 'quaternius-ubc', kind: 'part', id: 'eyebrows-regular'},
-  {packId: 'quaternius-outfits', kind: 'part', id: 'male-ranger-torso'},
-  {packId: 'quaternius-outfits', kind: 'part', id: 'male-ranger-arms'},
-  {packId: 'quaternius-outfits', kind: 'part', id: 'male-ranger-legs'},
-  {packId: 'quaternius-outfits', kind: 'part', id: 'male-ranger-boots'},
-  {packId: 'quaternius-ual', kind: 'clip', id: 'idle'},
-  {packId: 'quaternius-ual', kind: 'clip', id: 'walk'},
+  ...[
+    DEFAULT_CHARACTER_DATA.character.body.ref,
+    ...Object.values(DEFAULT_CHARACTER_DATA.character.parts).map(p => p.ref),
+  ].map((ref): DefaultSetRef => ({...splitRef(ref), kind: 'part'})),
+  ...DEFAULT_CHARACTER_DATA.clips.map((ref): DefaultSetRef => ({
+    ...splitRef(ref),
+    kind: 'clip',
+  })),
 ];
 
 /**

@@ -9,6 +9,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import type {RefObject} from 'react';
 import {DEFAULT_CLIP, createPreviewCharacter} from './default-character';
 import {loadBundledPacks} from './load-packs';
+import {startPreviewSession} from './preview-session';
 
 /** State of the preview viewport. */
 export interface PreviewState {
@@ -74,62 +75,36 @@ export function usePreview(
     const canvas = canvasRef.current;
     const viewport = viewportRef.current;
     if (canvas === null || viewport === null) return;
-    let cancelled = false;
-    let renderer: EngineCharacterRenderer | null = null;
-    let observer: ResizeObserver | null = null;
-    const fail = (message: string): void => {
-      if (!cancelled) patch({status: 'error', error: message});
-    };
-
-    const start = async (): Promise<void> => {
-      const rect = viewport.getBoundingClientRect();
-      canvas.width = Math.max(1, Math.floor(rect.width));
-      canvas.height = Math.max(1, Math.floor(rect.height));
-      const registry = createAssetRegistry();
-      registryRef.current = registry;
-      try {
-        await loadBundledPacks(registry);
-      } catch (e) {
-        return fail(e instanceof Error ? e.message : String(e));
-      }
-      const created = await createCharacterRenderer(canvas, {
-        registry,
-        previewScale: 1,
-        onError: error => fail(`${error.code}: ${error.message}`),
-      });
-      if (!created.ok) {
-        return fail(`${created.error.code}: ${created.error.message}`);
-      }
-      renderer = created.value;
-      if (cancelled) {
-        renderer.dispose();
-        return;
-      }
-      rendererRef.current = renderer;
-      patch({backend: renderer.backend});
-      const spec = await renderer.setCharacter(createPreviewCharacter());
-      if (!spec.ok) {
-        return fail(`${spec.error.code}: ${spec.error.message}`);
-      }
-      const played = await renderer.playClip(DEFAULT_CLIP);
-      if (!played.ok || cancelled) return;
-      patch({
-        status: 'ready',
-        playing: true,
-        clipDurationSec: registry.clipEntry(DEFAULT_CLIP)?.durationSec ?? 0,
-      });
-      observer = new ResizeObserver(() => {
-        const r = viewport.getBoundingClientRect();
-        renderer?.resize(Math.max(1, r.width), Math.max(1, r.height));
-      });
-      observer.observe(viewport);
-    };
-    void start();
-
+    // StrictMode mounts, cleans up and mounts again: the first session is
+    // cancelled before it can create a renderer (see startPreviewSession).
+    const session = startPreviewSession(
+      canvas,
+      viewport,
+      {character: createPreviewCharacter(), clip: DEFAULT_CLIP},
+      {
+        createRegistry: () => createAssetRegistry(),
+        loadPacks: loadBundledPacks,
+        createRenderer: (target, options) =>
+          createCharacterRenderer(target as HTMLCanvasElement, options),
+        observeResize: (element, onResize) => {
+          const observer = new ResizeObserver(onResize);
+          observer.observe(element as HTMLElement);
+          return () => observer.disconnect();
+        },
+      },
+      {
+        onRenderer: (renderer, registry) => {
+          rendererRef.current = renderer;
+          registryRef.current = registry;
+          patch({backend: renderer.backend});
+        },
+        onReady: ({clipDurationSec}) =>
+          patch({status: 'ready', playing: true, clipDurationSec}),
+        onError: message => patch({status: 'error', error: message}),
+      },
+    );
     return () => {
-      cancelled = true;
-      observer?.disconnect();
-      renderer?.dispose();
+      session.cancel();
       rendererRef.current = null;
       registryRef.current = null;
     };
@@ -151,6 +126,9 @@ export function usePreview(
     if (r.playing) {
       r.pause();
       patch({playing: false, timeSec: r.timeSec});
+    } else if (r.resume()) {
+      // Continues from the paused (or scrubbed) time; no reload, no re-retarget.
+      patch({playing: true});
     } else {
       void r.playClip(state.clip).then(result => {
         if (result.ok) patch({playing: true});

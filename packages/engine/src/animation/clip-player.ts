@@ -9,6 +9,7 @@ import type {
   CreateClipPlayer,
   RetargetedClip,
 } from '../contracts/animation';
+import type {EngineError, Result} from '../contracts/errors';
 import type {LoadedClip} from '../contracts/registry';
 import {retargetClip} from './retarget-clip';
 import {stripRootMotion} from './root-motion';
@@ -18,6 +19,8 @@ export const RETARGET_CACHE_SIZE = 16;
 
 /** Newest log entries kept. */
 const LOG_LIMIT = 256;
+
+const OK: Result<void, EngineError> = {ok: true, value: undefined};
 
 type Channel = {
   readonly interpolant: Interpolant;
@@ -29,7 +32,8 @@ type Channel = {
  * Creates a clip player bound to a character skeleton. `setClip` retargets (LRU keyed
  * `${clipRef}|${skeletonGroupId}`, logging `retarget:miss` or `retarget:hit`), then strips
  * root motion for `in-place` clips that have it, then logs `source:<ref>`. A clip that cannot be
- * retargeted keeps the previous clip and logs `retarget:error:<code>`.
+ * retargeted keeps the previous clip and returns the retarget error; the log entry
+ * `retarget:error:<code>` is for diagnostics only.
  */
 export const createClipPlayer: CreateClipPlayer = body => {
   const log: string[] = [];
@@ -78,12 +82,12 @@ export const createClipPlayer: CreateClipPlayer = body => {
   };
 
   const player: ClipPlayer = {
-    setClip(clip: LoadedClip | null, rootMotion): void {
+    setClip(clip: LoadedClip | null, rootMotion): Result<void, EngineError> {
       if (clip === null) {
         restoreRest();
         channels = [];
         note('source:none');
-        return;
+        return OK;
       }
       const key = `${clip.ref}|${body.skeletonGroupId}`;
       let retargeted = cache.get(key);
@@ -95,7 +99,7 @@ export const createClipPlayer: CreateClipPlayer = body => {
         const result = retargetClip(clip, body);
         if (!result.ok) {
           note(`retarget:error:${result.error.code}`);
-          return;
+          return result;
         }
         retargeted = result.value;
         cache.set(key, retargeted);
@@ -111,6 +115,7 @@ export const createClipPlayer: CreateClipPlayer = body => {
       restoreRest();
       channels = bind(playable);
       note(`source:${clip.ref}`);
+      return OK;
     },
     seek(timeSec: number): void {
       for (let i = 0; i < channels.length; i++) {

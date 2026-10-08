@@ -2,15 +2,17 @@
 
 Status: Accepted (2026-10-08). Last synced with specs 001–011 on 2026-10-08 (fix-up FX-A: feature
 folders, engine subpaths, lint rules, origin/CSP; fix-up FX-A2: security amendments to specs 000,
-001, 007, 008 and 009). This is the architecture source of truth for
-structure and dependency rules. Specs in `specs/` refine behavior and contracts; ADRs in
-`docs/adr/` record why. If this document and a spec disagree, the spec wins and this document must
-be updated in the same PR.
+001, 007, 008 and 009) and with the M1 code on 2026-10-09 (M1-32: engine module layout, rig and
+manifest fields, engine M1 API, asset build pipeline, texture loading under CSP). This is the
+architecture source of truth for structure and dependency rules. Specs in `specs/` refine behavior
+and contracts; ADRs in `docs/adr/` record why. If this document and a spec disagree, the spec wins
+and this document must be updated in the same PR.
 
-Spec and ADR status: specs 000–011 stay `draft` until the M1 rig spike (`tools/verify-rig.ts`)
-reports; contracts that depend on the shared-skeleton assumption may still change then. ADRs
-0001–0007 stay `Accepted`; a change of decision is recorded as a dated amendment or a superseding
-ADR.
+Spec and ADR status: the M1 rig spike (`tools/verify-rig.ts`) reported **mapped** (shared joint
+names and hierarchy, four bind-pose skeleton groups); ADR-0008 records the outcome and the
+resulting design (skeleton groups plus runtime retargeting). Specs follow their own status
+headers. ADRs 0001–0008 stay `Accepted`; a change of decision is recorded as a dated amendment or a
+superseding ADR.
 
 ## 1. Overview
 
@@ -24,7 +26,8 @@ guide, built from Markdown in `docs/guide/`.
 
 Rationale for the big choices: ADR-0001 (3D to pixel), ADR-0002 (monorepo, gts), ADR-0003
 (WebGPURenderer + TSL), ADR-0004 (React Flow), ADR-0005 (local-first uploads), ADR-0006 (specs),
-ADR-0007 (website, amended for the hosting origin).
+ADR-0007 (website, amended for the hosting origin), ADR-0008 (shared rig with skeleton groups and
+runtime retargeting).
 
 ### 1.1 Packages
 
@@ -35,11 +38,11 @@ Workspace scope: `@csg/*` (all packages `private: true` until a 1.0 publishing d
 | `packages/parts-schema` | `@csg/parts-schema` | any (Node, browser, worker) | Zod schemas + inferred types for every persisted document except graphs: `SlotDefinition` registry, `PartManifest`, `RigDefinition` (canonical rigs in `rigs/<rigId>.json`), `ClipManifest`, `CharacterSpec`, `AnatomyPreset`, `RenderSettings`, `ExportSettings`, `AssetLicense`, `UserAssetRecord`, `BoneMapPreset`, `ProjectDocument`. Canonical JSON. Migrations. JSON Schema generation. No three.js. |
 | `packages/shader-graph` | `@csg/shader-graph` | any | Pure graph model: `ShaderGraphDocument` schema, socket type registry and cast table, node type metadata (`NodeTypeSpec`), validation, migrations, `GraphCommand`s, copy/paste (`ShaderGraphClip`), URL encoding (`#g=`). No three.js, no React. |
 | `packages/shader-graph` (subpath) | `@csg/shader-graph/tsl` | browser/worker with three | Compiler: graph document to TSL node expressions via `NodeEmitter`s. Depends on `three` (peer, pinned). |
-| `packages/engine` | `@csg/engine` | browser + worker | three.js runtime: renderer creation, asset registry and loaders, rig rebinding, composition, anatomy, animation sampling, `RenderPipeline` (pixel pipeline), frame sampler, exporters (pure, worker), upload validation (worker), retargeting, local storage adapters. Implements `CompileContext`. Framework-agnostic (no React). |
-| `packages/engine` (subpaths) | `@csg/engine/rig`, `@csg/engine/retarget` | any (Node, browser, worker) | DOM-free rig math and retarget math (`src/rig/`, `src/retarget/`), exposed through `package.json` `exports` so `tools/` can use them without the browser runtime (rule 6). |
+| `packages/engine` | `@csg/engine` | browser + worker | three.js runtime. Built in M1 (`src/`): `contracts/` (type-only API), `loaders/` (GLB loader, URL policy, `_REGION`, `<img>` textures), `registry/` (asset registry, compatibility, rest poses), `composition/` (character skeleton, rebinding, sockets, tints, region hides, assembly, `evaluatePose`), `anatomy/`, `animation/` (sample times, clip player, root motion, retarget adapter), `retarget/` and `rig/` (DOM-free math), `renderer/` (backend with fallback, preview scene and clock). Later: `RenderPipeline` (pixel pipeline), frame sampler, exporters (pure, worker), upload validation (worker), local storage adapters. Implements `CompileContext`. Framework-agnostic (no React). Module layout: §4.8. |
+| `packages/engine` (subpaths) | `@csg/engine/rig`, `@csg/engine/retarget` | any (Node, browser, worker) | DOM-free rig math and retarget math (`src/rig/`, `src/retarget/`; `retarget/` is also three-free), exposed through `package.json` `exports` so `tools/` can use them without the browser runtime (rule 6). |
 | `apps/web` | `@csg/web` | browser | Vite + React editor. Feature folders under `src/features/` are exactly: composer, anatomy, animation, look, export, shader-graph, upload. The shell (single `/app/` route, layout, history, command/shortcut registry, preferences) and the preview viewport live in `src/app/`, which is not a feature. Owns UI state; not rendering. |
 | `apps/site` | `@csg/site` | Node build, static output | Next.js App Router landing page + Fumadocs docs from `docs/guide/**`. |
-| `tools/` | (workspace scripts) | Node | Asset build (`gltf-transform`, spec 011), `verify-rig.ts` spike, manifest generation, JSON Schema export, `spec:check` / `spec:trace`. Depends on `@csg/engine` but imports only `@csg/engine/rig` and `@csg/engine/retarget`. |
+| `tools/` | (workspace scripts) | Node | Asset build `assets:build` (`tools/build-parts.ts` + `tools/lib/build/`, `gltf-transform`, spec 011, §2.3), `assets:check` and `assets:licenses` (`tools/check-assets.ts`, `tools/generate-licenses.ts` + `tools/lib/check/`), `assets:verify-rig` (`tools/verify-rig.ts`, rig report), `fixtures:build`, JSON Schema export, `spec:check` / `spec:trace`. Depends on `@csg/engine` but imports only `@csg/engine/rig` and `@csg/engine/retarget`. |
 
 ### 1.2 Dependency directions
 
@@ -114,12 +117,13 @@ flowchart TD
   spec["CharacterSpec (JSON)"] --> resolve["AssetRegistry.resolve(refs)"]
   resolve --> assemble["Scene assembly"]
   subgraph assemble_detail [Scene assembly]
-    rig["Base skeleton from body part"] --> rebind["Rebind skinned parts by bone name"]
+    rig["Character skeleton from the body's skeleton group (characterSkeletonGroup)"] --> rebind["Rebind skinned parts by joint name (own inverse binds)"]
     rebind --> hides["Apply body-region hides (_REGION attribute) + alsoOccupies"]
     hides --> props["Attach static props to socket bones"]
     props --> tints["Tint uniforms per tint slot (multiply / replace)"]
   end
-  assemble --> pose["Per frame: sample clip -> root motion -> anatomy -> grounding -> sockets -> skinning"]
+  assemble --> clip["setClip: resolveClip -> retarget onto character group (LRU) -> root-motion policy"]
+  clip --> pose["Per frame: sample clip -> root motion -> anatomy -> grounding -> sockets -> skinning"]
   pose --> mat["Material graph (TSL) per part"]
   mat --> pass["pass(scene, camera) with MRT: color, normal, depth, partId"]
   pass --> post["Post graph: outline, palette LUT, dither, alpha cutoff"]
@@ -134,8 +138,22 @@ Details:
 - **Assembly is diff-based** (REQ-CMP-033). `setCharacter(spec)` compares with the previous spec:
   changing a tint updates a uniform; changing anatomy updates bone scales; swapping a part
   loads/rebinds only that part. Full rebuild only when the body (skeleton) changes.
-- **Per-frame application order** is fixed by spec 002 (Data & contracts): sample clip (spec 004),
-  root-motion policy, anatomy with child compensation, grounding offset, socket props, skinning.
+- **Skeleton groups** (ADR-0008, REQ-CMP-037). The character skeleton is built from the rest pose
+  of the body's `characterSkeletonGroup` (else its `skeletonGroup`, else
+  `rig.defaultSkeletonGroup`; `characterSkeletonGroupOf` in `registry/rest-pose.ts`). Every skinned
+  mesh, the body included, is rebound to it by joint name and keeps its own `boneInverses`, so a
+  part of another group renders with its bind delta and is never rejected for it.
+- **Clip retargeting** (REQ-ANM-023, ADR-0008). `ClipPlayer.setClip` retargets a clip whose
+  `skeletonGroup` differs from the character's, using the DOM-free `@csg/engine/retarget` math
+  (rest-pose-corrected rotations, hip and root translation scaled by the leg-length ratio, other
+  translations dropped, scale passed through). Results are cached per player (LRU,
+  `RETARGET_CACHE_SIZE` = 16, key `${clipRef}|${skeletonGroupId}`); a same-group clip or identity
+  plan is used as is. Retargeted clips interpolate linearly.
+- **Per-frame application order** is fixed by spec 002 (Data & contracts) and implemented by
+  `evaluatePose` (`composition/evaluate-pose.ts`): reset all bones to rest, 1) sample the
+  (already retargeted) clip by absolute seek (spec 004), 2) root-motion policy (applied once at
+  `setClip`, nothing per frame), 3) anatomy with child compensation, 4) grounding offset on the
+  skeleton root, 5) socket props (`updateSockets`), 6) skinning at draw.
 - **Material graph** (per part, default = toon ramp 2 to 4 bands + rim + tint) is compiled once per
   distinct graph structure and shared across parts. Exposed params are `uniform()` nodes created
   through `CompileContext.uniform()`.
@@ -149,6 +167,10 @@ Details:
   to the texel size. Readback via `renderer.readRenderTargetPixelsAsync`.
 - **Exporters** are pure functions over `RenderedFrame[]` (no three.js), so they are unit-testable
   in Node.
+
+M1 state: the M1 renderer (`createCharacterRenderer`, §3.6) runs assembly, clip playback and
+`evaluatePose`, and draws an unlit preview scene directly (no `RenderPipeline`, no material or
+post graphs; those are M2/M4).
 
 ### 2.2 Upload path
 
@@ -179,6 +201,44 @@ decoder at load time (§4.10). FBX/OBJ handling and the full threat model are sp
 With `DEDICATED_ORIGIN=false` the store step is skipped and assets live for the session only
 (REQ-GEN-009, §4.10).
 
+### 2.3 Asset build path (`pnpm assets:build`, spec 011)
+
+`tools/build-parts.ts` orchestrates pure stages in `tools/lib/build/` over gltf-transform
+`Document`s (I/O at the edges, sorted iteration, no timestamps; exit 0 ok, 1 build failure, 2 usage
+or source problem). Per pack:
+
+1. `config`: load `tools/packs/<packId>/pack.config.json` (Zod). `sources`: SHA-256 tree hash of
+   `assets-src/<dir>/` (vendor folder name from `tools/asset-sources.json`) against the recorded
+   hash (REQ-AST-024).
+2. Load the canonical rig `packages/parts-schema/rigs/<rigId>.json` (`AST_RIG_MISSING` if absent).
+3. `split`: one document per part (its meshes, full skeleton, own materials and textures) and per
+   clip (skeleton + one animation).
+4. Per item: `normalize` (REQ-AST-011), then `skeleton`: classify into one of
+   `rig.skeletonGroups` (REQ-AST-026; structural mismatch fails with `AST_RIG_MISMATCH`, no or
+   ambiguous group match warns `AST_SKELETON_GROUP_UNMATCHED`).
+5. Skinned parts: `region` writes the `_REGION` vertex attribute (bodies, REQ-AST-012/025), and
+   `influences` keeps the 4 largest weights per vertex (REQ-AST-027, `AST_INFLUENCES_LIMITED`).
+   All parts: `textures` enforces the texture budget.
+6. `optimize`: dedup, prune, weld, resample (1e-4), PNG texture resize, reorder, Meshopt
+   (`EXT_meshopt_compression`, quantize). Bundled texture sides are **512 px for bodies and 256 px
+   for other parts**, below the REQ-AST-010 maxima (1024 / 512), to keep the repo within budget;
+   that is ample for 32–128 px sprites. No Draco, no KTX2.
+7. Clips: duration and `hasRootMotion` from the root bone's horizontal travel; a clip without a
+   group match records `rig.defaultSkeletonGroup` (`AST_CLIP_GROUP_DEFAULTED`). Files above 3 MB
+   warn `AST_BUDGET_FILE_SIZE`.
+8. `emit`: `assets/packs/<packId>/{manifest.json, clips.json, parts/, clips/, retired-ids.json}`
+   with computed fields (`file`, `rig`, `skeletonGroup`, `sha256`, `stats`, `durationSec`,
+   `hasRootMotion`); the manifest embeds the rig (incl. `skeletonGroups`).
+
+`pnpm assets:check` (`tools/lib/check/run.ts`, REQ-AST-020) runs without `assets-src/`: manifest,
+clip manifest and pack config schemas; licenses; staleness against the config and canonical rig
+(`AST_MANIFEST_STALE`); `validatePartsAgainstRig`; per file SHA-256, budgets (triangles, textures,
+4 influences), stats and `_REGION` validity; each built skinned GLB re-verified against its
+declared skeleton group (non-reference group = warning `AST_BIND_POSE_DIFFERS`); clip rig, group
+and bone targets; thumbnails (warning); orphans and symlinks; ID stability against
+`retired-ids.json`; the default character + default clips size (AC-AST-016.2); and the generated
+section of `ASSETS_LICENSE.md` (`assets:licenses` regenerates it).
+
 ## 3. Core contracts
 
 The canonical definitions are Zod schemas in `@csg/parts-schema` and `@csg/shader-graph` with
@@ -193,10 +253,10 @@ When a spec changes a contract, this section is updated in the same PR.
 | `HexColor`, `AssetRef`, `TransformOffset`, `AssetLicense` | parts-schema | §3.1 below; `HexColor` normalization: spec 001 Data & contracts (refinement 3) |
 | `SlotId`, `SlotDefinition` (slot registry) | parts-schema | spec 001 REQ-CMP-001, Data & contracts |
 | `PartEntry`, `PartManifest` | parts-schema | spec 001 Data & contracts; generated fields: spec 011 REQ-AST-013 |
-| `RigDefinition` | parts-schema | spec 002 Data & contracts; derivation: spec 011 REQ-AST-005 |
+| `RigDefinition`, skeleton groups | parts-schema | spec 002 Data & contracts; derivation: spec 011 REQ-AST-005; groups: REQ-AST-026, REQ-CMP-037; ADR-0008 |
 | `AnatomyParams` (ranges), `AnatomyPreset`, per-frame order | parts-schema / engine | spec 002 Data & contracts |
 | `CharacterSpec`, canonical JSON, `#c=` share | parts-schema | spec 001 Data & contracts, REQ-CMP-022, REQ-CMP-025, REQ-CMP-034/035 |
-| `ClipRef`, `ClipEntry`, `ClipManifest`, `AnimationSelection` | parts-schema | spec 004 Data & contracts |
+| `ClipRef`, `ClipEntry`, `ClipManifest`, `AnimationSelection`; retargeting | parts-schema / engine | spec 004 Data & contracts, REQ-ANM-023 |
 | `RenderSettings` (except `animations`), `DIRECTION_ORDER`, defaults, palettes | parts-schema | spec 003 Data & contracts |
 | Reserved built-in param IDs (`RenderSettings` field ↔ graph binding) | shader-graph | spec 007 *Reserved built-in param IDs*, REQ-SGF-041 |
 | `ExportSettings`, `ExportContext`, `ExportProgress`, `SpriteSheetExport`, `SpriteExportManifest`, file names | parts-schema / engine | spec 005 Data & contracts |
@@ -205,6 +265,7 @@ When a spec changes a contract, this section is updated in the same PR.
 | `UploadLimits` / `DEFAULT_UPLOAD_LIMITS`, `DEFAULT_ARCHIVE_LIMITS`, `ALLOWED_DATA_URI_MIME`, `RESERVED_NAMES`, `UploadErrorCode`, `UploadAnalysis` and `UserAssetRecord` additions (incl. `sha256`), `BoneMapPreset`, `.csglib.zip` / `.csgproj.zip` | engine / parts-schema | spec 008 Data & contracts |
 | `CommandDef`, `ShortcutDef`, `HistoryEntry`, `UiPrefs`, `TabMessage`, `RecoveryMarkers`, IndexedDB stores, routing | web | spec 009 Data & contracts, REQ-UX-022..024, REQ-UX-029, REQ-UX-045, REQ-UX-048, REQ-UX-049 |
 | `pack.config.json`, `RigReport`, asset output layout | tools | spec 011 Data & contracts |
+| Engine M1 contracts (registry, loaders, composition, anatomy, animation, renderer) | engine | `packages/engine/src/contracts/` (type-only), §3.6 |
 | Error code prefixes | all | spec 000 Area-prefix registry |
 
 ### 3.1 Shared primitives and licensing
@@ -245,7 +306,11 @@ legs, feet, back, accessory, prop-main-hand, prop-off-hand` (spec 001 REQ-CMP-00
 its Data & contracts).
 
 ```ts
-export type RigId = string; // e.g. 'quaternius-ue5-65' (M1-gated, spec 011)
+export type RigId = string; // e.g. 'quaternius-ue5-65'
+/** Skeleton group ID, unique within a rig, e.g. 'superhero-m', 'male', 'female', 'ual'. */
+export type SkeletonGroupId = string;
+/** Joint name as in the source skeleton, [A-Za-z0-9_.:-]{1,64}; not renamed (decision D1, e.g. 'Head'). */
+export type JointName = string;
 
 /** Validated against the slot registry; [a-z0-9-]{1,32}. */
 export type SlotId = string;
@@ -256,7 +321,7 @@ export interface SlotDefinition {
   order: number;
   kinds: Array<'skinned' | 'static'>;
   required: boolean; // true only for 'body'
-  defaultSocket?: SocketBone;
+  defaultSocket?: SocketId;
   randomize: {emptyChance: number}; // 0..1; body = 0
 }
 
@@ -266,25 +331,54 @@ export type BodyRegion =
 
 export type TintSlot = 'skin' | 'hair' | 'eyes' | 'primary' | 'secondary' | 'metal' | 'leather';
 
-export type SocketBone = 'hand_r' | 'hand_l' | 'head' | 'spine_03' | 'pelvis';
+/** Socket IDs; RigDefinition.socketBones maps each to a joint (e.g. head -> 'Head'). */
+export type SocketId = 'hand_r' | 'hand_l' | 'head' | 'spine_03' | 'pelvis';
 
-/** Spec 002. Canonical files: packages/parts-schema/rigs/<rigId>.json (spec 011 REQ-AST-005). */
+/** Local rest transform of one joint: translation, quaternion xyzw, scale. */
+export interface RestTransform {
+  t: [number, number, number];
+  r: [number, number, number, number];
+  s: [number, number, number];
+}
+
+/** One bind/rest-pose variant of the rig (spec 011 REQ-AST-026, ADR-0008). */
+export interface SkeletonGroup {
+  id: SkeletonGroupId;
+  /** A rest transform for every bone. */
+  restPose: Record<JointName, RestTransform>;
+}
+
+/**
+ * Spec 002. Canonical files: packages/parts-schema/rigs/<rigId>.json, generated by
+ * `assets:verify-rig` from tools/rigs/<rigId>.overlay.json (spec 011 REQ-AST-005).
+ * Embedded in every PartManifest. Unknown fields round-trip.
+ */
 export interface RigDefinition {
   id: RigId;
-  /** Canonical bone names in hierarchy order. */
-  bones: string[];
-  /** Bone used as the root for yaw and translation snapping. */
-  rootBone: string;
+  comment?: string;
+  /** Joint names in hierarchy order (parents before children). */
+  bones: JointName[];
+  /** Joint used as the root for yaw and translation snapping (null parent). */
+  rootBone: JointName;
   /** Local axis along which each bone's length runs. */
   lengthAxis: 'x' | 'y' | 'z';
-  /** Anatomy control -> bones (hand-edited overlay). */
-  anatomyBones: Record<keyof AnatomyParams, string[]>;
-  /** Body region -> bones; used for hides and the _REGION vertex attribute (hand-edited overlay). */
-  regionBones: Record<BodyRegion, string[]>;
+  /** Anatomy control -> joints; all nine controls, none empty (hand-edited overlay). */
+  anatomyBones: Record<keyof AnatomyParams, JointName[]>;
+  /** Body region -> joints, disjoint; used for hides and _REGION (hand-edited overlay). */
+  regionBones: Record<BodyRegion, JointName[]>;
+  /** Socket ID -> joint. `pelvis` is the hip used by grounding and retargeting (no hipBone field). */
+  socketBones: Record<SocketId, JointName>;
+  skeletonHeightM?: number;
+  /** Joint -> parent joint; exactly one null (rootBone). */
+  parents: Record<JointName, JointName | null>;
+  /** Rest poses of the skeleton groups; IDs unique; at least one. */
+  skeletonGroups: SkeletonGroup[];
+  /** Reference group; one of skeletonGroups[].id. Fallback character skeleton. */
+  defaultSkeletonGroup: SkeletonGroupId;
 }
 
 export interface PartSocket {
-  bone: SocketBone;
+  bone: SocketId;
   offset: TransformOffset;
   /** Spec 002: whether the prop follows the socket bone's anatomy scale. */
   inheritScale?: boolean;
@@ -303,6 +397,10 @@ export interface PartEntry {
   node?: string;
   /** Required for kind 'skinned'. */
   rig?: RigId;
+  /** Computed: skeleton group of the file (REQ-AST-026); skinned parts. */
+  skeletonGroup?: SkeletonGroupId;
+  /** Authored, slot 'body' only: group whose rest pose builds the character skeleton (REQ-CMP-037). */
+  characterSkeletonGroup?: SkeletonGroupId;
   /** Only for parts in slot 'body': the fit group outfits target, e.g. 'regular'. */
   bodyType?: string;
   /** Body regions of the base body hidden while this part is equipped. */
@@ -337,9 +435,12 @@ export interface PartManifest {
 }
 ```
 
-Compatibility (REQ-CMP-008): a part fits the body if (a) skinned parts share the body's `rig`,
-(b) `bodies` is empty or contains the body id, (c) `bodyTypes` is empty or contains the body's
-`bodyType`.
+Compatibility (REQ-CMP-008, `registry/compatibility.ts`), checked in order: (a) a skinned part
+shares the body's `rig`, else reason `rig`; (b) `bodies` is empty or contains the body id, else
+`body`; (c) `bodyTypes` is empty or contains the body's `bodyType`, else `body-type`. Skeleton
+groups are deliberately not compared (each mesh keeps its own inverse binds, REQ-CMP-037); fits
+that depend on the bind pose, such as gendered hair and outfits, are authored as `bodies`
+(ADR-0008). Static props are rig-agnostic.
 
 ### 3.3 Character spec, clips and project document
 
@@ -390,14 +491,37 @@ export interface CharacterSpec {
  */
 export type ClipRef = `builtin:${string}/${string}` | `user:${string}#${string}`;
 
-/** Bundled clip catalog, `assets/packs/<packId>/clips.json`. Fields: spec 004 Data & contracts. */
+/** Spec 004 Data & contracts. Computed fields are written by build-parts. */
+export interface ClipEntry {
+  id: string; // [a-z0-9-]{1,64}, never reused
+  name: string;
+  category: 'locomotion' | 'combat' | 'reaction' | 'death' | 'emote' | 'misc';
+  file: string; // relative to the pack base URL
+  /** Animation name inside the GLB. */
+  sourceName: string;
+  rig: RigId;
+  durationSec: number;
+  loop: boolean;
+  defaultFrameCount: number; // 1..64
+  hasRootMotion: boolean;
+  /** Clip id of the in-place variant. */
+  inPlaceVariant?: string;
+  tags: string[];
+  license?: AssetLicense;
+  /** SHA-256 of `file`; cache key with the URL (REQ-ANM-021). */
+  sha256: string;
+  /** Skeleton group of the clip's source rest pose (REQ-AST-026); drives retargeting. */
+  skeletonGroup: SkeletonGroupId;
+}
+
+/** Bundled clip catalog, `assets/packs/<packId>/clips.json`. */
 export interface ClipManifest {
   format: 'sprite-clips-manifest';
   version: 1;
   packId: string;
   name: string;
   license: AssetLicense;
-  clips: ClipEntry[]; // id, name, category, file, sourceName, rig, durationSec, loop, ...
+  clips: ClipEntry[];
 }
 
 export interface ProjectDocument {
@@ -715,6 +839,74 @@ names.
 
 ### 3.6 Engine public API surface
 
+#### 3.6.1 What M1 exports
+
+The barrel `packages/engine/src/index.ts` re-exports every type of `src/contracts/` and the
+modules `loaders`, `registry`, `composition`, `anatomy`, `animation`, `renderer`, `rig` and
+`retarget`. The entry points apps use:
+
+```ts
+/** registry/asset-registry.ts */
+export function createAssetRegistry(options?: {loader?: GlbLoader}): EngineAssetRegistry;
+
+export interface EngineAssetRegistry extends AssetRegistry {
+  readonly loader: GlbLoader; // exposes fetchCount
+  /** Engine view: parsed scene (own boneInverses, regionId attribute) + rig. */
+  resolve(ref: AssetRef): Promise<Result<LoadedPartInternal, EngineError>>;
+  /** Lets clips resolve without a part pack; part packs register their embedded rigs. First wins. */
+  registerRig(rig: RigDefinition): void;
+  partEntry(ref: AssetRef): PartEntryView | undefined;
+  clipEntry(ref: ClipRef): ClipEntryView | undefined;
+}
+
+/** renderer/character-renderer.ts. WebGPU, else WebGL2; neither -> PIX_BACKEND_UNAVAILABLE. */
+export function createCharacterRenderer<R extends PreviewRenderer = WebGPURenderer>(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  options: CharacterRendererOptions<R>, // forceWebGL?, previewScale?, registry: AssemblyRegistry, slots?, factory?, onError?
+): Promise<Result<EngineCharacterRenderer<R>, EngineError>>;
+
+/** The M1 subset of CharacterRenderer (3.6.2) plus preview controls. */
+export interface EngineCharacterRenderer<R> extends CharacterRenderer {
+  readonly renderer: R;
+  readonly preview: PreviewScene; // scene, camera, direction stage
+  readonly assembly: CharacterAssembly;
+  readonly timeSec: number;
+  readonly playing: boolean;
+  /** null = continuous at the clip's duration; else step through export frames (REQ-ANM-018). */
+  setPreviewTiming(timing: PreviewTiming | null): void;
+  playClip(clipId: ClipRef, rootMotion?: RootMotionMode): Promise<Result<void, EngineError>>;
+  resize(width: number, height: number): void; // CSS px / previewScale
+  draw(): void;
+}
+
+/** composition/evaluate-pose.ts: reset to rest, then the spec 002 order (2.1). Deterministic. */
+export const evaluatePose: (context: PoseContext, timeSec: number) => void;
+// PoseContext = {body: BodySkeleton; player: ClipPlayer; anatomy: AnatomyBinding;
+//                props: readonly AttachedPart[]; params: AnatomyParams}
+```
+
+M1 `CharacterRenderer` implements `backend`, `setCharacter`, `play`, `pause`, `seek`,
+`setDirection` (yaw per `DIRECTION_ORDER`, `e` = screen-right, AC-PIX-005.1) and `dispose`; the
+other members of §3.6.2 do not exist yet. Known M1 limits: tinting mutates the registry's cached
+part scenes (one renderer per registry), and per-part tint overrides, morphs and `alsoOccupies`
+are not applied (M3). Registry user-asset methods throw `not implemented (M5)`.
+
+Engine-level lifecycle error: `ENGINE_DISPOSED` (exported from `composition/character-assembly.ts`)
+is returned as a `Result` error, never thrown, by `setCharacter`, `setClip` and `playClip` when
+called after `dispose()` or when `dispose()` happens while they are still loading. It is not tied
+to a spec area prefix (there is no `ENGINE` prefix in the registry of spec 000); callers treat it
+as "this renderer is gone" and drop the result.
+
+Other notable exports: `checkCompatibility`, `characterSkeletonGroupOf`, `restPoseOf`
+(registry); `createBodySkeleton`, `attachSkinnedPart`, `attachStaticPart`, `updateSockets`,
+`createCharacterAssembly`, tint and region-mask helpers (composition); `createClipPlayer`
+(`RETARGET_CACHE_SIZE`), `retargetClip`, `stripRootMotion`, `computeSampleTimes` (animation);
+`createGlbLoader` (Meshopt decoder only, Draco and KTX2 refused), `registerImageElementTextures`,
+`isAllowedAssetUrl` (same-origin and `blob:` only) (loaders); `createRetargetPlan`,
+`retargetTracks`, `legLength` (retarget); `restPoseForGroup`, `restWorldMatrices` (rig).
+
+#### 3.6.2 Target surface (v1)
+
 ```ts
 export interface RendererOptions {
   /** Force the WebGL2 backend (tests, Firefox/Linux workaround). */
@@ -744,10 +936,11 @@ export interface CharacterRenderer {
   dispose(): void;
 }
 
+/** Returns a Result: PIX_BACKEND_UNAVAILABLE when neither backend initializes. */
 export function createCharacterRenderer(
   canvas: HTMLCanvasElement | OffscreenCanvas,
   opts: RendererOptions,
-): Promise<CharacterRenderer>;
+): Promise<Result<CharacterRenderer, EngineError>>;
 
 export interface RenderedFrame {
   /** Carries AnimationSelection.label (file-safe), not the ClipRef (spec 004). */
@@ -818,9 +1011,14 @@ export interface AssetRegistry {
   registerUserAsset(record: UserAssetRecord): void;
   unregisterUserAsset(id: string): void;
   list(filter?: {slot?: SlotId; rig?: RigId}): PartEntryView[];
+  /** Same rig, any skeleton group, is listed (clips are retargeted, REQ-ANM-023). */
   listClips(filter?: {rig?: RigId}): ClipEntryView[];
+  /** Failures return CMP_PART_LOAD_FAILED, never throw. */
   resolve(ref: AssetRef): Promise<Result<LoadedPart, EngineError>>;
+  /** Failures return ANM_CLIP_LOAD_FAILED, never throw (REQ-ANM-021/022). */
+  resolveClip(ref: ClipRef): Promise<Result<LoadedClip, EngineError>>;
   licenseOf(ref: AssetRef | ClipRef): AssetLicense;
+  rigOf(ref: AssetRef | ClipRef): RigDefinition | undefined;
 }
 export type PartEntryView = PartEntry & {ref: AssetRef; source: 'builtin' | 'user'};
 export type ClipEntryView = ClipEntry & {ref: ClipRef; source: 'builtin' | 'user'};
@@ -828,6 +1026,15 @@ export type ClipEntryView = ClipEntry & {ref: ClipRef; source: 'builtin' | 'user
 export interface LoadedPart {
   ref: AssetRef;
   entry: PartEntry;
+}
+/** A loaded clip with the source rest pose of its skeleton group, for retargeting. */
+export interface LoadedClip {
+  ref: ClipRef;
+  entry: ClipEntry;
+  durationSec: number;
+  clip: AnimationClip; // three
+  rig: RigDefinition;
+  source: RestPose; // @csg/engine/retarget
 }
 
 /** Runs in the upload worker. */
@@ -953,12 +1160,13 @@ export interface EngineError {
 }
 ```
 
-**AssetRegistry clip API.** `registerClips`, `listClips`, `unregisterUserAsset` and `ClipEntryView`
-are architecture additions that implement REQ-ANM-001/002/016 and REQ-UPL-047/048. They are pending
-adoption into spec 004 Data & contracts (backlog F5); until then this section is their only
-definition, and if spec 004 adopts a different surface, spec 004 wins. Error code prefixes reuse the
-spec area prefixes (CMP, ANA, PIX, ANM, EXP, EDT, SGF, UPL, UX, WEB, AST; registry in spec 000) so a
-code points to the governing spec.
+**AssetRegistry clip API.** `registerClips`, `listClips`, `resolveClip`, `unregisterUserAsset` and
+`ClipEntryView` are architecture additions that implement REQ-ANM-001/002/016/021/022 and
+REQ-UPL-047/048. They are pending adoption into spec 004 Data & contracts (backlog F5); until then
+this section and `packages/engine/src/contracts/registry.ts` are their only definition, and if
+spec 004 adopts a different surface, spec 004 wins. Error code prefixes reuse the spec area
+prefixes (CMP, ANA, PIX, ANM, EXP, EDT, SGF, UPL, UX, WEB, AST; registry in spec 000) so a code
+points to the governing spec.
 
 ### 3.7 Editor shell contracts (apps/web)
 
@@ -1065,7 +1273,8 @@ The constitution (P-07) is binding; a spec may tighten a budget but not loosen i
 | Graph structure change recompile (200 nodes) | ≤ 300 ms | REQ-SGF-025 |
 | Editor initial load | LCP ≤ 2.5 s; ≤ 400 KB gzip initial JS; default character interactive ≤ 5 s at 50 Mbps | P-07, spec 009 NFR |
 | Editor initial JS **stretch** | < 300 KB gzip excluding three; three loaded once, shared | architecture goal, not gated |
-| Built-in asset download before first render | ≤ 15 MB | spec 011 NFR-3 |
+| Built-in asset download before first render | ≤ 15 MB (M1 default set: 3.74 MB) | spec 011 NFR-3, REQ-AST-016 |
+| Bundled packs in git (`assets/packs/**`) | ≤ 30 MB total, ≤ 3 MB per GLB (M1: about 18 MB) | M1 plan R1, `assets:check` |
 | Upload analysis, 30 MB GLB | ≤ 5 s, hard timeout 20 s | REQ-UPL-051, spec 008 limits |
 | Website | Lighthouse Performance ≥ 90, Accessibility ≥ 95 (mobile); LCP ≤ 2.0 s, CLS ≤ 0.05 | P-07, spec 010 |
 
@@ -1123,6 +1332,14 @@ decoder handling and re-validation of persisted data are in §4.10. Threat model
 Tests cite acceptance criteria in their names: `it('AC-PIX-003.2: ...')`. `spec:trace` reports ACs
 without tests.
 
+**GPU adapter caveat (E2E).** `apps/web/playwright.config.ts` has two Chromium projects:
+`chromium-webgpu` (`--enable-unsafe-webgpu`, Vulkan; must report `webgpu`) and `chromium-webgl2`
+(WebGPU disabled; must report `webgl2`). E2E runs against the production build so CSP violations
+fail (AC-GEN-010.2). The WebGPU project needs a real GPU adapter: headless Chromium without a GPU
+falls back to SwiftShader, which reports `webgpu` but draws nothing, so the pixel assertions fail.
+That loud failure is intended (M1 plan R2); a GPU-less CI runner must either provide a Vulkan
+adapter or run only the WebGL2 project, explicitly.
+
 ### 4.8 Directory conventions
 
 ```
@@ -1131,10 +1348,19 @@ packages/<name>/
   src/<module>/*.ts       # kebab-case files
   src/<module>/*.test.ts  # colocated unit tests
   test/fixtures/          # JSON and GLB fixtures
-packages/parts-schema/rigs/<rigId>.json   # canonical RigDefinition (spec 011)
+packages/parts-schema/rigs/<rigId>.json   # canonical RigDefinition incl. skeletonGroups (spec 011)
 packages/engine/src/
-  renderer/ registry/ loaders/ rig/ anatomy/ animation/ pipeline/ sampler/ export/ upload/ retarget/ storage/
-  # rig/ and retarget/ are DOM-free subpath exports (@csg/engine/rig, @csg/engine/retarget)
+  contracts/   # type-only API contracts (registry, loaders, composition, anatomy, animation, renderer, errors)
+  loaders/     # GLTFLoader + Meshopt only, URL policy, _REGION -> regionId, <img> texture plugin
+  registry/    # createAssetRegistry, compatibility, manifest JSON parsing, rest poses / character group
+  composition/ # character skeleton, skinned + static attach, sockets, tints, region mask,
+               # character assembly (diff-based), evaluatePose
+  anatomy/     # anatomy binding, plan, apply (child compensation, ground offset)
+  animation/   # sample times, clip player (retarget LRU), root motion, retarget-clip adapter
+  retarget/    # DOM-free and three-free retarget math (@csg/engine/retarget)
+  rig/         # DOM-free rig math: rest pose per group, FK (@csg/engine/rig)
+  renderer/    # backend selection + fallback, character renderer, preview scene, preview clock
+  # later: pipeline/ sampler/ export/ upload/ storage/
 packages/shader-graph/src/
   model/ sockets/ nodes/ commands/ migrations/ tsl/   # tsl/ is the only folder importing three
 apps/web/src/
@@ -1148,7 +1374,9 @@ apps/site/
   source.config.ts        # defineDocs({ dir: '../../docs/guide' })
   scripts/                # postbuild: sitemap.xml + robots.txt into out/
 assets/packs/<packId>/    # manifest.json, clips.json?, parts/, clips/, thumbnails/, presets/, retired-ids.json
-tools/                    # Node scripts (tsx); tools/packs/<packId>/pack.config.json, tools/rigs/*.overlay.json
+assets/reports/           # rig-report.md (+ JSON) from assets:verify-rig, committed (REQ-AST-007)
+tools/                    # Node scripts (tsx); tools/packs/<packId>/pack.config.json, tools/rigs/*.overlay.json,
+                          # tools/asset-sources.json; build-parts.ts + lib/build/, check-assets.ts + lib/check/
 docs/{architecture.md, adr/, guide/, contributing/}
 specs/NNN-name.md
 ```
@@ -1206,9 +1434,18 @@ default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; con
 The policy applies to production builds only (Vite dev needs inline scripts and HMR); E2E always
 runs against the production build and fails on any CSP violation (AC-GEN-010.2). Implementation
 consequences: no `blob:` workers (`worker-src 'self'`); `connect-src 'self'` means main-thread code
-must not `fetch` `blob:` or `data:` URLs, so stored-GLB textures are decoded via `img-src` paths or
-`createImageBitmap(Blob)` rather than a fetch-based image loader; `require-trusted-types-for
-'script'` plus the `innerHTML` lint ban (rule 9) means no string-to-DOM sinks.
+must not `fetch` `blob:` or `data:` URLs; `require-trusted-types-for 'script'` plus the `innerHTML`
+lint ban (rule 9) means no string-to-DOM sinks.
+
+**Texture loading under CSP.** three r186 `GLTFParser` uses an `ImageBitmapLoader` whenever
+`createImageBitmap` exists, and that loader `fetch`es the `blob:` URL the parser creates for each
+GLB-embedded image, which `connect-src 'self'` blocks (textures silently missing). Every engine
+GLB loader therefore registers `imageElementTexturesPlugin` (`loaders/image-element-textures.ts`,
+`registerImageElementTextures`), a `GLTFLoader` plugin that replaces `parser.textureLoader` with a
+`TextureLoader` on the parser's own `LoadingManager`. Images then decode through `<img>`, covered by
+`img-src 'self' blob: data:`; `flipY`, samplers, `SRGBColorSpace` and the URL policy are unchanged.
+This applies to bundled packs now and to stored user GLBs in M5 (PNG textures after
+normalization). Alternative for worker-side decoding: `createImageBitmap(Blob)` without a fetch.
 
 **Frame guard (REQ-GEN-012).** `frame-ancestors` cannot be delivered by `<meta>`, so when
 `window.self !== window.top` (or reading `window.top` throws) the editor renders only an "Open in a
@@ -1220,7 +1457,9 @@ touch localStorage or sessionStorage, open a `BroadcastChannel`, or register a s
 hashes committed in the repository; a mismatch fails the build. No CDN decoder paths
 (`setDecoderPath` to a remote URL is lint- and review-blocked). Draco and KTX2 decoding happens
 only in the upload worker, which calls the decoder modules directly; three's blob-worker wrappers
-(`DRACOLoader`/`KTX2Loader` worker pools) are not used.
+(`DRACOLoader`/`KTX2Loader` worker pools) are not used. The bundled-pack loader registers only the
+Meshopt decoder (REQ-AST-029) and refuses GLBs that use `KHR_draco_mesh_compression` or
+`KHR_texture_basisu`.
 
 **Normalized user GLBs (REQ-UPL-052..054).** Upload normalization (§2.2) re-encodes every accepted
 model as a plain GLB without `KHR_draco_mesh_compression`, `EXT_meshopt_compression` or
@@ -1253,11 +1492,11 @@ preference falls back to its default individually.
 
 | Milestone | Content | Exit criteria |
 |-----------|---------|---------------|
-| **M1** Asset spike + engine core | `tools/verify-rig.ts` (bone names, hierarchy, bind poses across UBC, Outfits, Animation Library); asset build (`gltf-transform`, spec 011); `@csg/parts-schema` v1 incl. slot registry, rigs and clip manifests; built-in manifests; engine: renderer creation with fallback, registry, loaders, rebinding, hides, anatomy with child compensation, animation playback; unlit test page | Spike report committed: shared skeleton confirmed, or per-pack retarget map defined (fallback: KayKit Adventurers). A fixture `CharacterSpec` renders with an animation on both backends. |
+| **M1** Asset spike + engine core | `tools/verify-rig.ts` (bone names, hierarchy, bind poses across UBC, Outfits, Animation Library); asset build (`gltf-transform`, spec 011); `@csg/parts-schema` v1 incl. slot registry, rigs and clip manifests; built-in manifests; engine: renderer creation with fallback, registry, loaders, rebinding, hides, anatomy with child compensation, animation playback; unlit test page | Spike report committed: shared skeleton confirmed, or per-pack retarget map defined (fallback: KayKit Adventurers). A fixture `CharacterSpec` renders with an animation on both backends. **Outcome (2026-10-09):** spike `mapped`, resolved by skeleton groups + runtime retargeting (ADR-0008); three Quaternius packs built; preview renders the default character with idle/walk on WebGPU and WebGL2 (E2E, §4.7 caveat). |
 | **M2** Pixel pipeline | Low-res RT, toon ramp + rim (material), MRT pass, outline (depth/normal/partId), palette LUT, Bayer dither, alpha cutoff, texel snapping, camera presets, directions, frame sampler | Golden images for side, 3/4, isometric at 32/64/128 px pass on WebGPU and WebGL2; determinism test passes. Post stages are implemented as functions with the same shape as node emitters so M4 can wrap them. |
 | **M3** Composer UI + export | apps/web shell (single history, shortcut registry), part picker, anatomy sliders, tints, animation picker, look panel, randomize, save/load, URL share, sprite sheet + metadata + CREDITS export, license warnings | E2E: compose, randomize, export a sheet; binding budgets in 4.3 met for preview and export. |
 | **M4** Shader graph | Graph model, schema, migrations, compiler to TSL, built-in material/post graphs as documents (output identical to M2 goldens), React Flow editor, search popup, groups, reroutes, frames, blackboard, previews, undo/redo via the shared history, copy/paste, presets | Default graphs reproduce M2 goldens pixel-exact; param slider updates without recompile; compile errors shown on nodes. |
-| **M5** Custom upload | Worker analysis, validator, budgets, VRM, FBX/OBJ beta, retargeter + bone map presets + auto-map + manual mapping UI, static prop gizmo, OPFS/IndexedDB storage, licensing UX | Mixamo and VRM fixtures retarget built-in clips without visible twisting (golden images); malicious fixture suite rejected; no network requests during upload (E2E asserts). |
+| **M5** Custom upload | Worker analysis, validator, budgets, VRM, FBX/OBJ beta, bone map presets + auto-map + manual mapping UI (extending the M1 retargeter), static prop gizmo, OPFS/IndexedDB storage, licensing UX | Mixamo and VRM fixtures retarget built-in clips without visible twisting (golden images); malicious fixture suite rejected; no network requests during upload (E2E asserts). |
 
 **Website track** (parallel, independent of the engine):
 
@@ -1281,7 +1520,11 @@ preference falls back to its default individually.
 - **One shared history**: simpler mental model and cross-feature undo; features must express edits
   as commands rather than local state mutations.
 - **Own retargeter**: more code, but avoids known `SkeletonUtils.retargetClip` twisting on Mixamo
-  rigs (kept as a fallback).
+  rigs (kept as a fallback). Built in M1 for the built-in skeleton groups and reused by M5.
+- **Skeleton groups + runtime retargeting** (ADR-0008): one rig, meshes keep their own inverse
+  binds, clips retargeted once per character group and cached; costs small bind-delta seams on a
+  bare `superhero-m` body and linear interpolation of retargeted clips, saves rebaking meshes and
+  duplicating clip bytes.
 - **No backend**: zero hosting cost and strong privacy; no cloud sync or sharing of user assets.
 - **Normalized, decoder-free stored GLBs**: larger OPFS footprint (no mesh/texture compression for
   user assets) in exchange for never running a decoder on persisted data.
@@ -1290,9 +1533,11 @@ preference falls back to its default individually.
 
 | Risk | Mitigation |
 |------|-----------|
-| Quaternius packs may not share one 65-joint skeleton with identical bind poses (**unverified**, third-party claim) | M1 spike `tools/verify-rig.ts` gates M1; fallback is per-pack bone maps through the retargeter, or KayKit Adventurers |
+| ~~Quaternius packs may not share one 65-joint skeleton with identical bind poses~~ Resolved by the M1 spike: shared names and hierarchy, four bind-pose groups (outcome `mapped`) | Skeleton groups + runtime retargeting (ADR-0008); fallback for visible `superhero-m` seams: leg-only rebake of that mesh |
+| Residual shear on rotated-rest bones under anatomy scaling (about 0.5–0.7 %) | Accepted for M1; revisit if visible in M2 goldens |
 | TSL / RenderPipeline API changes between three releases | Exact pin; upgrade PRs with goldens on both backends |
 | WebGL2 fallback differences (Firefox/Linux quirks) | Per-backend goldens; Firefox E2E on WebGL2 |
+| CI runners without a GPU adapter (SwiftShader reports `webgpu` but renders blank) | WebGPU E2E project fails loudly; CI must provide a Vulkan adapter or run WebGL2 only, explicitly (§4.7) |
 | Clipping between outfit parts | `hides` regions, `alsoOccupies`; manifest QA in M1 |
 | FBX import quality | Marked beta; recommend GLB conversion |
 | Pixel-exact goldens may be flaky across GPU drivers | Goldens generated in CI on a fixed runner image; tolerance override per test with reason |

@@ -1,3 +1,4 @@
+import {execFileSync} from 'node:child_process';
 import {existsSync, readdirSync, readFileSync, statSync} from 'node:fs';
 import {join, relative, resolve} from 'node:path';
 import {describe, expect, it} from 'vitest';
@@ -96,7 +97,34 @@ describe('pack configs (REQ-AST-009, REQ-CMP-036)', () => {
     }
   });
 
+  it('AC-AST-001.1: assets-src/ is gitignored (git check-ignore)', ctx => {
+    try {
+      execFileSync('git', ['--version'], {stdio: 'ignore'});
+      execFileSync('git', ['rev-parse', '--git-dir'], {
+        cwd: repoRoot,
+        stdio: 'ignore',
+      });
+    } catch {
+      console.info(
+        'skipped AC-AST-001.1: git or a git checkout is unavailable',
+      );
+      ctx.skip();
+      return;
+    }
+    // Exit code 0 means the path is ignored; 1 would throw.
+    const out = execFileSync('git', ['check-ignore', 'assets-src/x'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    });
+    expect(out.trim()).toBe('assets-src/x');
+  });
+
   const srcRoot = join(repoRoot, 'assets-src');
+  if (!existsSync(srcRoot)) {
+    console.info(
+      'skipped: no assets-src (real-pack REQ-AST-002 mapping checks need the unzipped vendor packs)',
+    );
+  }
   for (const packId of PACKS) {
     const entry = sources.packs.find(p => p.packId === packId);
     const dir = entry === undefined ? undefined : join(srcRoot, entry.dir);

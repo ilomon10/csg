@@ -140,3 +140,37 @@ test('AC-GEN-010.2: loading and using the preview raises no CSP violation', asyn
     ]),
   ]).toEqual([]);
 });
+
+test('REQ-ANM-018: Play after Pause and a seek continues from the seek time (no restart)', async ({
+  page,
+}) => {
+  await openPreview(page);
+  await page.getByRole('button', {name: 'Pause animation'}).click();
+  const scrub = page.getByTestId('scrubber');
+  await scrub.fill('1.2');
+  await expect(scrub).toHaveValue('1.2');
+  await page.getByRole('button', {name: 'Play animation'}).click();
+  await expect(
+    page.getByRole('button', {name: 'Pause animation'}),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(400);
+  const t = Number(await scrub.inputValue());
+  // Idle is 2.5 s long: a restart would read about 0.4 s, a resume about 1.6 s.
+  expect(t).toBeGreaterThan(1.2);
+  expect(t).toBeLessThan(2.4);
+  await expect(page.getByTestId('preview-error')).toHaveCount(0);
+});
+
+test('packs are served with explicit content types, nosniff and 404 for unknown paths', async ({
+  request,
+}) => {
+  const manifest = await request.get('/packs/quaternius-ual/clips.json');
+  expect(manifest.status()).toBe(200);
+  expect(manifest.headers()['content-type']).toContain('application/json');
+  expect(manifest.headers()['x-content-type-options']).toBe('nosniff');
+  const missing = await request.get('/packs/quaternius-ual/no-such-file.glb');
+  expect(missing.status()).toBe(404);
+  expect(missing.headers()['x-content-type-options']).toBe('nosniff');
+  const traversal = await request.get('/packs/..%2F..%2Fpackage.json');
+  expect(traversal.status()).toBe(404);
+});

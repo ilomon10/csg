@@ -3,6 +3,7 @@ import {ImageBitmapLoader, SRGBColorSpace, TextureLoader} from 'three';
 import type {Mesh, MeshStandardMaterial} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import type {GLTFParser} from 'three/addons/loaders/GLTFLoader.js';
+import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
 import {
   REGION_ATTRIBUTE,
   SOURCE_REGION_ATTRIBUTE,
@@ -115,6 +116,66 @@ describe('loaders: GLB loader (REQ-AST-028, REQ-AST-029)', () => {
       expect(result.error.details).toMatchObject({
         reason: 'extension-not-allowed',
       });
+    }
+  });
+
+  it('AC-AST-029.1 (loader part): Meshopt only, decoded on the calling thread: no Worker, no Draco/KTX2 loader, no decoder file request', async () => {
+    let workers = 0;
+    const original = (globalThis as {Worker?: unknown}).Worker;
+    (globalThis as {Worker?: unknown}).Worker = class {
+      constructor() {
+        workers++;
+      }
+    };
+    const meshopt = vi.spyOn(GLTFLoader.prototype, 'setMeshoptDecoder');
+    const draco = vi.spyOn(GLTFLoader.prototype, 'setDRACOLoader');
+    const ktx2 = vi.spyOn(GLTFLoader.prototype, 'setKTX2Loader');
+    const useWorkers = vi.spyOn(MeshoptDecoder, 'useWorkers');
+    try {
+      const files = new Map([
+        [BODY_URL, buildTestGlb({region: [0, 3, 10]})],
+        ['packs/p/clip.glb', buildTestGlb({animations: ['walk']})],
+      ]);
+      const stub = createTestFetch(files);
+      const loader = createGlbLoader({fetch: stub.fetch, origin: undefined});
+      const body = await loader.load(BODY_URL, {
+        errorCode: 'CMP_PART_LOAD_FAILED',
+        convertRegion: true,
+      });
+      const clip = await loader.load('packs/p/clip.glb', {
+        errorCode: 'ANM_CLIP_LOAD_FAILED',
+      });
+      expect(body.ok && clip.ok).toBe(true);
+      // Every GLTFLoader got the in-thread Meshopt decoder and nothing else.
+      expect(meshopt).toHaveBeenCalledTimes(2);
+      for (const call of meshopt.mock.calls)
+        expect(call[0]).toBe(MeshoptDecoder);
+      for (const instance of meshopt.mock.contexts as GLTFLoader[]) {
+        const fields = instance as unknown as {
+          dracoLoader: unknown;
+          ktx2Loader: unknown;
+        };
+        expect(fields.dracoLoader).toBeNull();
+        expect(fields.ktx2Loader).toBeNull();
+      }
+      expect(draco).not.toHaveBeenCalled();
+      expect(ktx2).not.toHaveBeenCalled();
+      expect(useWorkers).not.toHaveBeenCalled();
+      // The decoder's WASM instantiates from its embedded bytes on this thread.
+      await MeshoptDecoder.ready;
+      expect(MeshoptDecoder.supported).toBe(true);
+      expect(workers).toBe(0);
+      // Only the GLBs themselves were fetched: no Draco/Basis decoder files.
+      expect(stub.requests).toEqual([BODY_URL, 'packs/p/clip.glb']);
+      expect(stub.requests.some(u => /draco|basis|ktx2|\.wasm$/i.test(u))).toBe(
+        false,
+      );
+    } finally {
+      meshopt.mockRestore();
+      draco.mockRestore();
+      ktx2.mockRestore();
+      useWorkers.mockRestore();
+      (globalThis as {Worker?: unknown}).Worker = original;
     }
   });
 

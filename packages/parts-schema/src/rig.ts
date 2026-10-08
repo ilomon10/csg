@@ -121,7 +121,7 @@ export const rigDefinitionSchema = z
         if (bone !== rig.rootBone) {
           fail(
             ['parents', bone],
-            `only rootBone "${rig.rootBone}" may have a null parent`,
+            `exactly one root is required: only rootBone "${rig.rootBone}" may have a null parent`,
           );
         }
       } else {
@@ -139,7 +139,14 @@ export const rigDefinitionSchema = z
     if (known(rig.rootBone) && rig.parents[rig.rootBone] !== null) {
       fail(
         ['parents', rig.rootBone],
-        `rootBone "${rig.rootBone}" must have a null parent`,
+        `exactly one root is required: rootBone "${rig.rootBone}" must have a null parent`,
+      );
+    }
+    const roots = rig.bones.filter(bone => rig.parents[bone] === null);
+    if (roots.length === 1 && roots[0] !== rig.rootBone) {
+      fail(
+        ['rootBone'],
+        `rootBone "${rig.rootBone}" is not the joint with the null parent ("${roots[0]}")`,
       );
     }
 

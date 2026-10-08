@@ -2,7 +2,7 @@
  * Minimal quaternion and vector helpers (glTF `[x, y, z, w]` order). Pure,
  * allocation per call only; hot loops in `tracks.ts` inline the math instead.
  */
-import type {Quat, Vec3} from './types';
+import type {Quat, Vec3} from '../retarget/types';
 
 /** The identity quaternion. */
 export const QUAT_IDENTITY: Quat = [0, 0, 0, 1];
@@ -63,19 +63,22 @@ export function quatDot(a: Quat, b: Quat): number {
 }
 
 /**
- * Rotation angle in radians between two orientations, sign-agnostic
+ * Rotation angle in radians between two unit orientations, sign-agnostic
  * (`q` and `-q` are equal). Uses `atan2` so tiny angles stay accurate.
  *
- * @param a - First quaternion.
- * @param b - Second quaternion.
+ * @param a - First unit quaternion.
+ * @param b - Second unit quaternion.
  * @returns Angle in `[0, π]`.
  */
 export function quatAngle(a: Quat, b: Quat): number {
-  const [x, y, z, w] = quatMultiply(
-    quatInvert(quatNormalize(a)),
-    quatNormalize(b),
-  );
-  return 2 * Math.atan2(Math.sqrt(x * x + y * y + z * z), Math.abs(w));
+  // relative = conj(a) * b ; angle = 2 * atan2(|xyz|, |w|).
+  const [ax, ay, az, aw] = a;
+  const [bx, by, bz, bw] = b;
+  const w = aw * bw + ax * bx + ay * by + az * bz;
+  const x = aw * bx - ax * bw - ay * bz + az * by;
+  const y = aw * by + ax * bz - ay * bw - az * bx;
+  const z = aw * bz - ax * by + ay * bx - az * bw;
+  return 2 * Math.atan2(Math.hypot(x, y, z), Math.abs(w));
 }
 
 /**

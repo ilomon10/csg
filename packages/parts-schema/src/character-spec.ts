@@ -1,15 +1,17 @@
 import {z} from 'zod';
-import {anatomyParamsSchema, defaultAnatomy} from './anatomy';
+import {anatomyParamsSchema} from './anatomy';
 import {tintSlotSchema} from './body';
+import defaultCharacterJson from '../data/default-character.json';
 import {partSocketSchema} from './part-manifest';
 import {
   CHARACTER_FORMAT_VERSION,
   assetRefSchema,
+  clipRefSchema,
   hexColorSchema,
   slotIdSchema,
   toSchemaIssues,
 } from './primitives';
-import type {AssetRef, SchemaIssue} from './primitives';
+import type {AssetRef, ClipRef, SchemaIssue} from './primitives';
 
 /** One equipped part (architecture §3.3). */
 export const partSelectionSchema = z.object({
@@ -165,35 +167,35 @@ export function parseCharacterSpec(json: unknown): CharacterSpecResult {
   };
 }
 
-/** Body of the shipped default character (REQ-CMP-036). */
-export const DEFAULT_BODY_REF: AssetRef = 'builtin:quaternius-ubc/superhero-m';
+/** Shipped default character data file (`data/default-character.json`, REQ-CMP-036). */
+export const defaultCharacterDataSchema = z.object({
+  format: z.literal('sprite-default-character'),
+  version: z.literal(1),
+  character: characterSpecSchema,
+  /** Default clips, in menu order; the first is the one the preview starts with. */
+  clips: z.array(clipRefSchema).min(1),
+});
 
-/** Default tint colors; every slot is required. */
-const DEFAULT_TINTS: CharacterSpec['tints'] = {
-  skin: '#e0ac8a',
-  hair: '#4a3222',
-  eyes: '#3b5b8c',
-  primary: '#5b7fa6',
-  secondary: '#a65b5b',
-  metal: '#a8afb5',
-  leather: '#7a5230',
-};
+/** Inferred type of {@link defaultCharacterDataSchema}. */
+export type DefaultCharacterData = z.infer<typeof defaultCharacterDataSchema>;
+
+/** The validated default character data (parsed once at module load; throws if invalid). */
+export const DEFAULT_CHARACTER_DATA: DefaultCharacterData =
+  defaultCharacterDataSchema.parse(defaultCharacterJson);
+
+/** Body of the shipped default character (REQ-CMP-036). */
+export const DEFAULT_BODY_REF: AssetRef =
+  DEFAULT_CHARACTER_DATA.character.body.ref;
+
+/** Default clip refs (idle first, then walk), from the same data file. */
+export const DEFAULT_CLIP_REFS: readonly ClipRef[] =
+  DEFAULT_CHARACTER_DATA.clips;
 
 /**
- * Default `CharacterSpec` (REQ-CMP-036, spec 001 Data & contracts): body `superhero-m`, every
- * anatomy value 1, `seed: 0`. `parts` is empty until the M1-14 pack configs fix the hair and
- * outfit part IDs; the data file that fills it must keep every ref registered and compatible.
+ * Default `CharacterSpec` (REQ-CMP-036, spec 001 Data & contracts), read from
+ * `data/default-character.json`: body `superhero-m`, hair, eyebrows and the male ranger outfit,
+ * every anatomy value 1, `seed: 0`. Returns a fresh copy each call (the schema parse clones).
  */
 export function createDefaultCharacterSpec(): CharacterSpec {
-  return {
-    format: 'sprite-character',
-    version: CHARACTER_FORMAT_VERSION,
-    name: 'New character',
-    seed: 0,
-    body: {ref: DEFAULT_BODY_REF},
-    parts: {},
-    anatomy: defaultAnatomy(),
-    morphs: {},
-    tints: {...DEFAULT_TINTS},
-  };
+  return characterSpecSchema.parse(DEFAULT_CHARACTER_DATA.character);
 }

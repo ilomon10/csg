@@ -58,9 +58,14 @@ export type RootMotionMode = 'in-place' | 'metadata';
 export interface ClipPlayer {
   /**
    * Retargets (LRU cache keyed `${clipRef}|${skeletonGroupId}`, cap 16 clips),
-   * then applies the root-motion policy. `null` clears the clip.
+   * then applies the root-motion policy. `null` clears the clip. A clip that
+   * cannot be retargeted returns the retarget error (`ok: false`) and keeps the
+   * previous clip and pose (REQ-ANM-022).
    */
-  setClip(clip: LoadedClip | null, rootMotion: RootMotionMode): void;
+  setClip(
+    clip: LoadedClip | null,
+    rootMotion: RootMotionMode,
+  ): Result<void, EngineError>;
   /** Absolute seek; never accumulates (REQ-ANM-008) and allocates nothing per call. */
   seek(timeSec: number): void;
   /** Event log, for example `retarget:miss` and `retarget:hit`. */
