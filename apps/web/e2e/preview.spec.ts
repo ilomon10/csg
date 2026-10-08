@@ -62,6 +62,48 @@ async function openPreview(page: Page): Promise<string[]> {
   return violations;
 }
 
+interface AdapterReport {
+  available: boolean;
+  isFallbackAdapter?: boolean;
+  vendor?: string;
+  architecture?: string;
+  device?: string;
+  description?: string;
+}
+
+/** Reads the WebGPU adapter identity in-page; the webgpu project fails elsewhere if absent. */
+async function adapterReport(page: Page): Promise<AdapterReport> {
+  return page.evaluate(async () => {
+    const gpu = (
+      navigator as unknown as {
+        gpu?: {requestAdapter(): Promise<Record<string, unknown> | null>};
+      }
+    ).gpu;
+    const adapter = gpu ? await gpu.requestAdapter() : null;
+    if (!adapter) return {available: false};
+    const info = (adapter['info'] ?? {}) as Record<string, string>;
+    return {
+      available: true,
+      isFallbackAdapter: adapter['isFallbackAdapter'] === true,
+      vendor: info['vendor'],
+      architecture: info['architecture'],
+      device: info['device'],
+      description: info['description'],
+    };
+  });
+}
+
+/** True for CPU rasterizers (SwiftShader / llvmpipe / fallback adapters). */
+function isSoftwareAdapter(r: AdapterReport): boolean {
+  if (!r.available) return false;
+  const text = [r.vendor, r.architecture, r.device, r.description]
+    .join(' ')
+    .toLowerCase();
+  return (
+    r.isFallbackAdapter === true || /swiftshader|llvmpipe|software/.test(text)
+  );
+}
+
 test('AC-GEN-002.1: badge reports the expected backend', async ({
   page,
 }, info) => {
@@ -78,6 +120,24 @@ test('AC-CMP-036.1: default character renders and animates between seek times', 
   browser,
 }, info) => {
   await openPreview(page);
+  if (info.project.metadata['expectedBackend'] === 'webgpu') {
+    const report = await adapterReport(page);
+    await info.attach('webgpu-adapter-info', {
+      body: JSON.stringify(report, null, 2),
+      contentType: 'application/json',
+    });
+    const software = isSoftwareAdapter(report);
+    if (software) {
+      info.annotations.push({
+        type: 'skipped-pixel-check',
+        description: 'software WebGPU adapter (SwiftShader)',
+      });
+    }
+    test.skip(
+      software,
+      'software WebGPU adapter (SwiftShader) renders blank — pixel check needs a real GPU',
+    );
+  }
   const canvas = page.getByTestId('preview-canvas');
   const scrub = page.getByTestId('scrubber');
 
