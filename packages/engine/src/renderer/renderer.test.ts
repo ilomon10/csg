@@ -1,4 +1,5 @@
 import {describe, expect, it} from 'vitest';
+import {Vector3} from 'three';
 import type {Camera, Scene} from 'three';
 import {computeSampleTimes} from '../animation/sample-times';
 import {
@@ -11,7 +12,12 @@ import type {RendererParameters} from './backend';
 import {createCharacterRenderer} from './character-renderer';
 import type {PreviewRenderer} from './character-renderer';
 import {previewTimeAt, previewTimingFor} from './preview-clock';
-import {DIRECTION_ORDER, directionYaw} from './preview-scene';
+import {
+  DIRECTION_ORDER,
+  MODEL_FORWARD_YAW_OFFSET_RAD,
+  directionYaw,
+  stageYaw,
+} from './preview-scene';
 
 /** Failure modes of {@link FakeRenderer}. */
 interface Behaviour {
@@ -230,14 +236,59 @@ describe('character renderer (M1)', () => {
     expect(renderer.timeSec).toBe(0.5);
   });
 
-  it('REQ-PIX-005: setDirection turns the stage by index x 45 degrees, camera fixed', async () => {
+  it('REQ-PIX-005: setDirection turns the stage (model), camera fixed', async () => {
     const {renderer} = await create();
     const cameraBefore = renderer.preview.camera.matrixWorld.clone();
     renderer.setDirection(2);
-    expect(renderer.preview.stage.rotation.y).toBeCloseTo(Math.PI / 2, 12);
+    expect(renderer.preview.stage.rotation.y).toBeCloseTo(stageYaw(2), 12);
     expect(renderer.preview.camera.matrixWorld.equals(cameraBefore)).toBe(true);
-    expect(DIRECTION_ORDER[2]).toBe('n');
     expect(() => directionYaw(8)).toThrow();
+    expect(() => stageYaw(-1)).toThrow();
+  });
+
+  it('AC-PIX-005.1: index i faces i x 45 degrees counter-clockwise from screen-right; labels e..se', async () => {
+    expect([...DIRECTION_ORDER]).toEqual([
+      'e',
+      'ne',
+      'n',
+      'nw',
+      'w',
+      'sw',
+      's',
+      'se',
+    ]);
+    const {renderer} = await create();
+    const {camera, stage} = renderer.preview;
+    // A fresh preview already shows direction 0 (`e`), before any setDirection.
+    expect(stage.rotation.y).toBeCloseTo(stageYaw(0), 12);
+    camera.updateMatrixWorld(true);
+    // Camera basis: screen-right and "away from the camera" (into the screen).
+    const right = new Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const away = new Vector3()
+      .setFromMatrixColumn(camera.matrixWorld, 2)
+      .negate();
+    const forward = new Vector3();
+    for (let i = 0; i < DIRECTION_ORDER.length; i++) {
+      renderer.setDirection(i);
+      stage.updateMatrixWorld(true);
+      // Built models face +Z (REQ-AST-011); the stage turns them.
+      forward.set(0, 0, 1).transformDirection(stage.matrixWorld);
+      const yawDeg =
+        (Math.atan2(forward.dot(away), forward.dot(right)) * 180) / Math.PI;
+      const expected = i * 45;
+      expect(((yawDeg % 360) + 360) % 360).toBeCloseTo(expected, 9);
+      expect(directionYaw(i)).toBeCloseTo((expected * Math.PI) / 180, 12);
+    }
+    // e faces screen-right, s faces the camera.
+    renderer.setDirection(0);
+    stage.updateMatrixWorld(true);
+    forward.set(0, 0, 1).transformDirection(stage.matrixWorld);
+    expect(forward.dot(right)).toBeCloseTo(1, 12);
+    renderer.setDirection(DIRECTION_ORDER.indexOf('s'));
+    stage.updateMatrixWorld(true);
+    forward.set(0, 0, 1).transformDirection(stage.matrixWorld);
+    expect(forward.dot(away)).toBeCloseTo(-1, 12);
+    expect(stageYaw(0)).toBeCloseTo(MODEL_FORWARD_YAW_OFFSET_RAD, 12);
   });
 
   it('play() reports a clip load failure through onError and keeps playing state off', async () => {

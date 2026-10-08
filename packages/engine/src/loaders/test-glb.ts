@@ -14,6 +14,11 @@ export interface TestGlbOptions {
   readonly extensions?: readonly string[];
   /** URI of an external buffer (a second, empty-use buffer) to exercise the URL policy. */
   readonly externalBufferUri?: string;
+  /**
+   * Bytes of an image embedded in a `bufferView` (`image/png`), used as the base color
+   * texture of a material on the triangle (adds `TEXCOORD_0`).
+   */
+  readonly embeddedImage?: Uint8Array;
 }
 
 function pad4(length: number): number {
@@ -67,6 +72,25 @@ export function buildTestGlb(options: TestGlbOptions = {}): ArrayBuffer {
     attributes['_REGION'] = accessors.length - 1;
   }
 
+  let material: Record<string, unknown> | undefined;
+  let images: Array<Record<string, unknown>> | undefined;
+  if (options.embeddedImage !== undefined) {
+    const uv = add(f32([0, 0, 1, 0, 0, 1]));
+    accessors.push({
+      bufferView: uv,
+      componentType: 5126,
+      count: 3,
+      type: 'VEC2',
+    });
+    attributes['TEXCOORD_0'] = accessors.length - 1;
+    const imageView = add(options.embeddedImage);
+    images = [{bufferView: imageView, mimeType: 'image/png'}];
+    material = {
+      name: 'textured',
+      pbrMetallicRoughness: {baseColorTexture: {index: 0}},
+    };
+  }
+
   const animations = (options.animations ?? []).map(name => {
     const input = add(f32([0, 1]));
     accessors.push({
@@ -110,12 +134,24 @@ export function buildTestGlb(options: TestGlbOptions = {}): ArrayBuffer {
     scene: 0,
     scenes: [{nodes: [0]}],
     nodes: [{name: 'part', mesh: 0}],
-    meshes: [{primitives: [{attributes}]}],
+    meshes: [
+      {
+        primitives: [
+          material === undefined ? {attributes} : {attributes, material: 0},
+        ],
+      },
+    ],
     accessors,
     bufferViews,
     buffers,
   };
   if (animations.length > 0) json['animations'] = animations;
+  if (material !== undefined && images !== undefined) {
+    json['materials'] = [material];
+    json['images'] = images;
+    json['textures'] = [{source: 0, sampler: 0}];
+    json['samplers'] = [{magFilter: 9728, minFilter: 9728}];
+  }
   if (options.extensions !== undefined && options.extensions.length > 0) {
     json['extensionsUsed'] = [...options.extensions];
   }

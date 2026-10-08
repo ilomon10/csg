@@ -4,6 +4,7 @@
  * `GLTFLoader` with the Meshopt decoder only: no Draco loader, no KTX2 loader, no workers
  * (the decoder runs on the calling thread; `useWorkers` is never called). Bytes are fetched by
  * this module, checked against the URL policy and the extension deny list, then parsed.
+ * Textures decode through `<img>` (see `image-element-textures.ts`, REQ-GEN-010).
  */
 import {LoadingManager} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
@@ -12,6 +13,7 @@ import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
 import {parseJson} from '@csg/parts-schema';
 import type {EngineError, Result} from '../contracts/errors';
 import type {LoadGlb, LoadGlbOptions} from '../contracts/loaders';
+import {registerImageElementTextures} from './image-element-textures';
 import {convertRegionAttribute} from './region';
 import {BLOCKED_URL, isAllowedAssetUrl} from './url-policy';
 
@@ -183,6 +185,8 @@ export function createGlbLoader(config: GlbLoaderConfig = {}): GlbLoader {
     });
     const loader = new GLTFLoader(manager);
     loader.setMeshoptDecoder(MeshoptDecoder);
+    // Embedded textures load as <img> from blob: (CSP img-src), not fetch (REQ-GEN-010).
+    registerImageElementTextures(loader);
     try {
       const gltf = await loader.parseAsync(data, resourcePathOf(url));
       if (refused.length > 0) {

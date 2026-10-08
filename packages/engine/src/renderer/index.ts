@@ -27,9 +27,11 @@ export type {PreviewTiming} from './preview-clock';
 export {
   DIRECTION_ORDER,
   DIRECTION_STEP_DEG,
+  MODEL_FORWARD_YAW_OFFSET_RAD,
   PREVIEW_FRAME_CENTER_Y_M,
   PREVIEW_FRAME_HEIGHT_M,
   createPreviewScene,
   directionYaw,
+  stageYaw,
 } from './preview-scene';
 export type {DirectionLabel, PreviewScene} from './preview-scene';

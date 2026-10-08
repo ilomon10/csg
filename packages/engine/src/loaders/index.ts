@@ -16,6 +16,11 @@ export type {
   GlbLoaderConfig,
 } from './glb-loader';
 export {
+  IMAGE_ELEMENT_TEXTURES_PLUGIN,
+  imageElementTexturesPlugin,
+  registerImageElementTextures,
+} from './image-element-textures';
+export {
   REGION_ATTRIBUTE,
   SOURCE_REGION_ATTRIBUTE,
   convertRegionAttribute,

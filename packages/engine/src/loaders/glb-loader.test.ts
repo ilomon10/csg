@@ -1,10 +1,15 @@
-import {describe, expect, it} from 'vitest';
-import type {Mesh} from 'three';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+import {ImageBitmapLoader, SRGBColorSpace, TextureLoader} from 'three';
+import type {Mesh, MeshStandardMaterial} from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import type {GLTFParser} from 'three/addons/loaders/GLTFLoader.js';
 import {
   REGION_ATTRIBUTE,
   SOURCE_REGION_ATTRIBUTE,
   createGlbLoader,
   inspectGlb,
+  IMAGE_ELEMENT_TEXTURES_PLUGIN,
+  imageElementTexturesPlugin,
   isAllowedAssetUrl,
   joinPackUrl,
 } from './index';
@@ -176,5 +181,101 @@ describe('loaders: GLB loader (REQ-AST-028, REQ-AST-029)', () => {
     expect(inspectGlb(new TextEncoder().encode('{"asset":{}}').buffer).ok).toBe(
       false,
     );
+  });
+});
+
+/** 1x1 PNG; the fake `<img>` never decodes it, the bytes only travel through a blob: URL. */
+const PNG_1X1 = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48,
+  0x44, 0x52, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0x1f, 0x15, 0xc4, 0x89,
+]);
+
+/** Minimal `<img>` stand-in: records `src` and fires `load` asynchronously. */
+class FakeImage extends EventTarget {
+  static readonly sources: string[] = [];
+  crossOrigin: string | null = null;
+  private source = '';
+  get src(): string {
+    return this.source;
+  }
+  set src(value: string) {
+    this.source = value;
+    FakeImage.sources.push(value);
+    queueMicrotask(() => this.dispatchEvent(new Event('load')));
+  }
+}
+
+describe('loaders: embedded textures under CSP (REQ-GEN-010, architecture 4.10)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    FakeImage.sources.length = 0;
+  });
+
+  /** Browser-like globals: createImageBitmap exists, fetch is recorded, <img> is fake. */
+  function stubBrowser(): string[] {
+    const fetched: string[] = [];
+    vi.stubGlobal('self', globalThis);
+    vi.stubGlobal('createImageBitmap', () =>
+      Promise.reject(new Error('createImageBitmap must not be used')),
+    );
+    vi.stubGlobal('fetch', (url: string) => {
+      fetched.push(String(url));
+      return Promise.reject(new Error('connect-src blocked'));
+    });
+    vi.stubGlobal('document', {
+      createElementNS: (_ns: string, name: string) => {
+        if (name !== 'img') throw new Error(`unexpected element ${name}`);
+        return new FakeImage();
+      },
+    });
+    return fetched;
+  }
+
+  it('AC-GEN-010.2 (engine part): the parser loads textures with a TextureLoader even when createImageBitmap exists', async () => {
+    stubBrowser();
+    // Control: without the plugin, three r186 picks ImageBitmapLoader (fetch-based).
+    let control: GLTFParser | undefined;
+    await new GLTFLoader()
+      .register(parser => {
+        control = parser;
+        return {name: 'spy'};
+      })
+      .parseAsync(buildTestGlb(), '');
+    expect(control?.textureLoader).toBeInstanceOf(ImageBitmapLoader);
+
+    let seen: GLTFParser | undefined;
+    const loader = new GLTFLoader();
+    loader.register(parser => {
+      seen = parser;
+      return {name: 'spy'};
+    });
+    loader.register(imageElementTexturesPlugin);
+    await loader.parseAsync(buildTestGlb(), '');
+    expect(seen?.textureLoader).toBeInstanceOf(TextureLoader);
+    expect(seen?.plugins[IMAGE_ELEMENT_TEXTURES_PLUGIN]).toBeDefined();
+  });
+
+  it('AC-GEN-010.2 (engine part): an embedded GLB texture loads via <img> from blob:, never fetch; sRGB, flipY false', async () => {
+    const fetched = stubBrowser();
+    const files = new Map([[BODY_URL, buildTestGlb({embeddedImage: PNG_1X1})]]);
+    const stub = createTestFetch(files);
+    const glb = createGlbLoader({
+      fetch: stub.fetch,
+      origin: 'https://app.example',
+    });
+    const result = await glb.load(BODY_URL, {
+      errorCode: 'CMP_PART_LOAD_FAILED',
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(fetched).toEqual([]);
+    expect(FakeImage.sources).toHaveLength(1);
+    expect(FakeImage.sources[0]?.startsWith('blob:')).toBe(true);
+    const material = firstMesh(result.value.scene)
+      .material as MeshStandardMaterial;
+    const map = material.map;
+    if (map === null) throw new Error('base color texture missing');
+    expect(map.image).toBeInstanceOf(FakeImage);
+    expect(map.colorSpace).toBe(SRGBColorSpace);
+    expect(map.flipY).toBe(false);
   });
 });
