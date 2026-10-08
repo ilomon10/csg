@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "outDir": "dist",
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src", "e2e", "vite.config.ts", "playwright.config.ts"],
+  "references": [
+    {"path": "../../packages/engine"},
+    {"path": "../../packages/parts-schema"},
+    {"path": "../../packages/shader-graph"}
+  ]
+}

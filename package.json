@@ -1,0 +1,59 @@
+{
+  "name": "character-sprite-generator",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "fix": "eslint . --fix && prettier --write .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -b && pnpm --filter @csg/site typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "pnpm -r --if-present run build",
+    "e2e": "pnpm --filter @csg/web run e2e",
+    "spec:check": "tsx tools/check-spec-ids.ts",
+    "spec:immutability": "tsx tools/check-spec-id-removal.ts",
+    "spec:trace": "tsx tools/spec-trace.ts",
+    "assets:build": "tsx tools/build-parts.ts",
+    "assets:check": "tsx tools/not-implemented.ts assets:check M1",
+    "assets:verify-rig": "tsx tools/verify-rig.ts",
+    "assets:licenses": "tsx tools/not-implemented.ts assets:licenses M1",
+    "assets:thumbnails": "tsx tools/not-implemented.ts assets:thumbnails M1",
+    "fixtures:build": "tsx tools/not-implemented.ts fixtures:build M1",
+    "docs:shortcuts": "tsx tools/not-implemented.ts docs:shortcuts M2",
+    "docs:nodes": "tsx tools/not-implemented.ts docs:nodes M6",
+    "site:sprites": "pnpm --filter @csg/site sprites",
+    "changeset": "changeset",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css,html}": "prettier --write"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^3.0.3",
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
+    "@types/node": "^24.19.1",
+    "eslint": "^9.39.5",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import-x": "^4.17.1",
+    "globals": "^17.13.0",
+    "gts": "7.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vitest": "5.0.3"
+  }
+}

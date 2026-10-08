@@ -1,0 +1,63 @@
+name: Feature request
+description: Propose a new behavior. Name the area and the spec so it can be specified first.
+title: '[Feature] '
+labels: ['enhancement', 'needs-spec']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Features change behavior, so they go through a spec first (ADR-0006).
+        Pick the area that owns the behavior. If no spec covers it yet, write "none".
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area (spec prefix)
+      options:
+        - 'CMP - Character composer (spec 001)'
+        - 'ANA - Anatomy (spec 002)'
+        - 'PIX - Pixel render pipeline (spec 003)'
+        - 'ANM - Animation (spec 004)'
+        - 'EXP - Export (spec 005)'
+        - 'EDT - Shader graph editor (spec 006)'
+        - 'SGF - Shader graph format and compiler (spec 007)'
+        - 'UPL - Custom model upload (spec 008)'
+        - 'UX - Editor shell UX (spec 009)'
+        - 'WEB - Website (spec 010)'
+        - 'AST - Asset pipeline (spec 011)'
+        - 'GEN - Cross-cutting'
+        - 'Not sure'
+    validations:
+      required: true
+  - type: input
+    id: spec-link
+    attributes:
+      label: Spec link or ID
+      description: A file under specs/ and, if known, a REQ or AC ID. Write "none" if no spec covers it yet.
+      placeholder: specs/003-pixel-render-pipeline.md, AC-PIX-003.1
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and user story
+      description: Who needs this, and what goes wrong without it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe what the system should do. Quantify limits (px, ms, MB) where you can.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: understanding
+    attributes:
+      label: Before submitting
+      options:
+        - label: I understand a behavior change needs a spec update before code.
+          required: true

@@ -1,0 +1,74 @@
+name: Bug report
+description: Something does not work as the spec or the docs describe.
+title: '[Bug] '
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Search existing issues first.
+        For security problems, do not use this form. See SECURITY.md.
+  - type: input
+    id: spec
+    attributes:
+      label: Related spec ID (if any)
+      description: A REQ or AC ID, for example AC-PIX-003.1.
+      placeholder: AC-PIX-003.1
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen, and which spec or doc says so.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happens instead. Include the error code if one is shown.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps. Attach a project file if the problem depends on one. Do not attach files that contain personal data.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 140 on Windows 11
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Renderer backend
+      description: Shown in the editor diagnostics view (REQ-GEN-002).
+      options:
+        - WebGPU
+        - WebGL2
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: Paste errors from the browser console. Remove anything personal.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: I removed personal data from the attachments and the console output.
+          required: true

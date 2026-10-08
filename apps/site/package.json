@@ -1,0 +1,37 @@
+{
+  "name": "@csg/site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "sprites": "node scripts/generate-sprites.mjs",
+    "build": "node scripts/generate-og.mjs && node scripts/prebuild.mjs && next build && node scripts/postbuild.mjs",
+    "typecheck": "fumadocs-mdx && tsc --noEmit",
+    "check": "node scripts/generate-og.mjs && node scripts/prebuild.mjs",
+    "og": "node scripts/generate-og.mjs",
+    "postinstall": "fumadocs-mdx"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
+    "fumadocs-core": "16.16.2",
+    "fumadocs-mdx": "15.4.6",
+    "fumadocs-ui": "16.16.2",
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
+    "@fontsource/silkscreen": "5.3.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/mdx": "2.0.14",
+    "@types/node": "24.19.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "postcss": "8.5.23",
+    "tailwindcss": "4.3.3",
+    "zod": "4.6.5"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "title": "Custom models",
+  "pages": [
+    "index",
+    "preparing-models",
+    "upload",
+    "bone-mapping",
+    "props-and-sockets",
+    "budgets-and-limits",
+    "licensing"
+  ]
+}

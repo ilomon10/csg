@@ -1,0 +1,10 @@
+{
+  "title": "Composer",
+  "pages": [
+    "index",
+    "parts-and-slots",
+    "colors-and-tints",
+    "randomize-and-presets",
+    "save-load-share"
+  ]
+}

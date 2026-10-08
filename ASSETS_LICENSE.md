@@ -1,0 +1,91 @@
+# Asset licenses and credits
+
+This file lists every bundled asset and the vendored third-party files, with
+author, source and license (constitution P-02). Spec 011 (asset pipeline) will
+generate this file from the pack manifests. Until then, maintainers edit it by
+hand, and each row must match the manifest entry.
+
+Every export also writes a `CREDITS.txt` that lists the assets it uses.
+
+## Bundled 3D packs (planned, spec 011)
+
+### Universal Base Characters
+
+- Author: Quaternius
+- License: CC0 1.0 Universal
+- Source: [NEEDS CLARIFICATION: exact itch.io page URL, verified on the day of release]
+- Use: base bodies (6 bodies) and hairstyles (20)
+- Notes: the Standard zip is used. The paid Source version is not bundled.
+
+### Modular Character Outfits - Fantasy
+
+- Author: Quaternius
+- License: CC0 1.0 Universal
+- Source: [NEEDS CLARIFICATION: exact itch.io page URL, verified on the day of release]
+- Use: 12 outfits built from 62 modular parts (v2.0 or later)
+
+### Universal Animation Library
+
+- Author: Quaternius
+- License: CC0 1.0 Universal
+- Source: [NEEDS CLARIFICATION: exact itch.io page URL, verified on the day of release]
+- Use: animation clips. Vol. 2 is not yet used.
+
+### KayKit Adventurers (fallback character set)
+
+- Author: KayKit
+- License: CC0 1.0 Universal
+- Source: [NEEDS CLARIFICATION: exact source URL and author credit]
+- Use: fallback characters if the shared skeleton is not confirmed (architecture M1 risk)
+
+### KayKit and Quaternius weapons and shields (props)
+
+- Author: KayKit and Quaternius
+- License: CC0 1.0 Universal
+- Source: [NEEDS CLARIFICATION: exact URLs for each pack used]
+- Use: static props attached to socket bones
+
+## Palettes (planned)
+
+- PICO-8 palette. Source: [NEEDS CLARIFICATION: source URL and license terms to confirm before bundling]
+- Endesga-32 palette. Source: [NEEDS CLARIFICATION: source URL and license terms to confirm before bundling]
+- Custom palettes are supplied by users. They are not bundled.
+
+## Vendored code
+
+### design-taste-frontend skill
+
+- Author: Leonxlnx (taste-skill project)
+- License: MIT
+- Source: https://github.com/Leonxlnx/taste-skill, commit `b482f7a970abb98c4108d4a9f761e458c64cefc8`, vendored 2026-10-08
+- Location: `.claude/skills/design-taste-frontend/` (license text in its `LICENSE` file)
+- Notes: design guidance only, used for `apps/site`. See `VENDORED.md` in that folder.
+
+## Website fonts (self-hosted, spec 010 REQ-WEB-036)
+
+The site serves these three families from its own origin, subset to Latin. They come from the npm packages below (build-time `devDependencies` of `apps/site`). The full license text is in each package's `LICENSE` file.
+
+| Font       | Use                                               | Author                                                                    | License     | Source package                          |
+| ---------- | ------------------------------------------------- | ------------------------------------------------------------------------- | ----------- | --------------------------------------- |
+| Silkscreen | Pixel display face, headings of 24 px and up only | The Silkscreen Project Authors, https://github.com/googlefonts/silkscreen | SIL OFL 1.1 | `@fontsource/silkscreen` 5.3.0          |
+| Geist      | Body and UI sans                                  | The Geist Project Authors, https://github.com/vercel/geist-font           | SIL OFL 1.1 | `@fontsource-variable/geist` 5.3.0      |
+| Geist Mono | Code and monospace                                | The Geist Project Authors, https://github.com/vercel/geist-font           | SIL OFL 1.1 | `@fontsource-variable/geist-mono` 5.3.0 |
+
+## Website icons
+
+### Phosphor Icons
+
+- Author: Phosphor Icons (copyright 2020 Phosphor Icons)
+- License: MIT
+- Source: https://github.com/phosphor-icons/react, npm package `@phosphor-icons/react` 2.1.10
+- Use: UI icons on the landing page and docs chrome (a runtime dependency of `apps/site`)
+
+## Website images (planned, spec 010)
+
+Sprite animations and screenshots on the website come from this project's own export pipeline.
+The Open Graph cards in `apps/site/public/og/` (1200x630) are generated at build time by `apps/site/scripts/generate-og.mjs` with the same renderer and a built-in bitmap font. Every image is listed in `apps/site/public/sprites/manifest.json` and marked `placeholder: true` until real export sheets exist.
+[NEEDS CLARIFICATION: confirm the license for project-generated sprite art. Default: the repository's MIT license.]
+
+## Code dependencies
+
+Third-party npm packages (for example three.js, React Flow and Zod) keep their own licenses. They are listed in the package manifests and lock file.

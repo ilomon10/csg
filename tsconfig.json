@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    {"path": "packages/parts-schema"},
+    {"path": "packages/shader-graph"},
+    {"path": "packages/engine"},
+    {"path": "apps/web"},
+    {"path": "tools"}
+  ]
+}

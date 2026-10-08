@@ -1,0 +1,19 @@
+packages:
+  - packages/*
+  - apps/*
+  - tools
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true
+# Security override: tmp < 0.2.6 has a symlink-based arbitrary file write advisory.
+# Remove once every dependent requires tmp >= 0.2.6 (review by 2026-11-08).
+overrides:
+  tmp: '>=0.2.6'
+# Releases younger than the minimum age are normally blocked (supply-chain delay). These
+# exact versions are exempted so the toolchain installs; each entry should be removed
+# on or after 2026-11-08, once the version is past the age gate.
+minimumReleaseAgeExclude:
+  - '@playwright/test@1.64.0' # remove after 2026-11-08
+  - playwright-core@1.64.0 # remove after 2026-11-08
+  - playwright@1.64.0 # remove after 2026-11-08
+  - vite@8.3.4 # remove after 2026-11-08

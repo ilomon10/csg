@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+specs/traceability.md
+.changeset/*.md
+.tagconn
+docs
+specs
+assets
+apps/site/.source
+apps/site/next-env.d.ts
+apps/site/public/sprites/manifest.json

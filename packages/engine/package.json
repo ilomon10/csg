@@ -1,0 +1,22 @@
+{
+  "name": "@csg/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./rig": "./src/rig/index.ts",
+    "./retarget": "./src/retarget/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@csg/parts-schema": "workspace:*",
+    "@csg/shader-graph": "workspace:*",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "0.186.0"
+  }
+}

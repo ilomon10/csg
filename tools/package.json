@@ -1,0 +1,15 @@
+{
+  "name": "@csg/tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify-rig": "tsx verify-rig.ts",
+    "build-parts": "tsx build-parts.ts",
+    "not-implemented": "tsx not-implemented.ts"
+  },
+  "dependencies": {
+    "@csg/engine": "workspace:*",
+    "@csg/parts-schema": "workspace:*",
+    "@csg/shader-graph": "workspace:*"
+  }
+}

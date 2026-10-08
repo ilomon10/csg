@@ -1,0 +1,19 @@
+{
+  "title": "Guide",
+  "root": true,
+  "pages": [
+    "index",
+    "getting-started",
+    "composer",
+    "anatomy",
+    "render-settings",
+    "animation",
+    "export",
+    "shader-graph",
+    "custom-models",
+    "---Help---",
+    "faq",
+    "troubleshooting",
+    "glossary"
+  ]
+}

@@ -1,0 +1,1417 @@
+{
+  "format": "csg-site-sprites",
+  "version": 1,
+  "items": [
+    {
+      "file": "sprites/hero/adventurer-walk-8dir.png",
+      "width": 384,
+      "height": 512,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "sheet",
+      "cell": {
+        "w": 64,
+        "h": 64
+      },
+      "frames": 6,
+      "rows": [
+        "S",
+        "SW",
+        "W",
+        "NW",
+        "N",
+        "NE",
+        "E",
+        "SE"
+      ],
+      "description": "Adventurer walk cycle, 8 directions, 3/4 camera",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "cell": 64,
+        "frames": 6,
+        "camera": "top-down-3/4",
+        "pitch": 30
+      }
+    },
+    {
+      "file": "sprites/features/cameras.png",
+      "width": 384,
+      "height": 128,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "sheet",
+      "cell": {
+        "w": 64,
+        "h": 64
+      },
+      "frames": 6,
+      "rows": [
+        "side",
+        "top-down"
+      ],
+      "description": "Side view and top-down 3/4 walk",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "cell": 64,
+        "frames": 6,
+        "cameras": [
+          "side",
+          "top-down-3/4"
+        ]
+      }
+    },
+    {
+      "file": "sprites/features/lineup.png",
+      "width": 384,
+      "height": 384,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "sheet",
+      "cell": {
+        "w": 64,
+        "h": 64
+      },
+      "frames": 6,
+      "rows": [
+        "scout",
+        "mage",
+        "knight",
+        "ranger",
+        "bard",
+        "rogue"
+      ],
+      "description": "Six outfit and palette combinations on one rig",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "cell": 64,
+        "frames": 6
+      }
+    },
+    {
+      "file": "sprites/parade/lineup-east.png",
+      "width": 384,
+      "height": 384,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "sheet",
+      "cell": {
+        "w": 64,
+        "h": 64
+      },
+      "frames": 6,
+      "rows": [
+        "scout",
+        "mage",
+        "knight",
+        "ranger",
+        "bard",
+        "rogue"
+      ],
+      "description": "Six characters walking east",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "cell": 64,
+        "frames": 6
+      }
+    },
+    {
+      "file": "sprites/features/anatomy.png",
+      "width": 384,
+      "height": 192,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "sheet",
+      "cell": {
+        "w": 64,
+        "h": 64
+      },
+      "frames": 6,
+      "rows": [
+        "chibi",
+        "standard",
+        "tall"
+      ],
+      "description": "Three proportion presets",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "cell": 64,
+        "frames": 6,
+        "anatomy": [
+          "chibi",
+          "standard",
+          "tall"
+        ]
+      }
+    },
+    {
+      "file": "sprites/features/robot.png",
+      "width": 384,
+      "height": 64,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "sheet",
+      "cell": {
+        "w": 64,
+        "h": 64
+      },
+      "frames": 6,
+      "rows": [
+        "robot"
+      ],
+      "description": "Custom model walk cycle (boxy robot)",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "cell": 64,
+        "frames": 6
+      }
+    },
+    {
+      "file": "sprites/features/looks.png",
+      "width": 256,
+      "height": 64,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "sheet",
+      "cell": {
+        "w": 64,
+        "h": 64
+      },
+      "frames": 4,
+      "rows": [
+        "looks"
+      ],
+      "description": "Four looks from one character: toon + outline, no outline, Bayer dither, four-tone palette",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "looks": [
+          "toon-outline",
+          "no-outline",
+          "dither",
+          "four-tone"
+        ]
+      }
+    },
+    {
+      "file": "sprites/features/export-32.png",
+      "width": 192,
+      "height": 128,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "sheet",
+      "cell": {
+        "w": 32,
+        "h": 32
+      },
+      "frames": 6,
+      "rows": [
+        "S",
+        "W",
+        "N",
+        "E"
+      ],
+      "description": "32 px sheet, 4 directions, 6 frames",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "cell": 32,
+        "frames": 6
+      }
+    },
+    {
+      "file": "sprites/how/parts.png",
+      "width": 256,
+      "height": 256,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "frame",
+      "description": "Exploded modular parts, smooth shaded",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "shading": "smooth",
+        "explode": true
+      }
+    },
+    {
+      "file": "sprites/how/anatomy.png",
+      "width": 256,
+      "height": 256,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "frame",
+      "description": "Chibi, standard and tall proportions, smooth shaded",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "shading": "smooth"
+      }
+    },
+    {
+      "file": "sprites/how/shader.png",
+      "width": 256,
+      "height": 256,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "frame",
+      "description": "Same pose before and after the pixel pass (64 px, shown x4)",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/default.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Landing page OG card, six characters in a row",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "favicon.png",
+      "width": 64,
+      "height": 64,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "icon",
+      "description": "Site icon: adventurer head, front view",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/anatomy/chibi-and-readability.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Chibi and readability",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/anatomy.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Anatomy sliders",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/animation/clips.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Clips and the clip library",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/animation/frames-and-timing.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Frames and timing",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/animation.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Animation overview",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/composer/colors-and-tints.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Colors and tints",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/composer.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Composer",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/composer/parts-and-slots.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Parts and slots",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/composer/randomize-and-presets.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Randomize and presets",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/composer/save-load-share.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Save, load and share",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/custom-models/bone-mapping.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Bone mapping",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/custom-models/budgets-and-limits.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Budgets and limits",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/custom-models.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Custom models",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/custom-models/licensing.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Licensing your uploads",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/custom-models/preparing-models.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Preparing models in Blender",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/custom-models/props-and-sockets.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Props and sockets",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/custom-models/upload.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Uploading a model",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/export/credits-and-licensing.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Credits and licensing",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/export.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Exporting sprite sheets",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/export/metadata-json.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Metadata and file names",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/export/sheet-layouts.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Sheet layouts",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/export/using-in-game-engines.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Using sprites in game engines",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/faq.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Frequently asked questions",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/getting-started.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Your first sprite sheet",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/getting-started/interface-tour.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Interface tour",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/getting-started/keyboard-shortcuts.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Keyboard shortcuts",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/getting-started/system-requirements.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: System requirements",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/glossary.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Glossary",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/index.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Welcome to Character Sprite Generator",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/render-settings/camera-styles.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Camera styles",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/render-settings/directions.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Directions",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/render-settings.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Render settings overview",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/render-settings/palettes-and-dither.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Palettes and dithering",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/render-settings/resolution.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Resolution",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/render-settings/toon-and-outlines.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Toon shading and outlines",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/blackboard.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Blackboard and the Look panel",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/editor-basics.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Editor basics",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Shader graph overview",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/nodes/color.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Color nodes",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/nodes.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Node reference",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/nodes/input.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Input nodes",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/nodes/math.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Math nodes",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/nodes/post.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Post nodes",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/nodes/toon.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Toon nodes",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/nodes/utility-and-output.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Utility and output nodes",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/nodes/vector.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Vector nodes",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/recipes/cel-bands.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Cel-shaded bands",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/recipes/custom-palette.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Custom palette",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/recipes/gameboy-look.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: GameBoy look",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/recipes.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Recipes",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/shader-graph/recipes/thicker-outline.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Thicker outline",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/troubleshooting.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Troubleshooting",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/adding-parts.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Adding parts",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/ai-assisted-contributions.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: AI-assisted contributions",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/assets.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Asset pipeline",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/development-setup.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Development setup",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Contribute",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/spec-process.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Spec process",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/testing.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Testing",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/writing-a-node.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Writing a shader node",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/adr/0001-3d-to-pixel-art-pipeline.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: 0001. 3D modular models rendered through a pixel-art shader pipeline",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/adr/0002-pnpm-monorepo-and-google-ts-style.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: 0002. pnpm monorepo and Google TypeScript Style (gts)",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/adr/0003-webgpu-renderer-and-tsl.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: 0003. WebGPURenderer, TSL and RenderPipeline on pinned three r186",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/adr/0004-react-flow-for-node-graph-editor.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: 0004. React Flow for the node graph editor, own graph model",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/adr/0005-local-first-custom-model-upload.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: 0005. Local-first custom model upload",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/adr/0006-spec-driven-development.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: 0006. Spec-driven development with EARS and stable IDs",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/adr/0007-nextjs-fumadocs-website.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: 0007. Next.js + Fumadocs website with Markdown in docs/guide",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/adr.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Architecture Decision Records",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/contribute/architecture.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Architecture",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    }
+  ]
+}

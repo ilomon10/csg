@@ -1,0 +1,13 @@
+{
+  "title": "Contribute",
+  "pages": [
+    "index",
+    "development-setup",
+    "spec-process",
+    "adding-parts",
+    "assets",
+    "writing-a-node",
+    "testing",
+    "ai-assisted-contributions"
+  ]
+}

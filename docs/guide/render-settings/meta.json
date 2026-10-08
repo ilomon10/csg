@@ -1,0 +1,11 @@
+{
+  "title": "Render settings",
+  "pages": [
+    "index",
+    "camera-styles",
+    "directions",
+    "resolution",
+    "toon-and-outlines",
+    "palettes-and-dither"
+  ]
+}

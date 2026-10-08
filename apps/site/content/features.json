@@ -1,0 +1,50 @@
+[
+  {
+    "id": "parts",
+    "status": "planned",
+    "docs": "/docs/composer/parts-and-slots/",
+    "image": "sprites/features/lineup.png",
+    "title": "Mix and match parts",
+    "body": "Bodies, outfits, hair, hats and props share one skeleton, so any combination walks and turns the same way."
+  },
+  {
+    "id": "anatomy",
+    "status": "planned",
+    "docs": "/docs/anatomy/",
+    "image": "sprites/features/anatomy.png",
+    "title": "Anatomy sliders",
+    "body": "Head size, limb length and build, from chibi to tall, while clothes and props follow."
+  },
+  {
+    "id": "cameras",
+    "status": "planned",
+    "docs": "/docs/render-settings/camera-styles/",
+    "image": "sprites/features/cameras.png",
+    "title": "Side view and top-down",
+    "body": "A platformer side camera or an RPG 3/4 view, from the same character."
+  },
+  {
+    "id": "shader-graph",
+    "status": "planned",
+    "docs": "/docs/shader-graph/",
+    "image": "sprites/features/looks.png",
+    "title": "Shader graph editor",
+    "body": "Outlines, toon bands, dither and palettes are nodes you can rewire."
+  },
+  {
+    "id": "custom-models",
+    "status": "planned",
+    "docs": "/docs/custom-models/",
+    "image": "sprites/features/robot.png",
+    "title": "Your own models",
+    "body": "Load a GLB, glTF or VRM file. It stays on your machine and is never uploaded."
+  },
+  {
+    "id": "export",
+    "status": "planned",
+    "docs": "/docs/export/",
+    "image": "sprites/features/export-32.png",
+    "title": "Sheets your engine can read",
+    "body": "A PNG sheet, metadata JSON with frame rects, and a CREDITS.txt for every asset used."
+  }
+]

@@ -1,0 +1,86 @@
+name: Asset submission
+description: Propose a 3D part, animation, palette or other asset. Assets must have a compatible license.
+title: '[Asset] '
+labels: ['asset', 'needs-license-review']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach the asset file here. Link to its source instead.
+        Only CC0 or a compatible license is accepted (constitution P-02).
+  - type: input
+    id: asset-name
+    attributes:
+      label: Asset name
+    validations:
+      required: true
+  - type: input
+    id: author
+    attributes:
+      label: Author
+      description: The person or studio to credit.
+    validations:
+      required: true
+  - type: input
+    id: source-url
+    attributes:
+      label: Source URL
+      description: The page where the asset is published.
+    validations:
+      required: true
+  - type: dropdown
+    id: license
+    attributes:
+      label: License
+      description: Use the license identifiers from the asset contract.
+      options:
+        - CC0-1.0
+        - CC-BY-4.0
+        - CC-BY-SA-4.0
+        - own-work
+        - other
+    validations:
+      required: true
+  - type: dropdown
+    id: commercial-use
+    attributes:
+      label: Commercial use allowed
+      options:
+        - 'yes'
+        - 'no'
+        - unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Asset type
+      options:
+        - Skinned part (body, outfit, hair)
+        - Static prop (weapon, shield, accessory)
+        - Animation clip
+        - Palette
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: rig
+    attributes:
+      label: Rig and bones
+      description: Which skeleton does the asset use? List the bone names if you know them.
+  - type: textarea
+    id: attribution
+    attributes:
+      label: Attribution text
+      description: The credit line to show, if the license requires one.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+  - type: checkboxes
+    id: rights
+    attributes:
+      label: Rights
+      options:
+        - label: I have the right to submit this asset under the license selected above.
+          required: true
