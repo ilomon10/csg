@@ -1,0 +1,165 @@
+{
+  "format": "sprite-slot-registry",
+  "version": 1,
+  "slots": [
+    {
+      "id": "body",
+      "label": "slot.body",
+      "order": 0,
+      "kinds": ["skinned"],
+      "required": true,
+      "randomize": {
+        "emptyChance": 0
+      }
+    },
+    {
+      "id": "hair",
+      "label": "slot.hair",
+      "order": 1,
+      "kinds": ["skinned", "static"],
+      "required": false,
+      "defaultSocket": "head",
+      "randomize": {
+        "emptyChance": 0.1
+      }
+    },
+    {
+      "id": "eyebrows",
+      "label": "slot.eyebrows",
+      "order": 2,
+      "kinds": ["skinned", "static"],
+      "required": false,
+      "defaultSocket": "head",
+      "randomize": {
+        "emptyChance": 0.2
+      }
+    },
+    {
+      "id": "beard",
+      "label": "slot.beard",
+      "order": 3,
+      "kinds": ["skinned", "static"],
+      "required": false,
+      "defaultSocket": "head",
+      "randomize": {
+        "emptyChance": 0.7
+      }
+    },
+    {
+      "id": "face",
+      "label": "slot.face",
+      "order": 4,
+      "kinds": ["skinned", "static"],
+      "required": false,
+      "defaultSocket": "head",
+      "randomize": {
+        "emptyChance": 0.8
+      }
+    },
+    {
+      "id": "headwear",
+      "label": "slot.headwear",
+      "order": 5,
+      "kinds": ["skinned", "static"],
+      "required": false,
+      "defaultSocket": "head",
+      "randomize": {
+        "emptyChance": 0.5
+      }
+    },
+    {
+      "id": "torso",
+      "label": "slot.torso",
+      "order": 6,
+      "kinds": ["skinned"],
+      "required": false,
+      "randomize": {
+        "emptyChance": 0
+      }
+    },
+    {
+      "id": "arms",
+      "label": "slot.arms",
+      "order": 7,
+      "kinds": ["skinned"],
+      "required": false,
+      "randomize": {
+        "emptyChance": 0.6
+      }
+    },
+    {
+      "id": "hands",
+      "label": "slot.hands",
+      "order": 8,
+      "kinds": ["skinned"],
+      "required": false,
+      "randomize": {
+        "emptyChance": 0.6
+      }
+    },
+    {
+      "id": "legs",
+      "label": "slot.legs",
+      "order": 9,
+      "kinds": ["skinned"],
+      "required": false,
+      "randomize": {
+        "emptyChance": 0
+      }
+    },
+    {
+      "id": "feet",
+      "label": "slot.feet",
+      "order": 10,
+      "kinds": ["skinned"],
+      "required": false,
+      "randomize": {
+        "emptyChance": 0.1
+      }
+    },
+    {
+      "id": "back",
+      "label": "slot.back",
+      "order": 11,
+      "kinds": ["skinned", "static"],
+      "required": false,
+      "defaultSocket": "spine_03",
+      "randomize": {
+        "emptyChance": 0.7
+      }
+    },
+    {
+      "id": "accessory",
+      "label": "slot.accessory",
+      "order": 12,
+      "kinds": ["skinned", "static"],
+      "required": false,
+      "defaultSocket": "pelvis",
+      "randomize": {
+        "emptyChance": 0.7
+      }
+    },
+    {
+      "id": "prop-main-hand",
+      "label": "slot.prop-main-hand",
+      "order": 13,
+      "kinds": ["static"],
+      "required": false,
+      "defaultSocket": "hand_r",
+      "randomize": {
+        "emptyChance": 0.3
+      }
+    },
+    {
+      "id": "prop-off-hand",
+      "label": "slot.prop-off-hand",
+      "order": 14,
+      "kinds": ["static"],
+      "required": false,
+      "defaultSocket": "hand_l",
+      "randomize": {
+        "emptyChance": 0.6
+      }
+    }
+  ]
+}

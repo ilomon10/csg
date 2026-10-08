@@ -17,7 +17,7 @@ last_updated: 2026-10-08
 
 Realistic 3D proportions read badly at 32–64 px. Heads become 4 px blobs, forearms vanish and faces disappear (ADR-0001 "Bad" consequence). Anatomy controls let users push proportions toward readable stylizations (chibi, heroic) and vary characters. Proportions are applied as **bone scales with child compensation** on the shared skeleton, plus morph targets where the body provides them. All parts skinned to the skeleton and all socketed props follow automatically.
 
-**Dependency:** bone names, bone axes and `anatomyBones` mapping come from the `RigDefinition` produced and verified by the M1 asset spike (spec 011). Items marked *(M1-gated)* assume the shared Quaternius rig exists and that bone length runs along a single local axis.
+**Dependency:** bone names, bone axes and `anatomyBones` mapping come from the `RigDefinition` produced and verified by the M1 asset spike (spec 011). Items marked *(M1-gated)* assume the shared Quaternius rig exists and that bone length runs along a single local axis. *(Amended 2026-10-08 (M1-01c): the committed rig `packages/parts-schema/rigs/quaternius-ue5-65.json` also carries the joint hierarchy (`parents`) and the fallback skeleton group (`defaultSkeletonGroup`), see REQ-ANA-021 and Data & contracts.)*
 
 ## Goals
 
@@ -60,6 +60,8 @@ Realistic 3D proportions read badly at 32–64 px. Heads become 4 px blobs, fore
 | `feet` | 0.75–1.75 | 1.00 | 0.01 | 0.95–1.10 | `foot_*` | uniform, propagates to `ball_*` |
 | `limbThickness` | 0.75–1.75 | 1.00 | 0.01 | 0.90–1.15 | `upperarm_*`, `lowerarm_*`, `thigh_*`, `calf_*` | cross-section axes, compensated |
 
+Bone names in the "Affects" column are descriptive, written in UE5 style. The engine uses only the joint names listed in `RigDefinition.anatomyBones`, which keep the exact source spelling and case (REQ-ANA-020); for example `head` stands for joint `Head` in the Quaternius rig. *(Note added 2026-10-08 (M1 D1).)*
+
 - **AC-ANA-001.1** Given the `AnatomyParams` schema, When `head = 2.01` or `legLength = 0.69` is validated, Then validation fails naming the field and its range.
 - **AC-ANA-001.2** Given a slider value of 1.234 from the UI, When stored, Then the spec holds `1.23`.
 - **AC-ANA-001.3** Given a new `CharacterSpec`, When it is created, Then every anatomy value is 1.00 and the rendered body matches the unmodified body pixel-exactly (golden image).
@@ -74,12 +76,12 @@ Realistic 3D proportions read badly at 32–64 px. Heads become 4 px blobs, fore
 **REQ-ANA-003 [P1]** WHEN a compensated parameter scales a bone THE SYSTEM SHALL scale only the geometry skinned to that bone, and child bones SHALL keep their world scale and orientation while their joint positions follow the parent's changed length (segment-scale-compensate semantics).
 
 - **AC-ANA-003.1** Given `armLength = 1.2`, When the bind pose is evaluated, Then `lowerarm_l` is 1.2× farther from `upperarm_l` (± 1e-4 m), and the world scale of `lowerarm_l` and `hand_l` is unchanged (± 1e-4).
-- **AC-ANA-003.2** Given `torsoWidth = 1.4`, When evaluated, Then `neck_01`, `head`, `clavicle_l` and `clavicle_r` keep world scale 1 (± 1e-4) and the head shows no shear (all three world axes stay orthogonal within 1e-4).
+- **AC-ANA-003.2** Given `torsoWidth = 1.4`, When evaluated, Then `neck_01`, `Head` (the joint in `anatomyBones.head`), `clavicle_l` and `clavicle_r` keep world scale 1 (± 1e-4) and the head shows no shear (all three world axes stay orthogonal within 1e-4). *(Amended 2026-10-08 (M1 D1): joint `head` → `Head`, the source name.)*
 - **AC-ANA-003.3** Given `limbThickness = 1.5`, When evaluated, Then hand and foot world scales stay 1 and the limb vertices' distance from the bone axis grows 1.5× (± 1 %).
 
 **REQ-ANA-004 [P1]** WHEN a propagating parameter (`height`, `head`, `hands`, `feet`) scales a bone THE SYSTEM SHALL scale that bone's subtree uniformly, so hair, headwear, fingers and toes grow with it.
 
-- **AC-ANA-004.1** Given `head = 1.8` and a skinned hairstyle, When rendered, Then the hair bounding box grows 1.8× (± 2 %) around the head joint and does not intersect the neck region more than at `head = 1`.
+- **AC-ANA-004.1** Given `head = 1.8` and a skinned hairstyle, When rendered, Then the hair bounding box grows 1.8× (± 2 %) around the head joint (`anatomyBones.head`, `Head` in the Quaternius rig) and does not intersect the neck region more than at `head = 1`. *(Amended 2026-10-08 (M1 D1): joint named.)*
 
 **REQ-ANA-005 [P1]** THE SYSTEM SHALL use each bone's length axis and cross-section axes from `RigDefinition` (`lengthAxis`, default `'y'`) for length and thickness scaling. *(M1-gated: axis confirmed by verify-rig)*
 
@@ -91,10 +93,10 @@ Realistic 3D proportions read badly at 32–64 px. Heads become 4 px blobs, fore
 
 - **AC-ANA-006.1** Given a torso part and `torsoWidth = 1.3`, When rendered, Then torso part vertices and body torso vertices move by the same transform (no gap wider than 0.5 output pixel appears at 64 px versus `torsoWidth = 1`).
 
-**REQ-ANA-007 [P1]** THE SYSTEM SHALL keep static props at their socket bone's world position and orientation under any anatomy, and SHALL apply the socket bone's anatomy scale to the prop only where `socket.inheritScale` is true (default: true for socket `head`, false for all others).
+**REQ-ANA-007 [P1]** THE SYSTEM SHALL keep static props at their socket bone's world position and orientation under any anatomy, and SHALL apply the socket bone's anatomy scale to the prop only where `socket.inheritScale` is true (default: true for socket `head`, false for all others). Socket names here are socket IDs; the joint is `RigDefinition.socketBones[socketId]` (REQ-ANA-019). *(Amended 2026-10-08 (M1 D1): socket ID vs joint clarified.)*
 
-- **AC-ANA-007.1** Given a sword on `hand_r` and `hands = 1.75`, When rendered, Then the sword's world scale is unchanged and its grip stays at the hand socket (± 1e-4 m plus the authored offset scaled by 1.0).
-- **AC-ANA-007.2** Given a static hat on `head` and `head = 1.5`, When rendered, Then the hat's world scale is 1.5× and its offset from the head joint is scaled 1.5×.
+- **AC-ANA-007.1** Given a sword on socket `hand_r` and `hands = 1.75`, When rendered, Then the sword's world scale is unchanged and its grip stays at the hand socket joint `socketBones.hand_r` (± 1e-4 m plus the authored offset scaled by 1.0).
+- **AC-ANA-007.2** Given a static hat on socket `head` and `head = 1.5`, When rendered, Then the hat's world scale is 1.5× and its offset from the joint `socketBones.head` (`Head` in the fixture and Quaternius rigs) is scaled 1.5×. *(Amended 2026-10-08 (M1 D1): joint named.)*
 
 ### Grounding and animation
 
@@ -166,6 +168,29 @@ Realistic 3D proportions read badly at 32–64 px. Heads become 4 px blobs, fore
 
 - **AC-ANA-018.1** Given seeds 0–999, When randomize runs, Then every value lies inside its randomize range and results are reproducible per seed.
 
+### Joint names and sockets (M1 amendments 2026-10-08)
+
+**REQ-ANA-019 [P1]** THE SYSTEM SHALL resolve the joint of every socket through `RigDefinition.socketBones`, which maps each semantic socket ID (`hand_r`, `hand_l`, `head`, `spine_03`, `pelvis`) to a joint in `bones`, and SHALL never use a socket ID as a joint name. `RigDefinition` validation SHALL fail when a socket ID is missing from `socketBones` or maps to a name that is not in `bones`. *(Added 2026-10-08, M1 D1.)*
+
+- **AC-ANA-019.1** Given the fixture rig with joint `Head` (no joint named `head`) and `socketBones.head = 'Head'`, When a static hat with socket `head` is attached, Then the hat's parent is joint `Head` and its world position equals `Head`'s world position plus the authored offset (± 1e-6 m).
+- **AC-ANA-019.2** Given a `RigDefinition` whose `socketBones` lacks `pelvis`, or maps `head` to `head` while `bones` contains only `Head`, When validated, Then validation fails naming `socketBones.pelvis` or `socketBones.head` respectively.
+
+**REQ-ANA-020 [P1]** THE SYSTEM SHALL keep joint names exactly as in the source files (case-sensitive, no renaming or normalization) in `RigDefinition.bones`, `rootBone`, `anatomyBones`, `regionBones`, `socketBones` and every engine lookup, and SHALL match joint names case-sensitively. *(Added 2026-10-08, M1 D1: the Quaternius source joint is `Head`; renaming it at build time would break AC-AST-010.1, user clips and verify-rig.)*
+
+- **AC-ANA-020.1** Given the fixture rig with joint `Head`, When `anatomyBones.head` lists `head`, Then `RigDefinition` validation fails naming `anatomyBones.head` and the value `head`.
+- **AC-ANA-020.2** Given the fixture rig and a part whose skin uses joint `Head`, When the part is rebound to the body skeleton, Then it binds to `Head` and `AST_RIG_MISMATCH` is not reported.
+
+**REQ-ANA-021 [P1]** WHEN a `RigDefinition` is validated THE SYSTEM SHALL require that (a) `parents` has exactly the joints of `bones` as keys; (b) exactly one value of `parents` is `null` and its key is `rootBone`; (c) every non-null parent is a joint in `bones` at a lower index than its child; (d) `skeletonGroups` IDs are unique and every group's `restPose` has exactly the joints of `bones` as keys; and (e) `defaultSkeletonGroup` equals the ID of one entry in `skeletonGroups`; and SHALL otherwise fail with an issue whose path names the offending field (and joint or group, where one applies). The hip joint SHALL be `socketBones.pelvis`; no `hipBone` or top-level `joints` field is part of the contract. *(Added 2026-10-08 (M1-01c), PM decision after the verify-rig skeleton-group work.)*
+
+- **AC-ANA-021.1** Given the committed rig `packages/parts-schema/rigs/quaternius-ue5-65.json`, When it is validated with `@csg/parts-schema`, Then validation passes, `parents.root` is `null`, `parents.Head` is `neck_01`, and `defaultSkeletonGroup` is `superhero-m`.
+- **AC-ANA-021.2** Given the fixture rig with `parents.pelvis` changed to `null` (two `null` values), or with `parents.root` changed to `pelvis` (no `null` value), When validated, Then validation fails with an issue whose path starts with `parents` and whose message states that exactly one root is required.
+- **AC-ANA-021.3** Given the fixture rig with `rootBone: 'pelvis'` while `parents.root` is `null`, When validated, Then validation fails naming `rootBone`.
+- **AC-ANA-021.4** Given the fixture rig with `parents.spine_01` set to `spine_02` (a later joint in `bones`), or to `Spine_02` (not in `bones`), When validated, Then validation fails with path `parents.spine_01`.
+- **AC-ANA-021.5** Given the fixture rig with the `parents` entry for `hand_l` removed, or with an extra entry `parents.tail_01`, When validated, Then validation fails with path `parents.hand_l` or `parents.tail_01` respectively.
+- **AC-ANA-021.6** Given the fixture rig with skeleton groups `g-a` and `g-b`, When `defaultSkeletonGroup` is `g-c`, or the field is missing, Then validation fails with path `defaultSkeletonGroup`.
+- **AC-ANA-021.7** Given the fixture rig with `g-b.restPose` lacking `lowerarm_l`, or with two groups both named `g-a`, When validated, Then validation fails with a path naming `skeletonGroups`, the group index and `lowerarm_l` (first case) or the duplicate ID (second case).
+- **AC-ANA-021.8** Given a fixture rig with no `hipBone` field and `socketBones.pelvis = 'pelvis'`, When the spec 004 REQ-ANM-023 retarget plan is built, Then the hip joint it uses for `k = L_t / L_s` is `pelvis`; and given the same rig with `socketBones.pelvis = 'spine_01'`, Then the hip joint is `spine_01`.
+
 ## Edge cases
 
 - All parameters at extremes simultaneously → no NaN, no inverted geometry; AC-ANA-003.2 shear check runs at all-min and all-max (REQ-ANA-003).
@@ -175,6 +200,10 @@ Realistic 3D proportions read badly at 32–64 px. Heads become 4 px blobs, fore
 - Props on scaled hands → not scaled (REQ-ANA-007).
 - User-uploaded character with its own rig → anatomy uses the bone map to canonical names (spec 008); unmapped anatomy bones disable that slider with a reason.
 - Morph names that collide across parts → same name, same weight (REQ-ANA-012).
+- Source joint names with mixed case (`Head` next to `hand_r`) → kept as-is and matched case-sensitively (REQ-ANA-020); sockets resolve through `socketBones` (REQ-ANA-019).
+- Body and outfits from different skeleton groups (bind poses differ, spec 011 REQ-AST-026) → anatomy works on the character skeleton (spec 001 REQ-CMP-037); bind-pose scaling (REQ-ANA-003/008) uses that skeleton's rest pose.
+- Body that declares no skeleton group (e.g. its rest pose matched none, spec 011 AC-AST-026.4) → the character skeleton uses `RigDefinition.defaultSkeletonGroup` (REQ-ANA-021, spec 001 REQ-CMP-037). *(Added 2026-10-08 (M1-01c).)*
+- Rig JSON with a stale `hipBone` or top-level `joints` field (pre-M1-01c drafts) → not part of the contract and never read; the hip is `socketBones.pelvis` and rest poses come from `skeletonGroups[].restPose` (REQ-ANA-021). *(Added 2026-10-08 (M1-01c).)*
 - Auto camera framing (spec 003) normalizes overall size, so `height` is visible only with fixed framing or when comparing characters. The slider shows a hint about this when framing is `auto`.
 
 ## Data & contracts
@@ -193,16 +222,61 @@ export interface AnatomyParams {
   limbThickness: number; // 0.75..1.75
 }
 
-/** Refines RigDefinition (architecture §3.2). Produced by spec 011. */
+/** Source joint name, exact spelling and case (REQ-ANA-020), e.g. 'Head'. */
+export type JointName = string;
+
+/** Semantic socket IDs (M1 D1). Not joint names; resolved through RigDefinition.socketBones. */
+export type SocketId = 'hand_r' | 'hand_l' | 'head' | 'spine_03' | 'pelvis';
+/** Kept for spec 001 and architecture §3.2; same set as SocketId. */
+export type SocketBone = SocketId;
+
+/** Local rest transform of one joint (parent space). */
+export interface RestTransform {
+  t: [number, number, number];          // meters
+  r: [number, number, number, number];  // unit quaternion x, y, z, w
+  s: [number, number, number];
+}
+
+/**
+ * Refines RigDefinition (architecture §3.2). Produced by spec 011 and stored as
+ * `packages/parts-schema/rigs/<rigId>.json`. Amended 2026-10-08 (M1-01c): `parents` and
+ * `defaultSkeletonGroup` added, validated by REQ-ANA-021. The contract has NO `hipBone` field
+ * (the hip joint is `socketBones.pelvis`) and NO top-level `joints` array (rest poses live only
+ * in `skeletonGroups[].restPose`).
+ */
 export interface RigDefinition {
   id: RigId;
-  bones: string[];
-  rootBone: string;
+  /** Free-form note written by verify-rig (derivation + overlay comment). Informational. */
+  comment?: string;
+  /** Joint names in hierarchy order: every joint's parent appears earlier (REQ-ANA-021). */
+  bones: JointName[];
+  /**
+   * Added 2026-10-08 (M1-01c). Parent of every joint in `bones` (same key set), used for FK and
+   * parent checks. Exactly one value is `null`, the one for `rootBone`.
+   */
+  parents: Record<JointName, JointName | null>;
+  rootBone: JointName;
   /** Local axis along which each bone's length runs. */
   lengthAxis: 'x' | 'y' | 'z';
-  anatomyBones: Record<keyof AnatomyParams, string[]>;
+  /** Reference skeleton height in meters (verify-rig unit-scale check, spec 011). Informational. */
+  skeletonHeightM?: number;
+  anatomyBones: Record<keyof AnatomyParams, JointName[]>;
   /** Bone → body region, used for hides (spec 001) and region attributes (spec 011). */
-  regionBones: Record<BodyRegion, string[]>;
+  regionBones: Record<BodyRegion, JointName[]>;
+  /** Added 2026-10-08 (M1 D1). Every SocketId → a joint in `bones` (REQ-ANA-019). */
+  socketBones: Record<SocketId, JointName>;
+  /**
+   * Added 2026-10-08 (M1 PM rig update a). Skeleton groups (spec 011 REQ-AST-026): rest poses that
+   * differ between source files with the same names and hierarchy. Each group has a rest transform
+   * for every joint in `bones`. Group IDs match [a-z0-9-]{1,32}.
+   */
+  skeletonGroups: Array<{ id: string; restPose: Record<JointName, RestTransform> }>;
+  /**
+   * Added 2026-10-08 (M1-01c). ID of the entry in `skeletonGroups` used when a body declares
+   * neither `characterSkeletonGroup` nor `skeletonGroup` (spec 001 REQ-CMP-037). It is the group
+   * of the verify-rig reference file (spec 011 REQ-AST-005).
+   */
+  defaultSkeletonGroup: string;
 }
 
 /** Data file: presets/anatomy/<id>.json */
@@ -217,7 +291,7 @@ export interface AnatomyPreset {
 }
 ```
 
-Application order per frame (contract for engine and tests): 1) sample clip (spec 004); 2) apply root-motion policy (spec 004); 3) apply anatomy (`height` → length/width/thickness with compensation → propagating `head`/`hands`/`feet`); 4) apply grounding offset (computed once per anatomy change in bind pose); 5) update socket props; 6) skinning.
+Application order per frame (contract for engine and tests): 1) sample clip (spec 004), including the rest-pose correction of spec 004 REQ-ANM-023 onto the character's skeleton group *(added 2026-10-08, M1 PM rig update b)*; 2) apply root-motion policy (spec 004); 3) apply anatomy (`height` → length/width/thickness with compensation → propagating `head`/`hands`/`feet`); 4) apply grounding offset (computed once per anatomy change in bind pose); 5) update socket props; 6) skinning.
 
 ## Non-functional
 
@@ -229,7 +303,7 @@ Application order per frame (contract for engine and tests): 1) sample clip (spe
 ## Open questions
 
 - [NEEDS CLARIFICATION: Do the Quaternius bodies ship morph targets? The vendor pages do not mention shape keys. If none exist, REQ-ANA-012 applies only to uploads. Answered by the M1 spike.]
-- [NEEDS CLARIFICATION: Final bone lists per parameter and `lengthAxis` for the Quaternius rig. Blocks REQ-ANA-002/005 data, not the engine code. Answered by M1 `verify-rig`.]
+- [NEEDS CLARIFICATION: Final bone lists per parameter and `lengthAxis` for the Quaternius rig. Blocks REQ-ANA-002/005 data, not the engine code. Answered by M1 `verify-rig`. Partly answered 2026-10-08: names, hierarchy and `lengthAxis` are identical across all 36 checked files (outcome `mapped` only for bind poses); the overlay lists remain to be committed (M1-14) and confirmed in the M1-33 pass.]
 - [NEEDS CLARIFICATION: Does spec 003 own drawing the face decal layer (snapping, palette interaction)? This spec assumes yes and owns only selection and offset.]
 
 ## References
@@ -239,3 +313,5 @@ Application order per frame (contract for engine and tests): 1) sample clip (spe
 - Autodesk Maya joint attribute "Segment Scale Compensate" (concept reference for child compensation; Maya documentation, joint attributes)
 - three.js `SkinnedMesh` / `Skeleton` docs (r186): https://threejs.org/docs/#api/en/objects/SkinnedMesh (accessed 2026-10-08)
 - Quaternius Universal Base Characters: https://quaternius.itch.io/universal-base-characters (accessed 2026-10-08)
+- `.tagconn/work/m1-plan.md` §2.1, §5 (D1) and the M1 verify-rig PM update (2026-10-08)
+- Committed rig `packages/parts-schema/rigs/quaternius-ue5-65.json` and overlay `tools/rigs/quaternius-ue5-65.overlay.json` (shape of `parents`, `defaultSkeletonGroup`, `skeletonGroups`; read 2026-10-08, M1-01c)

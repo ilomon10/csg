@@ -1,7 +1,7 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {"types": ["node"], "allowJs": true, "outDir": "dist"},
-  "include": ["*.ts", "hooks/*.ts", "hooks/*.mjs"],
+  "include": ["*.ts", "lib/*.ts", "hooks/*.ts", "hooks/*.mjs"],
   "references": [
     {"path": "../packages/parts-schema"},
     {"path": "../packages/engine"},

@@ -119,6 +119,7 @@ This spec covers the clip library (data), choosing clips for export, determinist
 
 - **AC-ANM-013.1** Given a root-motion `run` clip, When 8 frames are rendered in place, Then the root bone X/Z world position equals its frame-0 position (± 1e-6 m) in every frame.
 - **AC-ANM-013.2** Given a `jump` clip, When rendered in place, Then the root's Y position follows the clip (rises above frame 0 by the authored height × `legLength`, spec 002).
+- **AC-ANM-013.3** Given the fixture clip with documented root motion (spec 011 AC-AST-021.2) and no `inPlaceVariant`, When 8 frames are sampled with `rootMotion: 'in-place'`, Then the root bone X/Z world position equals its frame-0 position (± 1e-6 m) in every frame while its Y follows the documented keyframes (± 1e-6 m). *(Added 2026-10-08, M1 D5: bundled UAL clips are in place, so runtime stripping is tested on the fixture.)*
 
 **REQ-ANM-014 [P1]** WHERE the clip manifest provides an in-place variant (`inPlaceVariant`) THE SYSTEM SHALL use it for in-place rendering instead of stripping translation.
 
@@ -155,6 +156,26 @@ This spec covers the clip library (data), choosing clips for export, determinist
 
 - **AC-ANM-020.1** Given a cached clip, When the user selects it, Then the preview shows its first frame within 150 ms.
 
+### Clip loading and retargeting (M1 amendments 2026-10-08)
+
+**REQ-ANM-021 [P1]** THE SYSTEM SHALL load clips only through `AssetRegistry.resolveClip(ref: ClipRef): Promise<Result<LoadedClip, EngineError>>` (see Data & contracts), which loads the clip GLB from the registered pack base URL, picks the animation named `sourceName`, and caches the result keyed by file URL and `sha256`, so resolving the same clip again makes no network request. *(Added 2026-10-08, M1 plan R6: adopts the architecture §3.6 clip API, backlog F5.)*
+
+- **AC-ANM-021.1** Given the fixture clip manifest registered with `registerClips`, When `resolveClip('builtin:<packId>/<clipId>')` is called, Then the result is `ok: true`, `value.entry.id` equals the clip ID, and `value.durationSec` equals the manifest `durationSec` (± 1e-6).
+- **AC-ANM-021.2** Given that clip resolved once, When it is resolved again, Then the loader's fetch count does not increase and both results reference the same cached clip data.
+
+**REQ-ANM-022 [P1]** IF a clip cannot be loaded THEN THE SYSTEM SHALL return `ok: false` with `EngineError.code` `ANM_CLIP_LOAD_FAILED` and `details: { ref, reason }`, where `reason` is one of `'not-registered'`, `'network'`, `'parse'`, `'animation-missing'` or `'extension-not-allowed'` (spec 011 REQ-AST-029), and SHALL keep the previously playing clip and pose unchanged. *(Added 2026-10-08, M1 plan R6.)*
+
+- **AC-ANM-022.1** Given a registered clip whose file returns HTTP 404, When it is resolved, Then the result is `ANM_CLIP_LOAD_FAILED` with `reason: 'network'` and the `ref`.
+- **AC-ANM-022.2** Given a clip entry whose `sourceName` is not an animation in its GLB, When resolved, Then the result is `ANM_CLIP_LOAD_FAILED` with `reason: 'animation-missing'`; Given an unregistered ref, Then `reason` is `'not-registered'`; Given a truncated GLB, Then `reason` is `'parse'`.
+- **AC-ANM-022.3** Given clip A playing and a selection change to clip B that fails to load, When the renderer's `play()` continues, Then the clip player's log still names clip A as the source and the pose at the next sample time equals clip A's pose (bit-identical).
+
+**REQ-ANM-023 [P1]** THE SYSTEM SHALL retarget every sampled clip pose onto the character skeleton (spec 001 REQ-CMP-037) before the root-motion policy and anatomy (spec 002 application order), using the clip's source rest pose (the local joint transforms stored in the clip GLB) and the character's rest pose: for every animated joint the local rotation SHALL be `q_t = q_tRest · q_sRest⁻¹ · q_s`; translation tracks SHALL be applied only to `rootBone` and to the joint `socketBones.pelvis` as `t_t = t_tRest + (t_s − t_sRest) · k`, where `k = L_t / L_s` and `L` is the rest-pose world height of the pelvis joint above the lowest joint listed in `anatomyBones.feet`; every other joint SHALL keep its target rest translation; scale tracks SHALL pass through unchanged. The math SHALL live in the DOM-free module `packages/engine/src/retarget/`, which imports neither `three` nor DOM APIs, so that tools and the spec 008 retargeter reuse it. *(Added 2026-10-08, M1 PM rig update b: rest-pose-corrected retargeting moves into M1 because bind poses form 4 skeleton groups, max delta 0.107 m / 13.4°.)*
+
+- **AC-ANM-023.1** Given the fixture clip authored on skeleton group `g-a` and a character on `g-b` whose `lowerarm_l` rest rotation differs by 10° about local Z, When `t = 0.5 s` is sampled, Then `lowerarm_l`'s local rotation equals `q_tRest · q_sRest⁻¹ · q_s` computed from the documented keyframe (each quaternion component ± 1e-6, sign-normalized).
+- **AC-ANM-023.2** Given `g-b`'s pelvis rest translation 0.05 m higher than `g-a`'s, When frames 0–7 are sampled, Then the pelvis local translation equals `t_tRest + (t_s − t_sRest) · k` with `k = L_t / L_s` (± 1e-6 m).
+- **AC-ANM-023.3** Given a character whose rest pose equals the clip's source rest pose, When any frame is sampled, Then the retargeted local transforms equal the raw sampled ones (± 1e-6).
+- **AC-ANM-023.4** Given the `retarget/` module, When its imports are statically checked and its tests run in Node, Then it imports no `three` module and no DOM global, and the tests pass.
+
 ## Edge cases
 
 - `frameCount = 1` → single pose at `s` (REQ-ANM-007).
@@ -166,6 +187,9 @@ This spec covers the clip library (data), choosing clips for export, determinist
 - Anatomy changes leg length → root Y and stride scale (spec 002 REQ-ANA-010).
 - Missing user clip → REQ-ANM-016.
 - Reduced motion → REQ-ANM-019.
+- Clip file missing, corrupt or without the named animation → `ANM_CLIP_LOAD_FAILED`, previous clip kept (REQ-ANM-022).
+- Clip rest pose differs from the character skeleton (different skeleton group) → rest-pose-corrected retargeting (REQ-ANM-023).
+- Bundled clips are already in place (M1 D5) → stripping is a no-op on them and is exercised by the fixture clip (AC-ANM-013.3).
 
 ## Data & contracts
 
@@ -189,6 +213,10 @@ export interface ClipEntry {
   inPlaceVariant?: string;       // clip id of the in-place variant
   tags: string[];
   license?: AssetLicense;        // overrides pack license
+  /** Added 2026-10-08 (M1 R6). Lowercase hex SHA-256 of `file`, written by build-parts (spec 011 REQ-AST-013); cache key with the URL. */
+  sha256: string;
+  /** Added 2026-10-08 (M1). Computed skeleton group of the clip file (spec 011 REQ-AST-026); informational, retargeting reads the rest pose from the file. */
+  skeletonGroup?: string;
 }
 
 export interface ClipManifest {
@@ -217,6 +245,37 @@ export interface AnimationSelection {
 }
 ```
 
+Asset registry clip API (added 2026-10-08, M1 plan R6; adopts architecture §3.6 and backlog F5, so this section now governs):
+
+```ts
+export interface AssetRegistry {
+  // ...part methods: architecture §3.6 / spec 001
+  /** Registers a bundled clip manifest (REQ-ANM-001). Clip refs are builtin:<packId>/<clipId>. */
+  registerClips(manifest: ClipManifest, baseUrl: string): void;
+  /** REQ-ANM-002 filter. */
+  listClips(filter?: { rig?: RigId }): ClipEntryView[];
+  /** REQ-ANM-021/022. Never throws for load failures; returns ANM_CLIP_LOAD_FAILED. */
+  resolveClip(ref: ClipRef): Promise<Result<LoadedClip, EngineError>>;
+}
+export type ClipEntryView = ClipEntry & { ref: ClipRef; source: 'builtin' | 'user' };
+
+/** Opaque to apps; holds the three.js AnimationClip and the source rest pose inside the engine. */
+export interface LoadedClip {
+  readonly ref: ClipRef;
+  readonly entry: ClipEntry;
+  readonly durationSec: number;
+}
+
+/** EngineError codes owned by this spec. */
+export type AnimationErrorCode = 'ANM_CLIP_LOAD_FAILED';
+export interface ClipLoadFailedDetails {
+  ref: ClipRef;
+  reason: 'not-registered' | 'network' | 'parse' | 'animation-missing' | 'extension-not-allowed';
+}
+```
+
+User clip refs (`user:<uuid>#<clipName>`) resolve through the same method once spec 008 lands (M5); until then `resolveClip` returns `ANM_CLIP_LOAD_FAILED` with `reason: 'not-registered'` for them.
+
 Contract changes to architecture §3.4 (to be synced in the implementing PR): `clipId` is typed as `ClipRef`; new fields `label`, `pingPong`, `bakePingPong`, `timing`, `range`, `rootMotion`, `directionOverrides`. `RenderedFrame.clipId` carries the `label`, so file-safe names reach spec 005 (a `ClipRef` contains `:` and `/`). Clip selection stays in `RenderSettings`, not in `CharacterSpec` (see spec 001, refinement 4).
 
 Per-frame metadata handed to spec 005: `{ label, direction, frame, sourceFrame, timeSec, durationMs: 1000/fps, rootOffsetPx?: [x, y] }`.
@@ -232,7 +291,8 @@ Per-frame metadata handed to spec 005: `{ label, direction, frame, sourceFrame, 
 
 - [NEEDS CLARIFICATION: Do all UAL clips use the same skeleton and bind pose as the base characters and outfits? *(M1-gated)* Blocks REQ-ANM-002 data and the `rig` field values.]
 - [NEEDS CLARIFICATION: Bundle only the free Standard tier (45 clips) or the full CC0 library (120+)? Shared with spec 011.]
-- [NEEDS CLARIFICATION: Should UAL's separate "root motion disabled" export be the in-place source (REQ-ANM-014), or should we strip translation from one root-motion set to halve download size? Proposal: strip at build time in spec 011, keep `inPlaceVariant` for user packs.]
+- ~~[NEEDS CLARIFICATION: Should UAL's separate "root motion disabled" export be the in-place source (REQ-ANM-014), or should we strip translation from one root-motion set to halve download size? Proposal: strip at build time in spec 011, keep `inPlaceVariant` for user packs.]~~ Resolved 2026-10-08 (M1 D5): M1 bundles only the in-place UAL file (`UAL1_Standard.glb`); the root-motion `_RM` file and bundled `inPlaceVariant` links are deferred with REQ-ANM-015 (P2). Runtime X/Z stripping (REQ-ANM-013) stays required and is tested on the fixture clip (AC-ANM-013.3); REQ-ANM-014 stays for packs that provide variants.
+- The first open question (shared skeleton) is partly answered 2026-10-08: UAL clips share bone names and hierarchy with the base characters and outfits but form their own bind-pose group; they are retargeted at runtime (REQ-ANM-023).
 
 ## References
 
@@ -241,3 +301,4 @@ Per-frame metadata handed to spec 005: `{ label, direction, frame, sourceFrame, 
 - Quaternius Universal Animation Library: https://quaternius.itch.io/universal-animation-library (accessed 2026-10-08): 120+ clips (45 in the Standard tier), CC0, root motion and root-motion-disabled variants, v2.0 bone naming matches the outfits and base characters
 - three.js `AnimationMixer.setTime` / `AnimationAction.time` (r186): https://threejs.org/docs/#api/en/animation/AnimationMixer (accessed 2026-10-08)
 - Aseprite JSON export (`direction: pingpong` in frame tags): https://www.aseprite.org/docs/cli/ (accessed 2026-10-08)
+- `.tagconn/work/m1-plan.md` §2.2, §5 (D5, R6) and the M1 verify-rig PM update (2026-10-08, rest-pose-corrected retargeting)

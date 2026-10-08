@@ -1,0 +1,63 @@
+{
+  "format": "sprite-asset-sources",
+  "version": 1,
+  "comment": "Expected raw source packs (spec 011 REQ-AST-001). `dir` is the folder under assets-src/ as unzipped from the vendor archive; archive hashes are null until the archives are recorded. `verifyRig.include` are glob-free path prefixes relative to `dir`; `exclude` are path fragments to skip (non-skinned exports).",
+  "rig": {
+    "id": "quaternius-ue5-65",
+    "referencePack": "quaternius-ubc",
+    "referenceFile": "Base Characters/Godot - UE/Superhero_Male_FullBody.gltf"
+  },
+  "packs": [
+    {
+      "packId": "quaternius-ubc",
+      "name": "Universal Base Characters (Standard)",
+      "vendorUrl": "https://quaternius.itch.io/universal-base-characters",
+      "version": null,
+      "tier": "standard",
+      "license": "CC0-1.0",
+      "author": "Quaternius",
+      "archiveFile": null,
+      "sha256": null,
+      "dir": "Universal Base Characters[Standard]",
+      "verifyRig": {
+        "include": [
+          "Base Characters/Godot - UE",
+          "Hairstyles/Rigged to Head Bone"
+        ],
+        "exclude": []
+      }
+    },
+    {
+      "packId": "quaternius-outfits",
+      "name": "Modular Character Outfits - Fantasy (Standard)",
+      "vendorUrl": "https://quaternius.itch.io/modular-character-outfits-fantasy",
+      "version": null,
+      "tier": "standard",
+      "license": "CC0-1.0",
+      "author": "Quaternius",
+      "archiveFile": null,
+      "sha256": null,
+      "dir": "Modular Character Outfits - Fantasy[Standard]",
+      "verifyRig": {
+        "include": ["Exports/glTF (Godot-Unreal)"],
+        "exclude": []
+      }
+    },
+    {
+      "packId": "quaternius-ual",
+      "name": "Universal Animation Library (Standard)",
+      "vendorUrl": "https://quaternius.itch.io/universal-animation-library",
+      "version": null,
+      "tier": "standard",
+      "license": "CC0-1.0",
+      "author": "Quaternius",
+      "archiveFile": null,
+      "sha256": null,
+      "dir": "Universal Animation Library[Standard]",
+      "verifyRig": {
+        "include": ["Unreal-Godot"],
+        "exclude": []
+      }
+    }
+  ]
+}
