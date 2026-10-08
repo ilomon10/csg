@@ -39,6 +39,57 @@ export type M1ErrorCode =
   | AssetErrorCode
   | RendererErrorCode;
 
+/**
+ * Pixel pipeline codes (spec 003 "Error and warning codes"). The settings
+ * codes match parts-schema `RenderSettingsErrorCode`; `PIX_INVALID_SETTINGS`
+ * covers fields without a dedicated code.
+ */
+export type PixelPipelineErrorCode =
+  | 'PIX_INVALID_SETTINGS'
+  | 'PIX_INVALID_RESOLUTION'
+  | 'PIX_INVALID_CAMERA'
+  | 'PIX_INVALID_DIRECTIONS'
+  | 'PIX_INVALID_TOON'
+  | 'PIX_PALETTE_TOO_LARGE'
+  | 'PIX_PALETTE_PARSE'
+  | 'PIX_DEVICE_LOST'
+  | 'PIX_BACKEND_UNAVAILABLE';
+
+/** Pixel pipeline warning codes (spec 003); reported, never a failed {@link Result}. */
+export type PixelPipelineWarningCode =
+  'PIX_FRAMING_CLIPPED' | 'PIX_PALETTE_DUPLICATES';
+
+/** Every error code the M2 engine returns. */
+export type M2ErrorCode = M1ErrorCode | PixelPipelineErrorCode;
+
+/** One field issue in `details.issues` of a `PIX_INVALID_*` / `PIX_PALETTE_*` error (REQ-PIX-037). */
+export interface SettingsIssueDetail {
+  /** Dotted settings path, for example `toon.thresholds`. */
+  readonly path: string;
+  readonly code: PixelPipelineErrorCode;
+  readonly message: string;
+}
+
+/** `details` of a settings validation error: every invalid field at once (REQ-PIX-037). */
+export interface InvalidSettingsDetails {
+  readonly issues: readonly SettingsIssueDetail[];
+}
+
+/** `details` of the `PIX_FRAMING_CLIPPED` warning (REQ-PIX-009). */
+export interface FramingClippedDetails {
+  readonly frames: ReadonlyArray<{
+    readonly label: string;
+    readonly direction: number;
+  }>;
+}
+
+/** `details` of `PIX_BACKEND_UNAVAILABLE` (architecture 4.4, m2-plan R3). */
+export interface BackendUnavailableDetails {
+  readonly backend: 'webgpu' | 'webgl2';
+  /** Missing capability, for example `EXT_color_buffer_half_float`. */
+  readonly reason: string;
+}
+
 /** `details.reason` of `CMP_PART_LOAD_FAILED` (spec 011 REQ-AST-028/029). */
 export type PartLoadFailedReason =
   | 'not-registered'

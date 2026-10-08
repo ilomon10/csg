@@ -4,7 +4,7 @@ title: Shader graph editor
 status: draft
 owner: spec-writer
 depends_on: [constitution, 000-overview, 003-pixel-render-pipeline, 007-shader-graph-format, 009-editor-shell-ux]
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 ---
 
 # 006 – Shader graph editor
@@ -362,12 +362,12 @@ Socket notation: `id: type [= default]`. All IDs are stable (REQ-SGF-004). `gen`
 | Type | T | Inputs | Outputs | Notes |
 |------|---|--------|---------|-------|
 | `input.uv` | M P | – | `uv: vec2` | Mesh UV (M) / screen UV (P) |
-| `input.normal` | M | – | `normal: vec3` | World-space, normalized |
-| `input.viewDir` | M | – | `dir: vec3` | Surface → camera, world |
-| `input.lightDir` | M | – | `dir: vec3` | Surface → key light (`light.dir`) |
+| `input.normal` | M | – | `normal: vec3` | View-space, normalized (amended 2026-10-09 (M2-01), was world-space; spec 003 REQ-PIX-013 note) |
+| `input.viewDir` | M | – | `dir: vec3` | Surface → camera, view space; `(0, 0, 1)` for the orthographic camera (amended 2026-10-09 (M2-01)) |
+| `input.lightDir` | M | – | `dir: vec3` | Surface → key light (`light.dir`), view space (amended 2026-10-09 (M2-01)) |
 | `input.partId` | M | – | `id: int` | Equipped part index |
 | `input.time` | M P | – | `t: float` | Seconds in preview, **0 in export** (REQ-SGF-032), warning badge |
-| `input.screenPos` | M P | – | `px: vec2`, `uv: vec2` | Low-res pixel coordinates (pixel centers) and 0..1 |
+| `input.screenPos` | M P | – | `px: vec2`, `uv: vec2` | `px` = integer cell pixel index, origin top-left (x right, y down, 0..W−1 / 0..H−1); `uv` = `(px + 0.5) / resolution`. Builtin `screenPos` (spec 007). Amended 2026-10-09 (M2-01), A4; was "pixel centers" |
 | `input.texelSize` | M P | – | `texel: vec2`, `resolution: vec2` | `1/resolution` and resolution in px |
 | `input.tint` | M | field `slot` (enum of tint slots) | `color: color` | `tint.<slot>` uniform |
 | `input.partAlbedo` | M | – | `color: color`, `alpha: float` | Part base texture × vertex color |
@@ -425,11 +425,11 @@ Socket notation: `id: type [= default]`. All IDs are stable (REQ-SGF-004). `gen`
 |------|--------|---------|
 | `post.sampleColor` | `offset: vec2 = 0,0` (texels) | `color: color` |
 | `post.sampleNormal` | `offset: vec2` | `normal: vec3` |
-| `post.sampleDepth` | `offset: vec2` | `depth: float` (linear 0..1) |
+| `post.sampleDepth` | `offset: vec2` | `depth: float` (signed distance from the pivot plane in output pixels, + toward the camera; spec 003 REQ-PIX-014 note. Amended 2026-10-09 (M2-01), A3; was "linear 0..1") |
 | `post.sampleId` | `offset: vec2` | `id: int`, `isBackground: bool` |
-| `post.edgeDetect` | `alpha: float` (coverage source), `cutoff: float ← render.alphaCutoff`, field `sources` (depth, normal, id; multi), `depthThresholdPx: float = 1`, `normalThresholdDeg: float = 45`, `width: int = 1` (1–3, outer) | `outer: float`, `inner: float` (REQ-PIX-015, -016) |
-| `post.outline` | `color: color`, `outer: float`, `inner: float`, field `mode` (black, darken, custom), `darkenAmount: float = 0.5`, `customColor: color = #000000` | `color: color` (REQ-PIX-017) |
-| `post.paletteQuantize` | `color: color` (sRGB), `lut: texture ← render.paletteLut` (64³ LUT, REQ-PIX-021) | `color: color` |
+| `post.edgeDetect` | `alpha: float` (coverage source), `cutoff: float ← render.alphaCutoff`, field `sources` (depth, normal, id; multi), `depthThresholdPx: float = 1` (output px, spec 003 REQ-PIX-016 note), `normalThresholdDeg: float = 45`, `width: int = 1` (1–3, outer) | `outer: float`, `inner: float` (REQ-PIX-015, -016), `source: color` (linear RGBA of the darken neighbour of an outer outline pixel, chosen by the rule of REQ-PIX-017 note, or the pixel's own scene color for an inner line pixel; `(0, 0, 0, 0)` elsewhere. Added 2026-10-09 (M2-01), A3) |
+| `post.outline` | `color: color`, `outer: float`, `inner: float`, `source: color` (from `post.edgeDetect.source`; added 2026-10-09 (M2-01)), field `mode` (black, darken, custom), `darkenAmount: float = 0.5`, `customColor: color = #000000`, `black: color ← render.paletteDarkest` (added 2026-10-09 (M2-01)) | `color: color` (REQ-PIX-017: `black` mode outputs `black`, `darken` outputs `source.rgb × (1 − darkenAmount)`, `custom` outputs `customColor`; alpha 1 on outline pixels) |
+| `post.paletteQuantize` | `color: color` (sRGB), `lut: texture ← render.paletteLut` (64³ LUT, REQ-PIX-021), `enabled: bool ← render.paletteEnabled` (added 2026-10-09 (M2-01); `false` passes `color` through unchanged) | `color: color` |
 | `post.bayerDither` | `color: color` (sRGB), `px: vec2 ← cell-local pixel coords`, field `matrix` (2, 4, 8; default ← `render.ditherMode`), `strength: float ← render.ditherStrength`, `spread: float = 0.25` (`DITHER_SPREAD`) | `color: color` (offset applied, REQ-PIX-022), `threshold: float` |
 | `post.posterize` | `color: color`, `levels: int = 8` (2–256) | `color: color` |
 | `post.alphaCutoff` | `color: color`, `cutoff: float ← render.alphaCutoff` | `color: color` (alpha ∈ {0, 1}) |
@@ -448,6 +448,8 @@ Socket notation: `id: type [= default]`. All IDs are stable (REQ-SGF-004). `gen`
 The default post graph chains its stages in the fixed order of REQ-PIX-025: alpha cutoff → outline → `color.linearToSrgb` → dither → palette quantize → final alpha.
 
 `←` means the socket uses that built-in (`NodeTypeSpec.inputs[].defaultBuiltin`) while unconnected.
+
+*(Amended 2026-10-09 (M2-01), amendments A3/A4 of the M2 plan.)* The sockets added above (`post.edgeDetect.source`, `post.outline.source`, `post.outline.black`, `post.paletteQuantize.enabled`) and the unit changes (`post.sampleDepth.depth`, `input.screenPos.px`, view-space `input.normal`/`viewDir`/`lightDir`) keep the node versions at `@1`, because no node type has shipped yet (the graph runtime arrives in M4). They make the catalog match the M2 stage functions (spec 003 REQ-PIX-035, Data & contracts), so the built-in graphs can reproduce the M2 goldens. The builtins `render.paletteDarkest` and `render.paletteEnabled` are defined in spec 007 (REQ-SGF-043). The registry test of AC-SGF-043.3 checks these sockets.
 
 ## Edge cases
 
@@ -557,6 +559,7 @@ export type GraphCommand =
 
 - spec 007 (SGF), spec 003 (PIX), spec 009 (UX), docs/architecture.md §3.5–3.6, ADR-0003, ADR-0004.
 - `.tagconn/work/research.md` §Shader graph editor (2026-10-08).
+- `.tagconn/work/m2-plan.md` §2.4 and §5, amendments A3/A4 (2026-10-09).
 - React Flow v12 docs (`isValidConnection`, `onConnectEnd`, MiniMap): https://reactflow.dev/api-reference (accessed 2026-10-08).
 - Blender Manual, Node Editor (shortcuts, frames, reroute, mute, hide sockets): https://docs.blender.org/manual/en/latest/interface/controls/nodes/index.html (accessed 2026-10-08).
 - Unity Shader Graph manual (Blackboard, Create Node menu, node previews): https://docs.unity3d.com/Packages/com.unity.shadergraph@17.0/manual/index.html (accessed 2026-10-08).

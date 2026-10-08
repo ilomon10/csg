@@ -10,3 +10,5 @@ export * from './anatomy';
 export * from './animation-selection';
 export * from './character-spec';
 export * from './pack-config';
+export * from './palettes';
+export * from './render-settings';

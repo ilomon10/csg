@@ -4,7 +4,7 @@ title: Shader graph format and compiler
 status: draft
 owner: spec-writer
 depends_on: [constitution, 000-overview, 003-pixel-render-pipeline, 006-shader-graph-editor]
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 ---
 
 # 007 – Shader graph format and compiler
@@ -216,7 +216,7 @@ Related: ADR-0003 (WebGPURenderer + TSL, r186 pinned), ADR-0004 (own graph model
 
 **REQ-SGF-033 [P1]** THE SYSTEM SHALL ship `builtin:material-toon` and `builtin:post-default` graph documents that, with default params, render with 0 differing pixels against the M2 golden images, for every M2 golden fixture on both backends.
 
-This is the same obligation as REQ-PIX-035. M2 stage functions keep the shape `(inputs, ctx) => node` defined there, and each built-in `NodeEmitter.compile` wraps the matching stage function.
+This is the same obligation as REQ-PIX-035. M2 stage functions keep the shape `(ctx, inputs, fields) => Record<outputId, node>` defined there (`StageEmitter`, the same argument order as `NodeEmitter.compile`), and each built-in `NodeEmitter.compile` wraps the matching stage function, passing the node's fields as typed `fields`. *(Amended 2026-10-09 (M2-01), A1; previously `(inputs, ctx) => node`.)*
 
 - **AC-SGF-033.1** Given each M2 golden fixture (side, three-quarter, isometric at 32/64/128 px; 18 cases, REQ-PIX-028), When rendered with the graph-compiled pipeline on WebGPU and on `forceWebGL`, Then the pixel diff against the M2 golden for that backend is 0.
 
@@ -276,6 +276,15 @@ This is the same obligation as REQ-PIX-035. M2 stage functions keep the shape `(
 - **AC-SGF-042.3** Given a document whose node IDs, labels, param names and group names contain `*/`, `"`, `;`, `}` and newline characters, When compiled on both backends, Then compilation succeeds, and none of those strings appears as a substring of the generated WGSL or GLSL source (checked by a test that dumps the generated shader source).
 - **AC-SGF-042.4** A registry test fails if any socket that a `NodeEmitter` uses as a loop or sample bound has no registry `min` and `max`, or if any enum socket has no `values`.
 
+### Built-in values contract
+
+**REQ-SGF-043 [P1]** THE SYSTEM SHALL implement in `CompileContext.builtin()` every name in the *Built-in values* table with the type, space and unit given there, and SHALL return the same TSL node for repeated calls with the same name within one compile. *(Added 2026-10-09 (M2-01), amendment A4: `render.paletteDarkest`, `render.paletteEnabled` and the `screenPos` definition. The M2 stage context implements the same table.)*
+
+- **AC-SGF-043.1** Given the engine's `CompileContext` with palette `endesga-32`, When `builtin('render.paletteDarkest')` is evaluated, Then it is the linear RGBA of #181425 with alpha 1; with palette `none` it is (0, 0, 0, 1); and `builtin('render.paletteEnabled')` is `true` and `false` respectively. Changing the palette from `endesga-32` to `pico-8` updates `render.paletteDarkest` to #000000 without recompiling (a `none` ↔ preset change may rebuild, spec 003 REQ-PIX-034).
+- **AC-SGF-043.2** Given a post pass at 48×40 whose output writes `builtin('screenPos')` into the red and green channels as integers, When read back (top-left origin, spec 003 REQ-PIX-029), Then pixel (x, y) holds (x, y) for every pixel, on both backends.
+- **AC-SGF-043.3** Given the node registry (M4), Then `post.edgeDetect@1` has output `source: color`, `post.outline@1` has inputs `source: color` and `black: color` with `defaultBuiltin: 'render.paletteDarkest'`, and `post.paletteQuantize@1` has input `enabled: bool` with `defaultBuiltin: 'render.paletteEnabled'` (spec 006 catalog).
+- **AC-SGF-043.4** Given `builtin('unknown.name')`, When called during emit, Then it throws, and the compiler reports `SGF_EMIT_FAILED` on the calling node.
+
 ## Type system
 
 | Type | TSL shape | Default | Notes |
@@ -307,6 +316,34 @@ This is the same obligation as REQ-PIX-035. M2 stage functions keep the shape `(
 
 Vector → scalar is always rejected. Users pick a component with `vector.split@1`. `util.reroute@1` is special-cased: its `in`/`out` sockets have pseudo-type `any` and take the concrete type of the source wired into `in` (an unconnected reroute is `float`). A reroute never inserts a cast; the cast happens at the reroute's targets. `genType` inputs accept anything whose resolved type casts to the resolved width.
 
+## Built-in values
+
+Names accepted by `CompileContext.builtin()` (REQ-SGF-043). Added 2026-10-09 (M2-01); before that the names were listed only in the `CompileContext` comment. View space: x screen-right, y screen-up, z toward the viewer. Cell pixel coordinates: origin top-left, x right, y down.
+
+| Name | Target | Type | Value |
+|------|--------|------|-------|
+| `uv` | M P | `vec2` | Mesh UV (M); `(screenPos + 0.5) / resolution` (P) |
+| `normal` | M | `vec3` | View-space unit normal |
+| `viewDir` | M | `vec3` | Surface → camera, view space; `(0, 0, 1)` for the orthographic camera |
+| `light.dir` | M | `vec3` | Surface → key light, view space, from `light.azimuthDeg`/`light.elevationDeg` (spec 003 REQ-PIX-013 note) |
+| `partId` | M | `int` | Part ID of the drawn mesh (spec 003 REQ-PIX-014) |
+| `tint.<slot>` | M | `color` | Tint uniform of that slot (linear) |
+| `part.albedo` | M | `color` | Part base texture × vertex color (linear), sampled per spec 003 REQ-PIX-038 |
+| `screenPos` | M P | `vec2` | Integer cell pixel index `(x, y)`, top-left origin, 0..W−1 / 0..H−1 (amendment A4; not the pixel center) |
+| `resolution` | M P | `vec2` | Cell size `(W, H)` in px |
+| `texelSize` | M P | `vec2` | `1 / resolution` |
+| `time` | M P | `float` | Seconds in preview; `0` in export (REQ-SGF-032) |
+| `scene.color` | P | `color` | Scene pass color, linear RGB, A = material alpha |
+| `scene.normal` | P | `vec3` | Scene pass view-space normal |
+| `scene.depth` | P | `float` | Signed distance from the pivot plane in output px, + toward the camera (spec 003 REQ-PIX-014 note) |
+| `scene.partId` | P | `int` | Scene pass part ID, 0 = background |
+| `render.paletteLut` | P | `texture` | Palette LUT (spec 003 REQ-PIX-021 note) |
+| `render.paletteEnabled` | P | `bool` | `true` unless the palette is `none` (amendment A4) |
+| `render.paletteDarkest` | P | `color` | Linear RGBA (A = 1) of the palette entry with the lowest OKLab lightness, ties lowest index; #000000 when the palette is `none` (amendment A4, spec 003 REQ-PIX-017 note) |
+| `render.ditherMode` | P | field default | `palette.dither.mode` (`none`/`bayer2`/`bayer4`/`bayer8`), read at compile time as the default of `post.bayerDither@1` field `matrix`; not a shader value |
+| `render.ditherStrength` | P | `float` | The `dither.strength` uniform (rule 3 below) |
+| `render.alphaCutoff` | P | `float` | The `alpha.cutoff` uniform (rule 3 below) |
+
 ## Reserved built-in param IDs
 
 This is the single mapping between the typed `RenderSettings` fields (spec 003, Data & contracts) and graph params. Spec 003 and spec 006 reference this table and do not repeat it.
@@ -336,7 +373,7 @@ Binding kinds:
 | `outline.colorMode` | `outline.colorMode` | field | `black` / `darken` / `custom` | `post.outline@1` field `mode` |
 | `outline.darkenAmount` | `outline.darkenAmount` | uniform | `float` 0–1 | `post.outline@1.darkenAmount` |
 | `outline.color` | `outline.color` | uniform | `color` | `post.outline@1.customColor` |
-| `palette.id`, `palette.colors`, `palette.metric` | `palette.id`, `palette.colors`, `palette.metric` | builtin | LUT texture (REQ-PIX-021) | `render.paletteLut` → `post.paletteQuantize@1.lut` |
+| `palette.id`, `palette.colors`, `palette.metric` | `palette.id`, `palette.colors`, `palette.metric` | builtin | LUT texture (REQ-PIX-021); darkest color; enabled flag | `render.paletteLut` → `post.paletteQuantize@1.lut`; `render.paletteEnabled` → `post.paletteQuantize@1.enabled`; `render.paletteDarkest` → `post.outline@1.black` (last two added 2026-10-09 (M2-01), A4) |
 | `palette.dither.mode` | `dither.mode` | builtin | `none` / `bayer2` / `bayer4` / `bayer8` | `render.ditherMode` → `post.bayerDither@1` field `matrix` default |
 | `palette.dither.strength` | `dither.strength` | uniform | `float` 0–1 | `post.bayerDither@1.strength`; builtin `render.ditherStrength` returns this uniform |
 | `alphaCutoff` | `alpha.cutoff` | uniform | `float` 0.01–1 | `post.alphaCutoff@1.cutoff`, `post.edgeDetect@1.cutoff`; builtin `render.alphaCutoff` returns this uniform |
@@ -519,10 +556,11 @@ export interface CompileContext {
   target: 'material' | 'post';
   mode: 'preview' | 'export' | 'node-preview';
   backend: 'webgpu' | 'webgl2';
-  /** 'uv','normal','viewDir','light.dir','partId','screenPos','texelSize','time',
-   *  'tint.<slot>','part.albedo','scene.color','scene.normal','scene.depth','scene.partId',
-   *  'resolution','render.paletteLut','render.ditherMode',
-   *  'render.ditherStrength','render.alphaCutoff'. Unknown name ⇒ throws (→ SGF_EMIT_FAILED). */
+  /** Names, types and units: section "Built-in values" (REQ-SGF-043). 'uv','normal','viewDir','light.dir',
+   *  'partId','screenPos','texelSize','time','tint.<slot>','part.albedo','scene.color','scene.normal',
+   *  'scene.depth','scene.partId','resolution','render.paletteLut','render.paletteEnabled',
+   *  'render.paletteDarkest','render.ditherMode','render.ditherStrength','render.alphaCutoff'.
+   *  Unknown name ⇒ throws (→ SGF_EMIT_FAILED). */
   builtin(name: string): TslNode;
   /** Creates or reuses a uniform keyed by a stable id: a param id (user or reserved, see Reserved built-in param IDs) or `node:${nodeId}.${socketId}` for inline values. */
   uniform(key: string, type: SocketType, initial: unknown): TslNode;
@@ -603,6 +641,7 @@ Minimal example:
 - ADR-0003 WebGPURenderer, TSL and RenderPipeline on pinned three r186; ADR-0004 React Flow, own graph model.
 - docs/architecture.md §1.2 rule 3, §3.5, §4.1, §4.5.
 - `.tagconn/work/research.md` §Shader graph editor (2026-10-08).
+- `.tagconn/work/m2-plan.md` §2.4 and §5, amendments A1/A4 (2026-10-09).
 - three.js Shading Language wiki: https://github.com/mrdoob/three.js/wiki/Three.js-Shading-Language (accessed 2026-10-08).
 - Unity Shader Graph, Data types and implicit conversion: https://docs.unity3d.com/Packages/com.unity.shadergraph@17.0/manual/Data-Types.html (accessed 2026-10-08).
 - Blender Manual, Node groups: https://docs.blender.org/manual/en/latest/interface/controls/nodes/groups.html (accessed 2026-10-08).

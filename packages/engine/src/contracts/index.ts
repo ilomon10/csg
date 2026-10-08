@@ -6,3 +6,4 @@ export type * from './composition';
 export type * from './anatomy';
 export type * from './animation';
 export type * from './renderer';
+export type * from './pipeline';

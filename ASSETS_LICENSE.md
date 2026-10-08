@@ -74,11 +74,25 @@ Generated from `assets/packs/*/manifest.json` and `clips.json` by `pnpm assets:l
 
 <!-- assets:licenses:end -->
 
-## Palettes (planned)
+## Palettes (spec 003 REQ-PIX-018)
 
-- PICO-8 palette. Source: [NEEDS CLARIFICATION: source URL and license terms to confirm before bundling]
-- Endesga-32 palette. Source: [NEEDS CLARIFICATION: source URL and license terms to confirm before bundling]
-- Custom palettes are supplied by users. They are not bundled.
+Palettes are color lists stored as data in `packages/parts-schema/data/palettes/`. Both were checked against the Lospec downloads on 2026-10-08. The source pages state no license, so each entry is recorded as "color list, no license stated by source". No license warning is shown for them.
+
+### PICO-8
+
+- Author: Lexaloffle Games (colors of the PICO-8 console)
+- License: color list, no license stated by source
+- Source: <https://lospec.com/palette-list/pico-8>
+- Use: palette preset `pico-8` (16 colors), `packages/parts-schema/data/palettes/pico-8.json`
+
+### Endesga-32
+
+- Author: ENDESGA
+- License: color list, no license stated by source
+- Source: <https://lospec.com/palette-list/endesga-32>
+- Use: palette preset `endesga-32` (32 colors), `packages/parts-schema/data/palettes/endesga-32.json`
+
+Custom palettes are supplied by users. They are not bundled.
 
 ## Vendored code
 
