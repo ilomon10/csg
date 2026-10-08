@@ -1,0 +1,302 @@
+import {
+  Color,
+  DataTexture,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  BoxGeometry,
+  BufferAttribute,
+} from 'three';
+import type {Material} from 'three';
+import {MeshBasicNodeMaterial} from 'three/webgpu';
+import {TINT_SLOTS} from '@csg/parts-schema';
+import type {HexColor, PartEntry, TintSlot} from '@csg/parts-schema';
+import {describe, expect, it} from 'vitest';
+import type {LoadedPartInternal} from '../contracts/registry';
+import {attachSkinnedPart} from './attach-skinned-part';
+import {createBodySkeleton} from './body-skeleton';
+import {
+  createRegionMask,
+  REGION_ID_ATTRIBUTE,
+  setRegionMask,
+} from './region-mask';
+import {
+  fixtureEntry,
+  loadFixtureManifest,
+  loadFixturePart,
+  loadFixtureRig,
+} from './test-fixtures';
+import {
+  applyTintMaterial,
+  createTintUniforms,
+  restoreMaterials,
+  setTint,
+} from './tint-material';
+
+const rig = loadFixtureRig();
+const manifest = loadFixtureManifest();
+
+const INITIAL = Object.fromEntries(
+  TINT_SLOTS.map(slot => [slot, '#ffffff']),
+) as Record<TintSlot, HexColor>;
+
+interface Traversable {
+  traverse(cb: (n: unknown) => void): void;
+}
+
+function nodesOf(material: Material): unknown[] {
+  const out: unknown[] = [];
+  const m = material as MeshBasicNodeMaterial;
+  for (const root of [m.colorNode, m.maskNode] as Array<Traversable | null>) {
+    root?.traverse(n => out.push(n));
+  }
+  return out;
+}
+
+function syntheticPart(
+  materials: Material[],
+  withRegion: boolean,
+): LoadedPartInternal {
+  const scene = new Group();
+  for (const material of materials) {
+    const geometry = new BoxGeometry();
+    if (withRegion) {
+      geometry.setAttribute(
+        REGION_ID_ATTRIBUTE,
+        new BufferAttribute(
+          new Float32Array(geometry.getAttribute('position').count),
+          1,
+        ),
+      );
+    }
+    scene.add(new Mesh(geometry, material));
+  }
+  return {
+    ref: 'builtin:test/part',
+    entry: fixtureEntry(manifest, 'fixture-shirt'),
+    rig,
+    scene,
+  };
+}
+
+function material(part: LoadedPartInternal, index = 0): MeshBasicNodeMaterial {
+  const mesh = part.scene.children[index] as Mesh;
+  return mesh.material as MeshBasicNodeMaterial;
+}
+
+const WHITE = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+
+describe('tint materials', () => {
+  it('REQ-CMP-013: one color uniform per tint slot, values from sRGB hex', () => {
+    const uniforms = createTintUniforms({
+      ...INITIAL,
+      primary: '#3a5fcd',
+      skin: '#808080',
+    });
+    expect(Object.keys(uniforms).sort()).toEqual([...TINT_SLOTS].sort());
+    expect(uniforms.primary.value.getHexString()).toBe('3a5fcd');
+    expect(uniforms.skin.value.getHexString()).toBe('808080');
+    expect(new Set(TINT_SLOTS.map(s => uniforms[s])).size).toBe(
+      TINT_SLOTS.length,
+    );
+  });
+
+  it('AC-CMP-013.1: two parts mapped to primary share the uniform; a tint change updates it in place without rebuilding materials', () => {
+    const uniforms = createTintUniforms(INITIAL);
+    const map: PartEntry['tintSlots'] = [
+      {material: 'Cloth', slot: 'primary', mode: 'multiply'},
+    ];
+    const a = syntheticPart(
+      [Object.assign(new MeshStandardMaterial(), {name: 'Cloth'})],
+      false,
+    );
+    const b = syntheticPart(
+      [Object.assign(new MeshStandardMaterial(), {name: 'Cloth'})],
+      false,
+    );
+    applyTintMaterial(a, map, uniforms, undefined);
+    applyTintMaterial(b, map, uniforms, undefined);
+    const ma = material(a);
+    const mb = material(b);
+    expect(nodesOf(ma)).toContain(uniforms.primary);
+    expect(nodesOf(mb)).toContain(uniforms.primary);
+    const versions = [ma.version, mb.version];
+    setTint(uniforms, 'primary', '#3a5fcd');
+    expect(uniforms.primary.value.getHexString()).toBe('3a5fcd');
+    expect(material(a)).toBe(ma);
+    expect(material(b)).toBe(mb);
+    expect([ma.version, mb.version]).toEqual(versions);
+  });
+
+  it('AC-CMP-013.2: a material with no tint mapping references no tint uniform and keeps its color when tints change', () => {
+    const uniforms = createTintUniforms(INITIAL);
+    const source = Object.assign(
+      new MeshStandardMaterial({color: 0x336699, map: WHITE}),
+      {name: 'Unmapped'},
+    );
+    const part = syntheticPart([source], false);
+    applyTintMaterial(
+      part,
+      [{material: 'Cloth', slot: 'primary'}],
+      uniforms,
+      undefined,
+    );
+    const m = material(part);
+    expect(m).toBeInstanceOf(MeshBasicNodeMaterial);
+    expect(m.colorNode).toBeNull();
+    for (const slot of TINT_SLOTS)
+      expect(nodesOf(m)).not.toContain(uniforms[slot]);
+    const before = m.color.getHex();
+    for (const slot of TINT_SLOTS) setTint(uniforms, slot, '#ff0000');
+    expect(m.color.getHex()).toBe(before);
+    expect(m.color.getHex()).toBe(0x336699);
+    expect(m.map).toBe(WHITE);
+  });
+
+  it('AC-CMP-014.1: multiply mode is luminance(texel) x tint (texture and tint in the graph); without a map the color is the tint', () => {
+    const uniforms = createTintUniforms({...INITIAL, primary: '#808080'});
+    const textured = syntheticPart(
+      [Object.assign(new MeshStandardMaterial({map: WHITE}), {name: 'Cloth'})],
+      false,
+    );
+    applyTintMaterial(
+      textured,
+      [{material: 'Cloth', slot: 'primary'}],
+      uniforms,
+      undefined,
+    );
+    const nodes = nodesOf(material(textured));
+    expect(nodes).toContain(uniforms.primary);
+    expect(
+      nodes.some(
+        n =>
+          (n as {isTextureNode?: boolean}).isTextureNode === true &&
+          (n as {value?: unknown}).value === WHITE,
+      ),
+    ).toBe(true);
+
+    const plain = syntheticPart(
+      [
+        Object.assign(new MeshStandardMaterial({color: 0x123456}), {
+          name: 'Cloth',
+        }),
+      ],
+      false,
+    );
+    applyTintMaterial(
+      plain,
+      [{material: 'Cloth', slot: 'primary', mode: 'multiply'}],
+      uniforms,
+      undefined,
+    );
+    expect(material(plain).colorNode).toBe(uniforms.primary);
+  });
+
+  it('AC-CMP-014.2: replace mode colors the material with the flat tint', () => {
+    const uniforms = createTintUniforms({...INITIAL, metal: '#ff0000'});
+    const part = syntheticPart(
+      [Object.assign(new MeshStandardMaterial({map: WHITE}), {name: 'Metal'})],
+      false,
+    );
+    applyTintMaterial(
+      part,
+      [{material: 'Metal', slot: 'metal', mode: 'replace'}],
+      uniforms,
+      undefined,
+    );
+    const m = material(part);
+    expect(m.colorNode).toBe(uniforms.metal);
+    expect(m.userData['tintSlot']).toBe('metal');
+    expect(uniforms.metal.value.getHexString()).toBe('ff0000');
+  });
+
+  it('AC-CMP-011.1: only geometry with regionId gets the region discard, driven by the shared mask uniform', () => {
+    const uniforms = createTintUniforms(INITIAL);
+    const mask = createRegionMask();
+    const bodyPart = syntheticPart(
+      [Object.assign(new MeshStandardMaterial(), {name: 'Body'})],
+      true,
+    );
+    const shirt = syntheticPart(
+      [Object.assign(new MeshStandardMaterial(), {name: 'Cloth'})],
+      false,
+    );
+    applyTintMaterial(
+      bodyPart,
+      [{material: 'Body', slot: 'skin'}],
+      uniforms,
+      mask,
+    );
+    applyTintMaterial(
+      shirt,
+      [{material: 'Cloth', slot: 'primary'}],
+      uniforms,
+      mask,
+    );
+    expect(material(bodyPart).maskNode).not.toBeNull();
+    expect(nodesOf(material(bodyPart))).toContain(mask);
+    expect(material(shirt).maskNode).toBeNull();
+    // AC-CMP-011.2: the mask changes in place; the material is not rebuilt.
+    const m = material(bodyPart);
+    setRegionMask(mask, ['torso', 'upper-arms']);
+    setRegionMask(mask, []);
+    expect(material(bodyPart)).toBe(m);
+  });
+
+  it('REQ-CMP-013: a plain {value} ref is wrapped once and read per render', () => {
+    const ref = {value: new Color('#00ff00')};
+    const uniforms = {...createTintUniforms(INITIAL), hair: ref};
+    const a = syntheticPart(
+      [Object.assign(new MeshStandardMaterial(), {name: 'Hair'})],
+      false,
+    );
+    applyTintMaterial(
+      a,
+      [{material: 'Hair', slot: 'hair'}],
+      uniforms,
+      undefined,
+    );
+    const node = material(a).colorNode as unknown as {
+      value: Color;
+      update: (f: unknown) => void;
+    };
+    node.update({});
+    expect(node.value).toBe(ref.value);
+  });
+
+  it('re-applying disposes the previous materials; linked attached meshes follow; restore brings the originals back', async () => {
+    const part = await loadFixturePart(
+      'pack/parts/fixture-body.glb',
+      fixtureEntry(manifest, 'fixture-body'),
+      rig,
+    );
+    const original = (() => {
+      let found: Material | undefined;
+      part.scene.traverse(o => {
+        if ((o as Mesh).isMesh) found = (o as Mesh).material as Material;
+      });
+      return found;
+    })();
+    const body = createBodySkeleton(rig, 'fixture-a');
+    if (!body.ok) throw new Error(body.error.message);
+    const attached = attachSkinnedPart(part, body.value);
+    if (!attached.ok) throw new Error(attached.error.message);
+    const clone = attached.value.object.children[0] as Mesh;
+    expect(clone.material).toBe(original);
+
+    const uniforms = createTintUniforms(INITIAL);
+    applyTintMaterial(part, part.entry.tintSlots, uniforms, createRegionMask());
+    const first = clone.material as MeshBasicNodeMaterial;
+    expect(first).toBeInstanceOf(MeshBasicNodeMaterial);
+    expect(first.name).toBe('Body');
+    expect(nodesOf(first)).toContain(uniforms.skin);
+    let disposed = 0;
+    first.addEventListener('dispose', () => disposed++);
+    applyTintMaterial(part, part.entry.tintSlots, uniforms, undefined);
+    expect(disposed).toBe(1);
+    expect(clone.material).not.toBe(first);
+    restoreMaterials(part.scene);
+    expect(clone.material).toBe(original);
+    attached.value.dispose();
+  });
+});

@@ -10,6 +10,7 @@ import {dirname, join, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {format, resolveConfig} from 'prettier';
 import {readRigFile, SourceReadError} from './lib/gltf-skeleton.js';
+import {checkDefaultSkeletonGroup} from './lib/check/default-group.js';
 import {
   annotateSkeletonGroups,
   buildReport,
@@ -214,13 +215,12 @@ async function main(): Promise<number> {
     }
     declared.push({id, packId: pack.packId, file: rel, skeleton: d.skeleton});
   }
-  if (
-    declared.find(g => g.id === overlay.defaultSkeletonGroup)?.file !== refRel
-  ) {
-    throw new UsageError(
-      `defaultSkeletonGroup ${safeName(String(overlay.defaultSkeletonGroup))} must use the reference file ${refRel}.`,
-    );
-  }
+  const groupError = checkDefaultSkeletonGroup(
+    overlay.defaultSkeletonGroup,
+    new Map(declared.map(g => [g.id, g.file])),
+    refRel,
+  );
+  if (groupError !== null) throw new UsageError(groupError);
 
   const files = discover(opts, cfg);
   const items: RigReportItem[] = [];

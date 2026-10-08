@@ -1,0 +1,397 @@
+{
+  "format": "sprite-pack-config",
+  "version": 1,
+  "packId": "quaternius-outfits",
+  "name": "Modular Character Outfits - Fantasy (Standard)",
+  "license": {
+    "license": "CC0-1.0",
+    "author": "Quaternius",
+    "sourceUrl": "https://quaternius.itch.io/modular-character-outfits-fantasy",
+    "commercialUse": "yes",
+    "attributionRequired": false
+  },
+  "rig": "quaternius-ue5-65",
+  "parts": [
+    {
+      "id": "male-ranger-torso",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Male_Ranger_Body.gltf"
+      },
+      "name": "Ranger tunic",
+      "slot": "torso",
+      "hides": ["torso", "upper-arms", "pelvis"],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["ranger", "male", "torso", "clothing"]
+    },
+    {
+      "id": "male-ranger-arms",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Male_Ranger_Arms.gltf"
+      },
+      "name": "Ranger sleeves and gloves",
+      "slot": "arms",
+      "hides": ["lower-arms", "hands"],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "primary",
+          "mode": "multiply"
+        },
+        {
+          "material": "MI_Regular_Male",
+          "slot": "skin",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["ranger", "male", "arms", "clothing"]
+    },
+    {
+      "id": "male-ranger-legs",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Male_Ranger_Legs.gltf"
+      },
+      "name": "Ranger trousers",
+      "slot": "legs",
+      "hides": ["upper-legs", "lower-legs"],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["ranger", "male", "legs", "clothing"]
+    },
+    {
+      "id": "male-ranger-boots",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Male_Ranger_Feet_Boots.gltf"
+      },
+      "name": "Ranger boots",
+      "slot": "feet",
+      "hides": ["feet"],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["ranger", "male", "feet", "clothing"]
+    },
+    {
+      "id": "male-peasant-torso",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Male_Peasant_Body.gltf"
+      },
+      "name": "Peasant tunic",
+      "slot": "torso",
+      "hides": ["torso", "upper-arms", "pelvis"],
+      "tintSlots": [
+        {
+          "material": "MI_Peasant",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["peasant", "male", "torso", "clothing"]
+    },
+    {
+      "id": "male-peasant-arms",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Male_Peasant_Arms.gltf"
+      },
+      "name": "Peasant sleeves and gloves",
+      "slot": "arms",
+      "hides": ["lower-arms", "hands"],
+      "tintSlots": [
+        {
+          "material": "MI_Peasant",
+          "slot": "primary",
+          "mode": "multiply"
+        },
+        {
+          "material": "MI_Regular_Male",
+          "slot": "skin",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["peasant", "male", "arms", "clothing"]
+    },
+    {
+      "id": "male-peasant-legs",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Male_Peasant_Legs.gltf"
+      },
+      "name": "Peasant trousers",
+      "slot": "legs",
+      "hides": ["upper-legs", "lower-legs"],
+      "tintSlots": [
+        {
+          "material": "MI_Peasant",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["peasant", "male", "legs", "clothing"]
+    },
+    {
+      "id": "male-peasant-feet",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Male_Peasant_Feet.gltf"
+      },
+      "name": "Peasant shoes",
+      "slot": "feet",
+      "hides": ["feet"],
+      "tintSlots": [
+        {
+          "material": "MI_Peasant",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["peasant", "male", "feet", "clothing"]
+    },
+    {
+      "id": "male-ranger-hood",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Male_Ranger_Head_Hood.gltf"
+      },
+      "name": "Ranger hood",
+      "slot": "headwear",
+      "hides": ["hair"],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["ranger", "male", "headwear", "hood"]
+    },
+    {
+      "id": "male-ranger-pauldron",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Male_Ranger_Acc_Pauldron.gltf"
+      },
+      "name": "Ranger pauldron",
+      "slot": "accessory",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "leather",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["ranger", "male", "accessory", "armor"]
+    },
+    {
+      "id": "female-ranger-torso",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Female_Ranger_Body.gltf"
+      },
+      "name": "Ranger top",
+      "slot": "torso",
+      "hides": ["torso", "upper-arms", "pelvis"],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["ranger", "female", "torso", "clothing"]
+    },
+    {
+      "id": "female-ranger-arms",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Female_Ranger_Arms.gltf"
+      },
+      "name": "Ranger sleeves and gloves",
+      "slot": "arms",
+      "hides": ["lower-arms", "hands"],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "primary",
+          "mode": "multiply"
+        },
+        {
+          "material": "MI_Regular_Female",
+          "slot": "skin",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["ranger", "female", "arms", "clothing"]
+    },
+    {
+      "id": "female-ranger-legs",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Female_Ranger_Legs.gltf"
+      },
+      "name": "Ranger trousers",
+      "slot": "legs",
+      "hides": ["upper-legs", "lower-legs"],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["ranger", "female", "legs", "clothing"]
+    },
+    {
+      "id": "female-ranger-boots",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Female_Ranger_Feet.gltf"
+      },
+      "name": "Ranger boots",
+      "slot": "feet",
+      "hides": ["feet"],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["ranger", "female", "feet", "clothing"]
+    },
+    {
+      "id": "female-peasant-torso",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Female_Peasant_Body.gltf"
+      },
+      "name": "Peasant top",
+      "slot": "torso",
+      "hides": ["torso", "upper-arms", "pelvis"],
+      "tintSlots": [
+        {
+          "material": "MI_Peasant",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["peasant", "female", "torso", "clothing"]
+    },
+    {
+      "id": "female-peasant-arms",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Female_Peasant_Arms.gltf"
+      },
+      "name": "Peasant sleeves and gloves",
+      "slot": "arms",
+      "hides": ["lower-arms", "hands"],
+      "tintSlots": [
+        {
+          "material": "MI_Peasant",
+          "slot": "primary",
+          "mode": "multiply"
+        },
+        {
+          "material": "MI_Regular_Female",
+          "slot": "skin",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["peasant", "female", "arms", "clothing"]
+    },
+    {
+      "id": "female-peasant-legs",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Female_Peasant_Legs.gltf"
+      },
+      "name": "Peasant trousers",
+      "slot": "legs",
+      "hides": ["upper-legs", "lower-legs"],
+      "tintSlots": [
+        {
+          "material": "MI_Peasant",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["peasant", "female", "legs", "clothing"]
+    },
+    {
+      "id": "female-peasant-feet",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Female_Peasant_Feet.gltf"
+      },
+      "name": "Peasant shoes",
+      "slot": "feet",
+      "hides": ["feet"],
+      "tintSlots": [
+        {
+          "material": "MI_Peasant",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["peasant", "female", "feet", "clothing"]
+    },
+    {
+      "id": "female-ranger-hood",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Female_Ranger_Head_Hood.gltf"
+      },
+      "name": "Ranger hood",
+      "slot": "headwear",
+      "hides": ["hair"],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "primary",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["ranger", "female", "headwear", "hood"]
+    },
+    {
+      "id": "female-ranger-pauldrons",
+      "match": {
+        "file": "Exports/glTF (Godot-Unreal)/Modular Parts/Female_Ranger_Acc_Pauldrons.gltf"
+      },
+      "name": "Ranger pauldrons",
+      "slot": "accessory",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Ranger",
+          "slot": "leather",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["ranger", "female", "accessory", "armor"]
+    }
+  ],
+  "clips": []
+}

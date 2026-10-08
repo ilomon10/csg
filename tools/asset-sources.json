@@ -25,7 +25,8 @@
           "Hairstyles/Rigged to Head Bone"
         ],
         "exclude": []
-      }
+      },
+      "treeSha256": "362d000f8fc34ffc0b35b1ab93bd33468cc7f52b0724af2d7e41570cc14ede39"
     },
     {
       "packId": "quaternius-outfits",
@@ -41,7 +42,8 @@
       "verifyRig": {
         "include": ["Exports/glTF (Godot-Unreal)"],
         "exclude": []
-      }
+      },
+      "treeSha256": "24273edd6cc6e2dc4b8c09629a5f94fef9dc64e0f67ff93adae9f06a0b3a432b"
     },
     {
       "packId": "quaternius-ual",
@@ -57,7 +59,8 @@
       "verifyRig": {
         "include": ["Unreal-Godot"],
         "exclude": []
-      }
+      },
+      "treeSha256": "cf66cf3aac5aa6302b65c492da7b0b08814c77a1ffd66bd132ebb3c60797a6b9"
     }
   ]
 }

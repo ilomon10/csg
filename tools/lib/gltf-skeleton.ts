@@ -6,7 +6,7 @@
  */
 import {readFile, stat} from 'node:fs/promises';
 import {dirname, resolve, sep} from 'node:path';
-import {NodeIO} from '@gltf-transform/core';
+import {Logger, NodeIO} from '@gltf-transform/core';
 import type {Document} from '@gltf-transform/core';
 import type {Node as GltfNode} from '@gltf-transform/core';
 import {compose} from './mat4.js';
@@ -46,12 +46,40 @@ function decodeDataUri(uri: string): Uint8Array<ArrayBuffer> {
     : new Uint8Array(Buffer.from(decodeURIComponent(body)));
 }
 
+async function readLocalResource(
+  baseDir: string,
+  uri: string,
+  what: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(uri)) {
+    throw new SourceReadError(
+      'AST_SOURCE_FORMAT',
+      `Remote ${what.toLowerCase()} URI refused: ${uri.slice(0, 40)}`,
+    );
+  }
+  const target = resolve(baseDir, decodeURIComponent(uri));
+  if (!target.startsWith(baseDir + sep)) {
+    throw new SourceReadError(
+      'AST_SOURCE_FORMAT',
+      `${what} URI escapes the source folder.`,
+    );
+  }
+  return new Uint8Array(await readFile(target));
+}
+
 /**
  * Loads a `.gltf` or `.glb` file into a gltf-transform document. External
  * images are replaced by empty stubs (never read); external buffers must live
  * inside the file's folder.
  */
-export async function loadGltfDocument(absPath: string): Promise<Document> {
+export async function loadGltfDocument(
+  absPath: string,
+  opts: {
+    readImages?: boolean;
+    /** Called with the URI of each referenced image file that does not exist. */
+    onMissingImage?: (uri: string) => void;
+  } = {},
+): Promise<Document> {
   const info = await stat(absPath);
   if (info.size > MAX_SOURCE_BYTES) {
     throw new SourceReadError(
@@ -60,7 +88,7 @@ export async function loadGltfDocument(absPath: string): Promise<Document> {
     );
   }
   const bytes = new Uint8Array(await readFile(absPath));
-  const io = new NodeIO();
+  const io = new NodeIO().setLogger(new Logger(Logger.Verbosity.ERROR));
   if (absPath.toLowerCase().endsWith('.glb')) {
     const magic = Buffer.from(bytes.subarray(0, 4)).toString('latin1');
     if (magic !== 'glTF') {
@@ -113,11 +141,26 @@ export async function loadGltfDocument(absPath: string): Promise<Document> {
     resources[uri] = new Uint8Array(await readFile(target));
   }
   for (const img of json.images ?? []) {
-    if (img.uri && !img.uri.startsWith('data:'))
-      resources[img.uri] = new Uint8Array(0);
-    else if (img.uri) resources[img.uri] = decodeDataUri(img.uri);
+    if (img.uri && !img.uri.startsWith('data:')) {
+      try {
+        resources[img.uri] = opts.readImages
+          ? await readLocalResource(baseDir, img.uri, 'Image')
+          : new Uint8Array(0);
+      } catch (e) {
+        if ((e as {code?: string}).code !== 'ENOENT') throw e;
+        opts.onMissingImage?.(img.uri);
+        resources[img.uri] = new Uint8Array(0);
+      }
+    } else if (img.uri) resources[img.uri] = decodeDataUri(img.uri);
   }
-  return io.readJSON({json: json as never, resources});
+  const doc = await io.readJSON({json: json as never, resources});
+  if (opts.readImages) {
+    // Drop textures whose image file is absent from the vendor pack (empty stub).
+    for (const tex of doc.getRoot().listTextures()) {
+      if ((tex.getImage()?.byteLength ?? 0) === 0) tex.dispose();
+    }
+  }
+  return doc;
 }
 
 function nodeMatrix(n: GltfNode): number[] {

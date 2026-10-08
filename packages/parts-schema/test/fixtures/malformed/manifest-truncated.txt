@@ -1,0 +1,8 @@
+{
+  "format": "sprite-parts-manifest",
+  "version": 1,
+  "packId": "fixture-pack",
+  "name": "Fixture pack",
+  "license": {
+    "license": "CC0-1.0",
+    "author": "character-sprite-generator contribu

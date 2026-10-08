@@ -1,7 +1,5 @@
 # Rig verification report
 
-Run date: 2026-10-08
-
 - Canonical rig: `quaternius-ue5-65`
 - Reference: `Universal Base Characters[Standard]/Base Characters/Godot - UE/Superhero_Male_FullBody.gltf`
 - Outcome: **mapped**
