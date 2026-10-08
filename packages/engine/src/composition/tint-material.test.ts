@@ -6,10 +6,13 @@ import {
   MeshStandardMaterial,
   BoxGeometry,
   BufferAttribute,
+  LinearMipmapLinearFilter,
+  LinearMipmapNearestFilter,
+  NearestFilter,
 } from 'three';
 import type {Material} from 'three';
 import {MeshBasicNodeMaterial} from 'three/webgpu';
-import {TINT_SLOTS} from '@csg/parts-schema';
+import {TINT_SLOTS, defaultRenderSettings} from '@csg/parts-schema';
 import type {HexColor, PartEntry, TintSlot} from '@csg/parts-schema';
 import {describe, expect, it} from 'vitest';
 import type {LoadedPartInternal} from '../contracts/registry';
@@ -26,12 +29,16 @@ import {
   loadFixturePart,
   loadFixtureRig,
 } from './test-fixtures';
+import {SettingsBinder} from '../pipeline/settings-binder';
+import {TOON_MATERIAL_USER_DATA} from '../pipeline/toon-material';
 import {
   applyTintMaterial,
   createTintUniforms,
+  ensureMipmapped,
   restoreMaterials,
   setTint,
 } from './tint-material';
+import type {TintMaterialOptions} from './tint-material';
 
 const rig = loadFixtureRig();
 const manifest = loadFixtureManifest();
@@ -298,5 +305,158 @@ describe('tint materials', () => {
     restoreMaterials(part.scene);
     expect(clone.material).toBe(original);
     attached.value.dispose();
+  });
+
+  describe('toon path (spec 003 pixel pipeline)', () => {
+    function options(binder = new SettingsBinder(defaultRenderSettings())) {
+      return {
+        binder,
+        opts: {
+          binder,
+          backend: 'webgl2',
+          mode: 'export',
+        } as TintMaterialOptions,
+      };
+    }
+
+    it('AC-CMP-013.1/014.1: tinted toon materials keep the M1 tint (shared slot uniform, texture in multiply) and are lit by the binder', () => {
+      const {binder, opts} = options();
+      const uniforms = createTintUniforms(INITIAL);
+      const part = syntheticPart(
+        [
+          Object.assign(new MeshStandardMaterial({map: WHITE}), {
+            name: 'Cloth',
+          }),
+        ],
+        false,
+      );
+      applyTintMaterial(
+        part,
+        [{material: 'Cloth', slot: 'primary'}],
+        uniforms,
+        undefined,
+        opts,
+      );
+      const m = material(part);
+      expect(m.userData[TOON_MATERIAL_USER_DATA]).toBe('toon');
+      expect(m.userData['tintSlot']).toBe('primary');
+      const nodes = nodesOf(m);
+      expect(nodes).toContain(uniforms.primary);
+      expect(nodes).toContain(binder.lightDir);
+      expect(nodes).toContain(binder.uniformNode('alpha.cutoff'));
+      expect(
+        nodes.some(
+          n =>
+            (n as {isTextureNode?: boolean}).isTextureNode === true &&
+            (n as {value?: unknown}).value === WHITE,
+        ),
+      ).toBe(true);
+      const version = m.version;
+      setTint(uniforms, 'primary', '#3a5fcd');
+      expect(m.version).toBe(version);
+    });
+
+    it('AC-CMP-013.2: an unmapped toon material references no tint uniform', () => {
+      const {opts} = options();
+      const uniforms = createTintUniforms(INITIAL);
+      const part = syntheticPart(
+        [
+          Object.assign(new MeshStandardMaterial({color: 0x336699}), {
+            name: 'X',
+          }),
+        ],
+        false,
+      );
+      applyTintMaterial(
+        part,
+        [{material: 'Cloth', slot: 'primary'}],
+        uniforms,
+        undefined,
+        opts,
+      );
+      for (const slot of TINT_SLOTS) {
+        expect(nodesOf(material(part))).not.toContain(uniforms[slot]);
+      }
+    });
+
+    it('AC-CMP-011.1 (unit): body toon materials combine the region mask with the alpha cutoff discard; non-body meshes get only the cutoff', () => {
+      const {binder, opts} = options();
+      const uniforms = createTintUniforms(INITIAL);
+      const mask = createRegionMask();
+      const body = syntheticPart(
+        [Object.assign(new MeshStandardMaterial(), {name: 'Body'})],
+        true,
+      );
+      const shirt = syntheticPart(
+        [Object.assign(new MeshStandardMaterial(), {name: 'Cloth'})],
+        false,
+      );
+      applyTintMaterial(
+        body,
+        [{material: 'Body', slot: 'skin'}],
+        uniforms,
+        mask,
+        opts,
+      );
+      applyTintMaterial(
+        shirt,
+        [{material: 'Cloth', slot: 'primary'}],
+        uniforms,
+        mask,
+        opts,
+      );
+      const bodyMask = nodesOf(material(body));
+      expect(bodyMask).toContain(mask);
+      expect(bodyMask).toContain(binder.uniformNode('alpha.cutoff'));
+      const shirtNodes = nodesOf(material(shirt));
+      expect(shirtNodes).not.toContain(mask);
+      expect(shirtNodes).toContain(binder.uniformNode('alpha.cutoff'));
+    });
+
+    it('AC-PIX-038.1 (unit): part textures get mipmaps; a NEAREST sampler becomes LINEAR_MIPMAP_LINEAR, a mipmapped one is kept', () => {
+      const nearest = new DataTexture(new Uint8Array(4), 1, 1);
+      nearest.minFilter = NearestFilter;
+      nearest.magFilter = NearestFilter;
+      nearest.generateMipmaps = false;
+      const {opts} = options();
+      const part = syntheticPart(
+        [
+          Object.assign(new MeshStandardMaterial({map: nearest}), {
+            name: 'Cloth',
+          }),
+        ],
+        false,
+      );
+      applyTintMaterial(
+        part,
+        [{material: 'Cloth', slot: 'primary'}],
+        createTintUniforms(INITIAL),
+        undefined,
+        opts,
+      );
+      expect(nearest.minFilter).toBe(LinearMipmapLinearFilter);
+      expect(nearest.generateMipmaps).toBe(true);
+      const kept = new DataTexture(new Uint8Array(4), 1, 1);
+      kept.minFilter = LinearMipmapNearestFilter;
+      kept.generateMipmaps = true;
+      expect(ensureMipmapped(kept)).toBe(false);
+      expect(kept.minFilter).toBe(LinearMipmapNearestFilter);
+    });
+
+    it('re-applying the toon path disposes the previous toon materials', () => {
+      const {opts} = options();
+      const uniforms = createTintUniforms(INITIAL);
+      const part = syntheticPart(
+        [Object.assign(new MeshStandardMaterial(), {name: 'Cloth'})],
+        false,
+      );
+      applyTintMaterial(part, [], uniforms, undefined, opts);
+      let disposed = 0;
+      material(part).addEventListener('dispose', () => disposed++);
+      applyTintMaterial(part, [], uniforms, undefined, opts);
+      expect(disposed).toBe(1);
+      restoreMaterials(part.scene);
+      expect(material(part)).toBeInstanceOf(MeshStandardMaterial);
+    });
   });
 });

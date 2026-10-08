@@ -67,3 +67,34 @@ jobs:
         with:
           name: playwright-report
           path: apps/web/playwright-report
+
+  # Canonical GPU tests (REQ-PIX-028): software rasterizer inside the pinned Playwright image, both
+  # backends. CSG_GOLDEN_ENV=canonical makes the harness FAIL (never skip) on a wrong backend/adapter.
+  # Keep the image in sync with scripts/golden-env/run.sh and the exact @playwright/test version.
+  gpu-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
+      options: --ipc=host
+    env:
+      CSG_GOLDEN_ENV: canonical
+      CSG_GOLDEN_IMAGE: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+      HOME: /root
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      # The image ships node 24 and corepack but not pnpm; the version comes from package.json.
+      - run: corepack enable && pnpm --version
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:gpu
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: gpu-test-results
+          path: |
+            test-results/goldens/**
+            test-results/perf/**
+          if-no-files-found: ignore
