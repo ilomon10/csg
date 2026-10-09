@@ -12,7 +12,10 @@
  *
  * The scene pass writes three MRT attachments ({@link createSceneMrt}):
  * `output` (linear RGB, A = coverage), `normalDepth` (view normal, depth in
- * output pixels from the pivot plane) and `partId` (`Object3D.userData.partId`).
+ * output pixels from the pivot plane) and `partId` (R = `Object3D.userData.partId`,
+ * G = band brightness `light_k` of REQ-PIX-011 for the post builtin
+ * `scene.light`: toon materials write their band, every other material 1;
+ * background 0. FX-J, spec 003 "Band brightness to the post stages").
  */
 import {FrontSide} from 'three';
 import type {Side} from 'three';
@@ -92,8 +95,9 @@ export function setSceneDepth(
 /**
  * The per-fragment nodes of the scene MRT (m2-plan 2.3): `output` is the
  * material output; `normalDepth` = `vec4(normalView, depthPx)`; `partId` =
- * `vec4(userData.partId, 0, 0, 1)`. Evaluated in each object's material
- * context, after the material's discards.
+ * {@link partIdMrtNode} with `light_k = 1` (materials that write no band;
+ * toon materials override it with their band through `material.mrtNode`).
+ * Evaluated in each object's material context, after the material's discards.
  *
  * @param depth - Depth uniforms.
  * @returns One node per {@link SCENE_MRT_KEYS} entry, except `output`.
@@ -102,14 +106,24 @@ export function sceneMrtNodes(
   depth: SceneDepthUniforms,
 ): Record<Exclude<SceneMrtKey, 'output'>, TslNode> {
   const depthPx = depth.pivotDistance.add(positionView.z).mul(depth.pxPerWorld);
+  return {
+    normalDepth: vec4(normalView, depthPx),
+    partId: partIdMrtNode(float(1)),
+  };
+}
+
+/**
+ * The `partId` attachment value: `vec4(userData.partId, light, 0, 1)`.
+ *
+ * @param light - Band brightness `light_k` (0..1) for `scene.light`.
+ * @returns The vec4 node.
+ */
+export function partIdMrtNode(light: TslNode): TslNode {
   const partId = userData(
     PART_ID_USER_DATA,
     'float',
   ) as unknown as Node<'float'>;
-  return {
-    normalDepth: vec4(normalView, depthPx),
-    partId: vec4(partId, float(0), float(0), float(1)),
-  };
+  return vec4(partId, light as Node<'float'>, float(0), float(1));
 }
 
 /**
@@ -184,10 +198,9 @@ export function createToonMaterial(
     side = FrontSide,
   } = options;
   const base = vec4(options.base as Node<'vec4'>);
+  const shade = lighting === 'toon' ? toonShade(ctx, base) : undefined;
   const rgb =
-    lighting === 'toon'
-      ? (toonShade(ctx, base) as Node<'vec3'>)
-      : vec3(base.rgb);
+    shade === undefined ? vec3(base.rgb) : (shade.color as Node<'vec3'>);
 
   const material = new MeshBasicNodeMaterial();
   material.name = name;
@@ -205,6 +218,11 @@ export function createToonMaterial(
   material.depthTest = true;
   material.toneMapped = false;
   material.fog = false;
+  // Band brightness for the post rim (`scene.light`, FX-J): merged over the
+  // pass MRT's `partId` output, which writes 1 for every other material.
+  if (shade !== undefined) {
+    material.mrtNode = mrt({partId: partIdMrtNode(shade.light)});
+  }
   material.userData[TOON_MATERIAL_USER_DATA] = lighting;
   return material;
 }

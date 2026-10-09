@@ -60,10 +60,16 @@ export function computeFraming(
     const availRight = Math.max(rightPx - margin, 1);
     const availLeft = Math.max(leftPx - margin, 1);
     const availUp = Math.max(upPx - margin, 1);
+    // Below the pivot, only when the pivot row leaves room past the margin; with
+    // no such room the below-pivot geometry clips (REQ-PIX-009) instead of
+    // blowing the scale up.
+    const availDown = downPx - margin;
     let s = 0;
     for (const {box} of boxes) {
       s = Math.max(s, box.maxX / availRight, -box.minX / availLeft);
       s = Math.max(s, box.maxY / availUp);
+      if (box.minY < 0 && availDown >= 1)
+        s = Math.max(s, -box.minY / availDown);
     }
     // Empty or degenerate bounds: fall back to 1 world unit per pixel.
     worldPerPx = s > 0 ? s : 1;

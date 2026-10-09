@@ -6,7 +6,7 @@
  */
 import {Group} from 'three';
 import type {UniformNode} from 'three/webgpu';
-import {TINT_SLOTS} from '@csg/parts-schema';
+import {TINT_SLOTS, V1_SLOT_IDS} from '@csg/parts-schema';
 import type {
   AnatomyParams,
   AssetRef,
@@ -37,6 +37,9 @@ import type {
   LoadedClip,
   LoadedPartInternal,
 } from '../contracts/registry';
+import {partIdFor} from '../pipeline/part-ids';
+import type {PartIdRegistry} from '../pipeline/part-ids';
+import {PART_ID_USER_DATA} from '../pipeline/toon-material';
 import {characterSkeletonGroupOf, restPoseOf} from '../registry/rest-pose';
 import {attachSkinnedPart} from './attach-skinned-part';
 import {attachStaticPart} from './attach-static-part';
@@ -49,6 +52,7 @@ import {
   restoreMaterials,
   setTint,
 } from './tint-material';
+import type {TintMaterialOptions} from './tint-material';
 
 /** Name of {@link CharacterAssembly.root}. */
 export const CHARACTER_ROOT_NAME = 'character';
@@ -76,9 +80,16 @@ export interface CharacterAssemblyOptions {
   readonly registry: AssemblyRegistry;
   /**
    * Slot registry, for `defaultSocket` of static parts whose manifest entry and
-   * selection carry no socket (spec 001 SlotDefinition).
+   * selection carry no socket (spec 001 SlotDefinition), and for the slot
+   * order of part IDs (REQ-PIX-014). Default order: {@link V1_SLOT_IDS}.
    */
   readonly slots?: SlotRegistry;
+  /**
+   * Pixel-pipeline materials (spec 003): passed to `applyTintMaterial`, so
+   * every part, static props included, gets toon materials bound to the
+   * renderer's binder. Omitted = the unlit M1 materials.
+   */
+  readonly material?: TintMaterialOptions;
 }
 
 /** One attached part of the current character. */
@@ -116,9 +127,18 @@ export interface CharacterAssembly {
   /** Attached parts by slot, the body under `body`. */
   readonly parts: ReadonlyMap<SlotId, AssembledPart>;
   /**
+   * Part ID per attached slot (REQ-PIX-014): body = 1, then the slot registry
+   * order ({@link partIdFor}); never load order. Every object of a part's
+   * attachment carries it as `userData.partId` (`PART_ID_USER_DATA`).
+   */
+  readonly partIds: ReadonlyMap<SlotId, number>;
+  /** Duration in seconds of the clip the player holds, or `null` without a clip. */
+  readonly clipDurationSec: number | null;
+  /**
    * Event log for tests and diagnostics: `body:rebuild:<group>`,
    * `clip-cache:invalidate:<group>`, `part:attach:<slot>`,
-   * `part:detach:<slot>`, `tint:<slot>`, `clip:<ref>`.
+   * `part:detach:<slot>`, `tint:<slot>`, `clip:<ref>`,
+   * `materials:<unlit|toon>`.
    */
   readonly log: readonly string[];
   /**
@@ -155,6 +175,14 @@ export interface CharacterAssembly {
   ): Promise<Result<void, EngineError>>;
   /** Poses the character at an absolute time ({@link evaluatePose}); no-op without a body. */
   evaluate(timeSec: number): void;
+  /**
+   * Switches every tinted part between the M1 unlit materials (`undefined`)
+   * and the pixel-pipeline toon materials (spec 003); attached clones follow
+   * through `linkMaterial`. Parts attached later use the same options.
+   *
+   * @param options Toon binding, or `undefined` for unlit materials.
+   */
+  setMaterialOptions(options: TintMaterialOptions | undefined): void;
   /** Detaches everything and restores the materials this assembly tinted. */
   dispose(): void;
 }
@@ -188,6 +216,38 @@ function disposedFailure(call: string): {ok: false; error: EngineError} {
 
 function sameSocket(a: PartSocket | undefined, b: PartSocket | undefined) {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Default slot order of part IDs: the v1 slots in display order. */
+const DEFAULT_PART_ID_REGISTRY: PartIdRegistry = {
+  slots: V1_SLOT_IDS.map((id, order) => ({id, order})),
+};
+
+/**
+ * Part IDs of `slots` (REQ-PIX-014): registry order through {@link partIdFor};
+ * slots the registry does not know (custom data) follow after every known
+ * slot, sorted by id. A function of the slot set only, never of load order.
+ */
+function partIdsOf(
+  slots: readonly SlotId[],
+  registry: PartIdRegistry,
+): Map<SlotId, number> {
+  const known = new Set(registry.slots.map(s => s.id));
+  const unknown = slots.filter(s => !known.has(s)).sort();
+  let maxOrder = -1;
+  for (const s of registry.slots) maxOrder = Math.max(maxOrder, s.order);
+  const extended: PartIdRegistry =
+    unknown.length === 0
+      ? registry
+      : {
+          slots: [
+            ...registry.slots,
+            ...unknown.map((id, i) => ({id, order: maxOrder + 1 + i})),
+          ],
+        };
+  const out = new Map<SlotId, number>();
+  for (const slot of slots) out.set(slot, partIdFor(slot, extended));
+  return out;
 }
 
 /** Slot keys of a spec's non-body parts, sorted (deterministic order). */
@@ -225,6 +285,9 @@ export function createCharacterAssembly(
   const regionMask = createRegionMask(0);
   const log: string[] = [];
   const parts = new Map<SlotId, AssembledPart>();
+  const partIds = new Map<SlotId, number>();
+  const idRegistry: PartIdRegistry = options.slots ?? DEFAULT_PART_ID_REGISTRY;
+  let materialOptions = options.material;
   /** Part scenes tinted by this assembly, with their attachment count. */
   const tinted = new Map<object, {part: LoadedPartInternal; count: number}>();
   let pose: PoseState | null = null;
@@ -245,7 +308,13 @@ export function createCharacterAssembly(
       known.count++;
       return;
     }
-    applyTintMaterial(part, part.entry.tintSlots, tints, regionMask);
+    applyTintMaterial(
+      part,
+      part.entry.tintSlots,
+      tints,
+      regionMask,
+      materialOptions,
+    );
     tinted.set(part.scene, {part, count: 1});
   };
 
@@ -317,6 +386,17 @@ export function createCharacterAssembly(
       if (assembled.part.entry.kind === 'static') {
         state.props.push(assembled.attached);
       }
+    }
+  };
+
+  /** Writes `userData.partId` on every object of every attachment (REQ-PIX-014). */
+  const assignPartIds = (): void => {
+    partIds.clear();
+    for (const [slot, id] of partIdsOf([...parts.keys()], idRegistry)) {
+      partIds.set(slot, id);
+      parts.get(slot)?.attached.object.traverse(o => {
+        o.userData[PART_ID_USER_DATA] = id;
+      });
     }
   };
 
@@ -512,7 +592,11 @@ export function createCharacterAssembly(
     tints,
     regionMask,
     parts,
+    partIds,
     log,
+    get clipDurationSec() {
+      return clip?.loaded.durationSec ?? null;
+    },
 
     setCharacter(next) {
       return serialize(async () => {
@@ -526,6 +610,7 @@ export function createCharacterAssembly(
             ? await rebuild(next)
             : await update(pose, spec, next);
         if (!result.ok) return result;
+        assignPartIds();
         applyLooks(next);
         spec = next;
         return result;
@@ -574,11 +659,27 @@ export function createCharacterAssembly(
       if (pose !== null) evaluatePose(pose as PoseContext, timeSec);
     },
 
+    setMaterialOptions(next) {
+      if (disposed) return;
+      materialOptions = next;
+      for (const {part} of tinted.values()) {
+        applyTintMaterial(
+          part,
+          part.entry.tintSlots,
+          tints,
+          regionMask,
+          materialOptions,
+        );
+      }
+      log.push(`materials:${next === undefined ? 'unlit' : 'toon'}`);
+    },
+
     dispose() {
       if (disposed) return;
       disposed = true;
       for (const assembled of parts.values()) detach(assembled);
       parts.clear();
+      partIds.clear();
       if (pose !== null) {
         pose.body.root.removeFromParent();
         pose.body.skeleton.dispose();

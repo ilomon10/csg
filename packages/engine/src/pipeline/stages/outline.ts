@@ -44,8 +44,18 @@ export type OutlineMode = (typeof OUTLINE_MODES)[number];
 
 /** Fields of {@link outline}. */
 export interface OutlineFields {
-  /** Colour mode (compile-time). An unknown value falls back to `black` (REQ-SGF-042). */
+  /**
+   * Colour mode (compile-time) of the outer outline, and of inner lines when
+   * {@link OutlineFields.innerMode} is omitted. An unknown value falls back to
+   * `black` (REQ-SGF-042).
+   */
   readonly mode: OutlineMode;
+  /**
+   * Colour mode of inner lines (FX-J PM decision: `outline.inner.colorMode`,
+   * default `darken`, while the outer outline defaults to `black`). Omitted:
+   * same as `mode` (the single-mode catalog node of spec 006).
+   */
+  readonly innerMode?: OutlineMode;
 }
 
 /**
@@ -82,34 +92,51 @@ export const outline: StageEmitter<
     float(1),
     float(0),
   );
-  let rgb: Node<'vec3'>;
-  switch (fields.mode) {
-    case 'darken':
-      rgb = (inputs.source as Node<'vec4'>).rgb.mul(
-        float(1).sub(inputs.darkenAmount as Node<'float'>),
-      );
-      break;
-    case 'custom':
-      rgb = vec3(inputs.customColor as Node<'vec3'>);
-      break;
-    default:
-      rgb = (inputs.black as Node<'vec4'>).rgb;
-  }
+  const lineColor = (mode: OutlineMode): Node<'vec3'> => {
+    switch (mode) {
+      case 'darken':
+        return (inputs.source as Node<'vec4'>).rgb.mul(
+          float(1).sub(inputs.darkenAmount as Node<'float'>),
+        );
+      case 'custom':
+        return vec3(inputs.customColor as Node<'vec3'>);
+      default:
+        return (inputs.black as Node<'vec4'>).rgb;
+    }
+  };
+  const outerRgb = lineColor(fields.mode);
+  const innerMode = fields.innerMode ?? fields.mode;
+  // Outer pixels are uncovered and inner pixels covered, so at most one is set;
+  // the outer colour wins if both ever were.
+  const isOuter = select(
+    (inputs.outer as Node<'float'>).greaterThan(0.5),
+    float(1),
+    float(0),
+  );
+  const rgb: Node<'vec3'> =
+    innerMode === fields.mode
+      ? outerRgb
+      : (pick(
+          vec4(lineColor(innerMode), float(1)),
+          vec4(outerRgb, float(1)),
+          isOuter,
+        ).rgb as Node<'vec3'>);
   // Branch-free blend with an exact 0/1 weight (`pick` in edge-detect.ts).
   return {color: pick(color, vec4(rgb, float(1)), line)};
 };
 
 /**
- * `mode` field of the built-in post pipeline (spec 007 reserved field
- * `outline.colorMode`).
+ * Fields of the built-in post pipeline: `mode` from `outline.colorMode`
+ * (outer outline, spec 007 reserved field) and `innerMode` from
+ * `outline.inner.colorMode` (FX-J).
  *
  * @param o - `RenderSettings.outline`.
- * @returns The `mode` field.
+ * @returns The fields.
  */
 export function outlineFieldsFromSettings(
   o: RenderSettings['outline'],
 ): OutlineFields {
-  return {mode: o.colorMode};
+  return {mode: o.colorMode, innerMode: o.inner.colorMode};
 }
 
 /**

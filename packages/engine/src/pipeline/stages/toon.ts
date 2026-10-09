@@ -181,7 +181,7 @@ export function defaultToonRampInputs(
 }
 
 /**
- * Default inputs of {@link toonRim} in `builtin:material-toon`: `normal`,
+ * Default inputs of {@link toonRim} for a material graph (catalog defaults): `normal`,
  * `viewDir`, `light.dir`, and the reserved uniforms `rim.width` and
  * `rim.strength`. The `rim.enabled` gate is applied by the caller
  * ({@link toonRimEnabled}).
@@ -202,8 +202,9 @@ export function defaultToonRimInputs(
 }
 
 /**
- * The `rim.enabled` gate (spec 007: `math.select@1` on `toon.rim@1.rim` in
- * M4): the bool uniform as a node.
+ * The `rim.enabled` gate for a material graph using `toon.rim@1` (spec 007:
+ * `math.select@1` on `toon.rim@1.rim` in M4): the bool uniform as a node. The
+ * built-in pipeline gates its post rim stage with the same uniform.
  *
  * @param ctx - A material compile context.
  * @returns Bool node.
@@ -213,22 +214,24 @@ export function toonRimEnabled(ctx: CompileContext): TslNode {
 }
 
 /**
- * `builtin:material-toon` color in M2 (REQ-PIX-011..013): ramp, gated rim,
- * combine. Uniform values change without a recompile (REQ-PIX-034).
+ * `builtin:material-toon` color (REQ-PIX-011, REQ-PIX-013): the toon ramp
+ * only. The rim is no longer a material term: since FX-J (user D2) it is the
+ * screen-space post stage `rimLight` (`./rim`, REQ-PIX-012 as amended), so
+ * `rim.*` uniforms do not affect the material. {@link toonRim} and
+ * {@link toonCombine} stay available for user material graphs (spec 006
+ * catalog `toon.rim@1`). Uniform values change without a recompile
+ * (REQ-PIX-034).
  *
  * @param ctx - A material compile context.
  * @param base - Linear base color (vec3 or vec4; alpha ignored).
- * @returns Linear lit color (vec3).
+ * @returns Linear lit `color` (vec3) and the band brightness `light`
+ *   (`light_k`, written to the scene MRT for `scene.light`).
  */
-export function toonShade(ctx: CompileContext, base: TslNode): TslNode {
-  const ramp = toonRamp(ctx, defaultToonRampInputs(ctx, base), {});
-  const rim = toonRim(ctx, defaultToonRimInputs(ctx), {});
-  const gated = select(
-    toonRimEnabled(ctx) as Node<'bool'>,
-    rim.rim as Node<'float'>,
-    float(0),
-  );
-  return toonCombine(ctx, {color: ramp.color, rim: gated}, {}).color;
+export function toonShade(
+  ctx: CompileContext,
+  base: TslNode,
+): Record<ToonRampOutput, TslNode> {
+  return toonRamp(ctx, defaultToonRampInputs(ctx, base), {});
 }
 
 // ---------------------------------------------------------------------------

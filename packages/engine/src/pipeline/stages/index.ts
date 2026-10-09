@@ -7,11 +7,13 @@ import type {PostStageId} from '../../contracts/pipeline';
 
 /**
  * Post stages of the default post pipeline in their fixed order
- * (REQ-PIX-025, AC-PIX-025.1): coverage (alpha cutoff) → outer and inner
- * outline → sRGB conversion → dither → palette lookup → final alpha.
+ * (REQ-PIX-025, AC-PIX-025.1): coverage (alpha cutoff) → screen-space rim
+ * edge (REQ-PIX-012 as amended by FX-J) → outer and inner outline → sRGB
+ * conversion → dither → palette lookup → final alpha.
  */
 export const DEFAULT_POST_STAGES = [
   'coverage',
+  'rim',
   'outline',
   'srgb',
   'dither',
@@ -27,6 +29,7 @@ export const POST_STAGE_NODE_TYPES: Readonly<
   Record<PostStageId, readonly string[]>
 > = {
   coverage: ['post.alphaCutoff@1'],
+  rim: ['post.rimEdge@1'],
   outline: ['post.edgeDetect@1', 'post.outline@1'],
   srgb: ['color.linearToSrgb@1'],
   dither: ['post.bayerDither@1'],
@@ -39,6 +42,8 @@ export * from './toon';
 
 // Coverage and outline (M2-12).
 export * from './coverage';
+// Screen-space rim (FX-J).
+export * from './rim';
 export * from './edge-detect';
 export * from './outline';
 

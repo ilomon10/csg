@@ -33,12 +33,7 @@ import {
   SettingsBinder,
   lightDirection,
 } from '../../src/pipeline/settings-binder';
-import {
-  toonBandIndex,
-  toonBandLight,
-  toonColor,
-  toonRimValue,
-} from '../../src/pipeline/stages/toon';
+import {toonBandIndex, toonBandLight} from '../../src/pipeline/stages/toon';
 import {
   PART_ID_USER_DATA,
   createSceneDepthUniforms,
@@ -222,7 +217,7 @@ function settings(patch: {
     },
     toon: {
       bands: patch.bands ?? 3,
-      rim: patch.rim ?? {enabled: false, strength: 0.5, width: 0.2},
+      rim: patch.rim ?? {enabled: false, strength: 0.5},
     },
     palette: {...s.palette, id: 'none'},
     alphaCutoff: patch.alphaCutoff ?? 0.5,
@@ -281,6 +276,60 @@ function centroid(pixels: readonly number[]): [number, number] {
   return [sx / pixels.length, sy / pixels.length];
 }
 
+/** Authored sRGB texel used by the multiply tests (not gray, so luminance would differ). */
+const TEXEL: readonly [number, number, number] = [255, 128, 64];
+
+/** A 4×4 sRGB texture of one colour (mipmaps added by ensureMipmapped). */
+function solidTexture(
+  rgb: readonly [number, number, number],
+): THREE.DataTexture {
+  const data = new Uint8Array(4 * 4 * 4);
+  for (let i = 0; i < 16; i++) data.set([rgb[0], rgb[1], rgb[2], 255], i * 4);
+  const t = new THREE.DataTexture(data, 4, 4);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
+  return t;
+}
+
+const srgbToLinear = (v: number) => {
+  const c = v / 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+};
+const linearToSrgb8 = (l: number) =>
+  Math.round(
+    255 * (l <= 0.0031308 ? l * 12.92 : 1.055 * l ** (1 / 2.4) - 0.055),
+  );
+
+/** sRGB8 of `texel.rgb × tint` computed in linear (REQ-CMP-014 multiply). */
+function multiplyExpected(
+  texel: readonly number[],
+  tintGray: number,
+): [number, number, number] {
+  const t = srgbToLinear(tintGray);
+  return [0, 1, 2].map(k =>
+    linearToSrgb8(srgbToLinear(texel[k] as number) * t),
+  ) as [number, number, number];
+}
+
+/** Each channel within ±1 of the expectation (8-bit texture filtering/rounding). */
+function expectNear(actual: readonly number[], expected: readonly number[]) {
+  for (let k = 0; k < expected.length; k++)
+    expect(
+      Math.abs((actual[k] as number) - (expected[k] as number)),
+    ).toBeLessThanOrEqual(1);
+}
+
+/** Every covered pixel is `rgb` (±1) and opaque; asserts enough coverage. */
+function expectAllOpaque(srgb: Uint8ClampedArray, rgb: readonly number[]) {
+  let covered = 0;
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    if (srgb[i * 4 + 3] !== 255) continue;
+    covered++;
+    expectNear(Array.from(srgb.subarray(i * 4, i * 4 + 3)), rgb);
+  }
+  expect(covered).toBeGreaterThan(1000);
+}
+
 describe(`toon material + scene MRT (${currentBackend()})`, () => {
   let h: GpuHarness;
   beforeAll(async () => {
@@ -297,6 +346,7 @@ describe(`toon material + scene MRT (${currentBackend()})`, () => {
       yawDeg?: number;
       lighting?: TintMaterialOptions['lighting'];
       tint?: HexColor;
+      map?: THREE.Texture;
     } = {},
   ): Promise<Frame> {
     const binder = new SettingsBinder(s);
@@ -311,7 +361,9 @@ describe(`toon material + scene MRT (${currentBackend()})`, () => {
     const geometry = new THREE.SphereGeometry(RADIUS, 96, 48);
     const {part, mesh} = tintedMesh(
       geometry,
-      Object.assign(new THREE.MeshStandardMaterial(), {name: 'Skin'}),
+      Object.assign(new THREE.MeshStandardMaterial({map: opts.map ?? null}), {
+        name: 'Skin',
+      }),
       1,
     );
     mesh.rotation.y = ((opts.yawDeg ?? 0) * Math.PI) / 180;
@@ -366,14 +418,12 @@ describe(`toon material + scene MRT (${currentBackend()})`, () => {
     expect(again.srgb).toEqual(frame.srgb);
   });
 
-  it('AC-PIX-012.2 / REQ-PIX-011: every opaque pixel equals clamp(0.2 · light_k + rim) computed from its read-back normal', async () => {
-    const rim = {enabled: true, strength: 0.35, width: 0.25};
-    const s = settings({rim});
+  it('REQ-PIX-011 (FX-J): the material outputs base · light_k with no rim term even with rim on; partId.g holds light_k (scene.light), 1 for unlit', async () => {
+    const s = settings({rim: {enabled: true, strength: 1}});
     const frame = await sphere(s, {linearBase: 0.2});
     const l = lightDirection(s.lighting);
     const thresholds = [1 / 3, 2 / 3];
     let checked = 0;
-    let rimPixels = 0;
     for (const i of opaque(frame)) {
       const n: [number, number, number] = [
         frame.normalDepth[i * 4] as number,
@@ -382,54 +432,26 @@ describe(`toon material + scene MRT (${currentBackend()})`, () => {
       ];
       const len = Math.hypot(...n);
       const u: [number, number, number] = [n[0] / len, n[1] / len, n[2] / len];
-      const nl = u[0] * l[0] + u[1] * l[1] + u[2] * l[2];
-      const lambda = Math.max(nl, 0);
-      const nearBoundary =
-        Math.abs(nl) < 0.01 ||
-        thresholds.some(t => Math.abs(lambda - t) < 0.01) ||
-        Math.abs(u[2] - rim.width) < 0.01;
-      if (nearBoundary) continue;
-      const k = toonBandIndex(lambda, thresholds, 3);
-      const r = toonRimValue(u, l, rim.width, rim.strength);
-      if (r > 0) rimPixels++;
-      const expected = toonColor(0.2, toonBandLight(k, 3, 0.15), r);
-      expect(Math.abs((frame.output[i * 4] as number) - expected)).toBeLessThan(
-        2e-3,
+      const lambda = Math.max(u[0] * l[0] + u[1] * l[1] + u[2] * l[2], 0);
+      if (thresholds.some(t => Math.abs(lambda - t) < 0.01)) continue;
+      const light = toonBandLight(
+        toonBandIndex(lambda, thresholds, 3),
+        3,
+        0.15,
       );
+      expect(
+        Math.abs((frame.output[i * 4] as number) - 0.2 * light),
+      ).toBeLessThan(2e-3);
+      expect(
+        Math.abs((frame.partId[i * 4 + 1] as number) - light),
+      ).toBeLessThan(2e-3);
       checked++;
     }
     expect(checked).toBeGreaterThan(1000);
-    expect(rimPixels).toBeGreaterThan(10);
-  });
-
-  it('AC-PIX-012.1: rim strength 1, width 0.2 brightens a band on the lit edge only; strength 0 adds no rim pixels', async () => {
-    const off = await sphere(settings({}), {linearBase: 0.2});
-    const on = await sphere(
-      settings({rim: {enabled: true, strength: 1, width: 0.2}}),
-      {linearBase: 0.2},
-    );
-    const zero = await sphere(
-      settings({rim: {enabled: true, strength: 0, width: 0.2}}),
-      {linearBase: 0.2},
-    );
-    await evidence(h, 'sphere-rim-on', on);
-    expect(zero.srgb).toEqual(off.srgb);
-    const brighter: number[] = [];
-    for (let i = 0; i < SIZE * SIZE; i++) {
-      const a = off.srgb[i * 4] as number;
-      const b = on.srgb[i * 4] as number;
-      expect(b).toBeGreaterThanOrEqual(a);
-      if (b > a) brighter.push(i);
-    }
-    expect(brighter.length).toBeGreaterThan(10);
-    const [cx, cy] = centroid(brighter);
-    // Upper-left of the sphere center (light from azimuth 135°).
-    expect(cx).toBeLessThan(SIZE / 2 - 3);
-    expect(cy).toBeLessThan(SIZE / 2 - 3);
-    for (const i of brighter) {
-      // Rim pixels are on the silhouette band: N.z <= width (+ fp16 slack).
-      expect(on.normalDepth[i * 4 + 2] as number).toBeLessThan(0.2 + 0.02);
-    }
+    // Background: partId (and so scene.light) is 0.
+    expect(frame.partId[1]).toBe(0);
+    const unlit = await sphere(s, {linearBase: 0.2, lighting: 'unlit'});
+    for (const i of opaque(unlit)) expect(unlit.partId[i * 4 + 1]).toBe(1);
   });
 
   it('AC-PIX-013.1: side (0°) and isometric (30°) cameras light the sphere from the same screen direction (upper-left)', async () => {
@@ -487,6 +509,98 @@ describe(`toon material + scene MRT (${currentBackend()})`, () => {
       expect(Array.from(frame.srgb.subarray(i * 4, i * 4 + 4))).toEqual([
         128, 128, 128, 255,
       ]);
+    }
+  });
+
+  it('AC-CMP-014.1: multiply is texel.rgb × tint on the toon path (unlit, palette none): white texel × #808080 = #808080, (255,128,64) × #808080 = per-channel product', async () => {
+    const white = solidTexture([255, 255, 255]);
+    const colored = solidTexture(TEXEL);
+    try {
+      const w = await sphere(settings({}), {
+        lighting: 'unlit',
+        tint: '#808080',
+        map: white,
+      });
+      expectAllOpaque(w.srgb, [128, 128, 128]);
+      const c = await sphere(settings({}), {
+        lighting: 'unlit',
+        tint: '#808080',
+        map: colored,
+      });
+      expectAllOpaque(c.srgb, multiplyExpected(TEXEL, 128));
+      // White tint = the authored texel colours (default tints, PM 2026-10-09).
+      const authored = await sphere(settings({}), {
+        lighting: 'unlit',
+        tint: '#ffffff',
+        map: colored,
+      });
+      expectAllOpaque(authored.srgb, TEXEL);
+    } finally {
+      white.dispose();
+      colored.dispose();
+    }
+  });
+
+  it('AC-CMP-014.1: multiply is texel.rgb × tint on the unlit M1 material (no pipeline options)', async () => {
+    const colored = solidTexture(TEXEL);
+    const uniforms = createTintUniforms({...WHITE_TINTS, primary: '#808080'});
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    const {part} = tintedMesh(
+      geometry,
+      Object.assign(new THREE.MeshStandardMaterial({map: colored}), {
+        name: 'Cloth',
+      }),
+      1,
+    );
+    applyTintMaterial(
+      part as never,
+      [{material: 'Cloth', slot: 'primary'}],
+      uniforms,
+    );
+    const scene = new THREE.Scene();
+    scene.add(part.scene);
+    try {
+      const target = new THREE.RenderTarget(SIZE, SIZE, {
+        type: THREE.UnsignedByteType,
+        format: THREE.RGBAFormat,
+        colorSpace: THREE.SRGBColorSpace,
+        minFilter: THREE.NearestFilter,
+        magFilter: THREE.NearestFilter,
+        generateMipmaps: false,
+        samples: 0,
+      });
+      const r = h.renderer;
+      try {
+        r.setClearColor(0x000000, 0);
+        r.setRenderTarget(target);
+        r.render(scene, makeCamera(0));
+        r.setRenderTarget(null);
+        const raw = (await r.readRenderTargetPixelsAsync(
+          target,
+          0,
+          0,
+          SIZE,
+          SIZE,
+        )) as Uint8Array;
+        const rgba = normalizeReadback(
+          raw,
+          SIZE,
+          SIZE,
+          readbackLayout(h.backend, SIZE),
+        );
+        const c = idx(SIZE / 2, SIZE / 2) * 4;
+        expect(rgba[c + 3]).toBe(255);
+        expectNear(
+          Array.from(rgba.subarray(c, c + 3)),
+          multiplyExpected(TEXEL, 128),
+        );
+      } finally {
+        target.dispose();
+      }
+    } finally {
+      restoreMaterials(part.scene);
+      geometry.dispose();
+      colored.dispose();
     }
   });
 

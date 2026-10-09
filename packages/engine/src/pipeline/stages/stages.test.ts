@@ -37,6 +37,7 @@ describe('post stage list', () => {
   it('AC-PIX-025.1: default post stages are in the fixed REQ-PIX-025 order', () => {
     expect([...DEFAULT_POST_STAGES]).toEqual([
       'coverage',
+      'rim',
       'outline',
       'srgb',
       'dither',
@@ -46,6 +47,7 @@ describe('post stage list', () => {
     expect(Object.keys(POST_STAGE_NODE_TYPES).sort()).toEqual(
       [...DEFAULT_POST_STAGES].sort(),
     );
+    expect(POST_STAGE_NODE_TYPES.rim).toEqual(['post.rimEdge@1']);
     expect(POST_STAGE_NODE_TYPES.srgb).toEqual(['color.linearToSrgb@1']);
     expect(POST_STAGE_NODE_TYPES.dither).toEqual(['post.bayerDither@1']);
     expect(POST_STAGE_NODE_TYPES.palette).toEqual(['post.paletteQuantize@1']);
@@ -62,6 +64,7 @@ describe('emitter shape', () => {
       'toonRim',
       'toonCombine',
       'alphaCutoff',
+      'rimEdge',
       'edgeDetect',
       'outline',
       'linearToSrgb',

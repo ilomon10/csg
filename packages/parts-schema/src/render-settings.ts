@@ -33,29 +33,51 @@ export type CameraPreset = (typeof CAMERA_PRESETS)[number];
 /** Palette IDs of `RenderSettings.palette.id`. */
 export const PALETTE_IDS = ['none', 'pico-8', 'endesga-32', 'custom'] as const;
 
-/** Preset-dependent defaults (spec 003 Data & contracts, Defaults table). */
+/**
+ * Preset-dependent defaults (spec 003 Data & contracts, Defaults table).
+ * `pivotRowPx` is resolution-relative: see {@link defaultPivotRowPx}.
+ */
 const PRESET_DEFAULTS = {
-  side: {elevationDeg: 0, directions: 2, singleFacing: 'e', pivotRowPx: 2},
-  'three-quarter': {
-    elevationDeg: 35,
-    directions: 8,
-    singleFacing: 's',
-    pivotRowPx: 4,
-  },
-  isometric: {
-    elevationDeg: 30,
-    directions: 8,
-    singleFacing: 's',
-    pivotRowPx: 6,
-  },
-  // Not specified for `custom`; it starts from the three-quarter values.
-  custom: {
-    elevationDeg: 35,
-    directions: 8,
-    singleFacing: 's',
-    pivotRowPx: 4,
-  },
+  side: {elevationDeg: 0, directions: 2, singleFacing: 'e'},
+  'three-quarter': {elevationDeg: 35, directions: 8, singleFacing: 's'},
+  isometric: {elevationDeg: 30, directions: 8, singleFacing: 's'},
+  // `custom` starts from the three-quarter values (spec 003, M2-01b).
+  custom: {elevationDeg: 35, directions: 8, singleFacing: 's'},
 } as const;
+
+/** Spec 003 rounding of the pivot rule: `round(x) = floor(x + 0.5)`. */
+function roundHalfUp(x: number): number {
+  return Math.floor(x + 0.5);
+}
+
+/**
+ * Default ground pivot row (`camera.pivotRowPx`, rows from the bottom) of a
+ * preset (spec 003 REQ-PIX-008 note, AC-PIX-008.5, FX-H): `side` =
+ * `outerWidth + 2`; `three-quarter` and `custom` = `round(H · 3/16)`;
+ * `isometric` = `round(H · 5/32)`, with `H` = `resolution.height`,
+ * `outerWidth` the outer outline width (0 when disabled) and
+ * `round(x) = floor(x + 0.5)`. An explicit `pivotRowPx` overrides it.
+ *
+ * @param preset - Camera preset.
+ * @param height - Cell height in px (32..128).
+ * @param outerWidthPx - Outer outline width in px, 0 when disabled.
+ * @returns The default pivot row.
+ */
+export function defaultPivotRowPx(
+  preset: CameraPreset,
+  height: number,
+  outerWidthPx: number,
+): number {
+  switch (preset) {
+    case 'side':
+      return outerWidthPx + 2;
+    case 'isometric':
+      return roundHalfUp((height * 5) / 32);
+    case 'three-quarter':
+    case 'custom':
+      return roundHalfUp((height * 3) / 16);
+  }
+}
 
 const FIELD_ERROR = 'PIX_INVALID_SETTINGS';
 
@@ -86,7 +108,7 @@ const settingsInputSchema = z.object({
     .object({
       azimuthDeg: z.number().min(0).max(360).default(135),
       elevationDeg: z.number().min(0).max(90).default(45),
-      ambient: unit.default(0.15),
+      ambient: unit.default(0.1),
     })
     .prefault({}),
   toon: z
@@ -96,8 +118,9 @@ const settingsInputSchema = z.object({
       rim: z
         .object({
           enabled: z.boolean().default(true),
-          strength: unit.default(0.35),
-          width: unit.default(0.25),
+          strength: unit.default(0.5),
+          // Deprecated (FX-J): range-checked so saved settings load, never rendered.
+          width: unit.optional(),
         })
         .prefault({}),
     })
@@ -120,9 +143,10 @@ const settingsInputSchema = z.object({
           normal: z.boolean().default(false),
           depthThresholdPx: z.number().positive().default(4),
           normalThresholdDeg: z.number().min(1).max(179).default(60),
+          colorMode: z.enum(['black', 'darken', 'custom']).default('darken'),
         })
         .prefault({}),
-      colorMode: z.enum(['black', 'darken', 'custom']).default('darken'),
+      colorMode: z.enum(['black', 'darken', 'custom']).default('black'),
       darkenAmount: unit.default(0.6),
       color: hexColorSchema.optional(),
     })
@@ -168,7 +192,7 @@ export interface RenderSettings {
     elevationDeg: number;
     /** `auto` fits the union bounds; a number is world units per pixel (> 0). */
     framing: 'auto' | number;
-    /** Ground pivot row from the bottom, 0..height-1. */
+    /** Ground pivot row from the bottom, 0..height-1; default {@link defaultPivotRowPx}. */
     pivotRowPx: number;
   };
   directions: 1 | 2 | 4 | 8;
@@ -182,7 +206,11 @@ export interface RenderSettings {
     bands: 2 | 3 | 4;
     /** `bands - 1` strictly ascending values in (0, 1); omitted means evenly spaced. */
     thresholds?: number[];
-    rim: {enabled: boolean; strength: number; width: number};
+    /**
+     * Screen-space 1 px lit edge (REQ-PIX-012, FX-J). `width` is deprecated:
+     * accepted (0..1) so saved settings load, never used for rendering.
+     */
+    rim: {enabled: boolean; strength: number; width?: number};
   };
   outline: {
     outer: {enabled: boolean; widthPx: 1 | 2 | 3};
@@ -193,10 +221,13 @@ export interface RenderSettings {
       normal: boolean;
       depthThresholdPx: number;
       normalThresholdDeg: number;
+      /** Inner line colour mode (FX-J, PM decision); default `darken`. */
+      colorMode: 'black' | 'darken' | 'custom';
     };
+    /** Outer outline colour mode; default `black` (FX-J, user D2). */
     colorMode: 'black' | 'darken' | 'custom';
     darkenAmount: number;
-    /** Required when `colorMode` is `custom`. */
+    /** Required when `colorMode` or `inner.colorMode` is `custom`. */
     color?: HexColor;
   };
   materialGraph: string;
@@ -313,7 +344,10 @@ function crossChecks(value: SettingsInput): RenderSettingsIssue[] {
       );
     }
   }
-  if (outline.colorMode === 'custom' && outline.color === undefined) {
+  if (
+    (outline.colorMode === 'custom' || outline.inner.colorMode === 'custom') &&
+    outline.color === undefined
+  ) {
     issues.push(fail('outline.color', 'required when colorMode is custom'));
   }
   if (palette.id === 'custom') {
@@ -393,7 +427,13 @@ export function parseRenderSettings(input: unknown): RenderSettingsResult {
       preset: v.camera.preset,
       elevationDeg: v.camera.elevationDeg ?? d.elevationDeg,
       framing: v.camera.framing,
-      pivotRowPx: v.camera.pivotRowPx ?? d.pivotRowPx,
+      pivotRowPx:
+        v.camera.pivotRowPx ??
+        defaultPivotRowPx(
+          v.camera.preset,
+          v.resolution.height,
+          v.outline.outer.enabled ? v.outline.outer.widthPx : 0,
+        ),
     },
     directions: v.directions ?? d.directions,
     singleFacing: v.singleFacing ?? d.singleFacing,

@@ -144,4 +144,43 @@ describe('computeFraming', () => {
   it('REQ-PIX-007: empty bounds in auto mode give a finite scale', () => {
     expect(computeFraming([], settings(64, 64, 2)).worldPerPx).toBe(1);
   });
+
+  it.each([0, 30, 35])(
+    'AC-PIX-009.3: auto framing keeps a foot in front of the pivot inside the cell at elevation %i',
+    elev => {
+      // Near foot projects below the ground row by sin(elev) * depth.
+      const below = -0.4 * Math.sin((elev * Math.PI) / 180) - 0.05;
+      const boxes = [
+        {label: 'idle', direction: 0, box: box(-0.5, 0.5, below, 1.8)},
+        {label: 'idle', direction: 1, box: box(-0.4, 0.4, 0, 1.8)},
+      ];
+      const s = settings(64, 64, 4, 'auto', 'custom');
+      const f = computeFraming(boxes, {
+        ...s,
+        camera: {...s.camera, elevationDeg: elev},
+      });
+      expect(f.clipped).toEqual([]);
+      // Lowest point stays at least the margin (outline 1 + 1) above the bottom edge.
+      const footRowsAbovePivot = below / f.worldPerPx;
+      expect(footRowsAbovePivot).toBeGreaterThanOrEqual(-(4 - 2) - 1e-9);
+    },
+  );
+
+  it('AC-PIX-009.3: auto takes the bottom ratio when it dominates', () => {
+    // down avail 4 - 2 = 2 px; minY -1 -> s = 0.5 beats left/right/top.
+    const f = computeFraming(
+      [{label: 'a', direction: 0, box: box(-0.5, 0.5, -1, 1)}],
+      settings(64, 64, 4),
+    );
+    expect(f.worldPerPx).toBeCloseTo(0.5, 12);
+    expect(f.clipped).toEqual([]);
+  });
+
+  it('AC-PIX-009.3: fixed framing still reports below-pivot clipping', () => {
+    const f = computeFraming(
+      [{label: 'a', direction: 3, box: box(-0.1, 0.1, -1, 1)}],
+      settings(64, 64, 2, 0.0625),
+    );
+    expect(f.clipped).toEqual([{label: 'a', direction: 3}]);
+  });
 });

@@ -4,7 +4,7 @@ title: Export (sprite sheets, metadata, credits)
 status: draft
 owner: spec-writer (review: graphics-engineer)
 depends_on: [constitution, 000-overview, 003-pixel-render-pipeline, 004-animation, 008-custom-model-upload]
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 ---
 
 # 005 – Export
@@ -218,6 +218,8 @@ Everything is rendered once at 1× (the cell resolution). Larger scales are made
 - Browser blocks downloads or storage is full → `EXP_DOWNLOAD_FAILED` with retry, and nothing is lost (REQ-EXP-017).
 - Cancel during packaging → same as REQ-EXP-024.
 - Export of 1 direction with label `s` → tags `<label>_s` (REQ-EXP-012).
+- Feet or a lying pose below the ground row → with auto framing spec 003 fits them into the cell and no `PIX_FRAMING_CLIPPED` warning is passed through; the warning appears only with fixed framing or when `pivotRowPx` leaves no room below the outline margin (spec 003 REQ-PIX-007 note, AC-PIX-009.3). The pivot in the manifest is unchanged (REQ-PIX-008). *(Added 2026-10-09 (M2-01b).)*
+- WebGL2 without `EXT_color_buffer_float` → the pixel pipeline cannot be created and the export fails with `PIX_BACKEND_UNAVAILABLE` before any frame is rendered; no files are offered (spec 003 AC-PIX-026.2). *(Added 2026-10-09 (M2-01b).)*
 
 ## Data & contracts
 
@@ -412,7 +414,7 @@ The `WARNINGS` section appears only when warnings exist. No dates or times appea
 
 - `docs/architecture.md` §2.1, §3.4, §3.6, §4.1, §4.3
 - `specs/constitution.md` P-02, P-03, P-04, P-07, P-10
-- Spec 003 (PIX): `RenderedFrame`, pivot, `DIRECTION_ORDER`, `PIX_FRAMING_CLIPPED`
+- Spec 003 (PIX): `RenderedFrame`, pivot, `DIRECTION_ORDER`, `PIX_FRAMING_CLIPPED`, `PIX_BACKEND_UNAVAILABLE` (amended 2026-10-09 (M2-01b))
 - ADR-0005 (licensing UX, local-first)
 - Aseprite CLI `--sheet` / `--data` JSON format: https://www.aseprite.org/docs/cli/ (accessed 2026-10-08)
 - Phaser 3 Aseprite loader: https://docs.phaser.io/api-documentation/class/loader-loaderplugin#aseprite (accessed 2026-10-08)

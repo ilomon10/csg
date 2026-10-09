@@ -23,7 +23,7 @@ import type {
   Texture,
   TextureFilter,
 } from 'three';
-import {float, luminance, texture, uniform, vec3, vec4} from 'three/tsl';
+import {texture, uniform, vec3, vec4} from 'three/tsl';
 import {MeshBasicNodeMaterial} from 'three/webgpu';
 import type {Node, UniformNode} from 'three/webgpu';
 import {TINT_SLOTS} from '@csg/parts-schema';
@@ -190,9 +190,12 @@ function colorOf(material: Material): Color {
  * Builds the unlit material for one source material.
  *
  * - No mapping: base color × map, unchanged by any tint (AC-CMP-013.2).
- * - `multiply`: `luminance(map texel) × tint`, alpha from the texel; without a
- *   map the texel is white, so the result is the tint (AC-CMP-014.1).
- * - `replace`: the flat tint color (AC-CMP-014.2).
+ * - `multiply`: `texel.rgb × tint`, alpha from the texel: a white tint keeps
+ *   the authored texture colours; without a map the texel is white, so the
+ *   result is the tint (AC-CMP-014.1, REQ-CMP-014 as amended 2026-10-09).
+ * - `replace`: the flat tint color (AC-CMP-014.2) with the texel's alpha, so
+ *   cut-out cards (hair, leaves) keep their silhouette (PM decision, M2-16);
+ *   without a map the alpha is 1.
  *
  * The base color factor is ignored by tinted materials: the tint is the color.
  */
@@ -219,13 +222,13 @@ function buildMaterial(
     const tint = colorNodeOf(uniforms[mapping.slot]);
     const mode = mapping.mode ?? DEFAULT_TINT_MODE;
     let colorNode: Node;
-    if (mode === 'replace') {
+    if (map === null) {
       colorNode = tint;
-    } else if (map === null) {
-      colorNode = tint;
+    } else if (mode === 'replace') {
+      colorNode = vec4(tint, texture(map).a);
     } else {
       const texel = texture(map);
-      colorNode = vec4(tint.mul(luminance(texel.rgb)), texel.a);
+      colorNode = vec4(texel.rgb.mul(tint as unknown as Node<'vec3'>), texel.a);
     }
     material.colorNode = colorNode as MeshBasicNodeMaterial['colorNode'];
     material.userData[TINT_SLOT_USER_DATA] = mapping.slot;
@@ -240,8 +243,11 @@ function buildMaterial(
  * builtins of a material compile context:
  *
  * - No mapping: base color factor × albedo (texel RGBA); tints ignored.
- * - `multiply`: `vec4(tint × luminance(albedo.rgb), albedo.a)`.
- * - `replace`: `vec4(tint, 1)` (M1: the flat tint, texture alpha ignored).
+ * - `multiply`: `vec4(albedo.rgb × tint, albedo.a)` (REQ-CMP-014 as amended
+ *   2026-10-09: a white tint shows the authored texture colours).
+ * - `replace`: `vec4(tint, albedo.a)`: the flat tint with the texel alpha, so
+ *   cut-out cards keep their silhouette (PM decision, M2-16; alpha 1 without
+ *   a map).
  *
  * The source `opacity` scales the alpha, which is then tested against the
  * shared `alpha.cutoff` (A8). The region mask, when given, is an extra
@@ -280,8 +286,8 @@ function buildToonMaterial(
     const mode = mapping.mode ?? DEFAULT_TINT_MODE;
     base =
       mode === 'replace'
-        ? vec4(tint, float(1))
-        : vec4(tint.mul(luminance(part.rgb)), part.a);
+        ? vec4(tint, part.a)
+        : vec4(tint.mul(part.rgb), part.a);
   }
   if (source.opacity !== 1) base = vec4(base.rgb, base.a.mul(source.opacity));
   const material = createToonMaterial({

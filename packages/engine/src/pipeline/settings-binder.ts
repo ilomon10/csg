@@ -176,7 +176,8 @@ export function reservedUniformValues(
     'toon.thresholds': toonThresholds(s.toon),
     'rim.enabled': s.toon.rim.enabled,
     'rim.strength': s.toon.rim.strength,
-    'rim.width': s.toon.rim.width,
+    // Deprecated (FX-J): kept as a uniform for legacy `toon.rim@1` graphs.
+    'rim.width': s.toon.rim.width ?? 0.25,
     'light.azimuthDeg': s.lighting.azimuthDeg,
     'light.elevationDeg': s.lighting.elevationDeg,
     'light.ambient': s.lighting.ambient,
@@ -236,6 +237,7 @@ const CHANGE_RULES: ReadonlyArray<readonly [string, readonly ChangeClass[]]> = [
   ['outline.inner.depthThresholdPx', ['uniforms']],
   ['outline.inner.normalThresholdDeg', ['uniforms']],
   ['outline.colorMode', ['post']],
+  ['outline.inner.colorMode', ['post']],
   ['outline.darkenAmount', ['uniforms']],
   ['outline.color', ['uniforms']],
   ['materialGraph', ['material']],

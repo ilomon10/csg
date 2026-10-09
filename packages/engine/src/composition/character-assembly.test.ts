@@ -1,7 +1,12 @@
 import {describe, expect, it} from 'vitest';
 import {Color, Matrix4, Vector3} from 'three';
 import type {Bone, Material, Mesh, Object3D, SkinnedMesh} from 'three';
-import {BODY_REGIONS} from '@csg/parts-schema';
+import {
+  BODY_REGIONS,
+  V1_SLOT_IDS,
+  defaultRenderSettings,
+  slotRegistrySchema,
+} from '@csg/parts-schema';
 import type {CharacterSpec} from '@csg/parts-schema';
 import {computeGroundOffset} from '../anatomy/apply';
 import {
@@ -14,6 +19,11 @@ import {createTestRegistry, fixtureSpec, ref} from './assembly-test-env';
 import type {TestRegistry} from './assembly-test-env';
 import {REGION_ID_ATTRIBUTE, isRegionHidden, regionMaskOf} from './region-mask';
 import {TINT_SLOT_USER_DATA} from './tint-material';
+import {SettingsBinder} from '../pipeline/settings-binder';
+import {
+  PART_ID_USER_DATA,
+  TOON_MATERIAL_USER_DATA,
+} from '../pipeline/toon-material';
 
 // Spec ACs say `g-a`/`g-b`; the fixtures use `fixture-a`/`fixture-b` (same meaning).
 
@@ -642,5 +652,155 @@ describe('character assembly: region hides (REQ-AST-028)', () => {
     }
     expect(torsoVertices).toBeGreaterThan(0);
     expect(otherVertices).toBeGreaterThan(0);
+  });
+});
+
+/** A registry whose part loads finish after `delayMs(ref)` (simulated network order). */
+function delayedRegistry(delayMs: (r: string) => number): AssemblyRegistry {
+  const inner = createTestRegistry();
+  return {
+    async resolve(r) {
+      const result = await inner.resolve(r);
+      await new Promise(resolve => setTimeout(resolve, delayMs(r)));
+      return result;
+    },
+    resolveClip: r => inner.resolveClip(r),
+    clipEntry: r => inner.clipEntry(r),
+  };
+}
+
+/** `[mesh path, partId]` of every mesh under the root, in scene-graph order. */
+function partIdTable(assembly: CharacterAssembly): Array<[string, unknown]> {
+  const out: Array<[string, unknown]> = [];
+  assembly.root.traverse(o => {
+    if ((o as Partial<Mesh>).isMesh !== true) return;
+    const path: string[] = [];
+    for (let p: Object3D | null = o; p !== null; p = p.parent)
+      path.unshift(p.name);
+    out.push([path.join('/'), o.userData[PART_ID_USER_DATA]]);
+  });
+  return out;
+}
+
+describe('character assembly: pixel pipeline integration (M2-16)', () => {
+  it('AC-PIX-014.1: part IDs follow the slot order, not the order parts finish loading', async () => {
+    const order = [
+      ref('fixture-body'),
+      ref('fixture-shirt'),
+      ref('fixture-sword'),
+    ];
+    const loadedOrder: string[][] = [[], []];
+    const tables = [];
+    for (const [run, delays] of [
+      [0, [1, 15, 30]],
+      [1, [30, 15, 1]],
+    ] as const) {
+      const registry = delayedRegistry(r => delays[order.indexOf(r)] ?? 0);
+      const wrapped: AssemblyRegistry = {
+        ...registry,
+        resolve: async r => {
+          const result = await registry.resolve(r);
+          loadedOrder[run]?.push(r);
+          return result;
+        },
+      };
+      const assembly = createCharacterAssembly({registry: wrapped});
+      expect((await assembly.setCharacter(fixtureSpec())).ok).toBe(true);
+      tables.push(partIdTable(assembly));
+      expect(Object.fromEntries(assembly.partIds)).toEqual({
+        body: 1,
+        torso: 1 + V1_SLOT_IDS.indexOf('torso'),
+        'prop-main-hand': 1 + V1_SLOT_IDS.indexOf('prop-main-hand'),
+      });
+      assembly.dispose();
+    }
+    // The loads really completed in opposite orders.
+    expect(loadedOrder[1]).toEqual([...(loadedOrder[0] ?? [])].reverse());
+    expect(tables[1]).toEqual(tables[0]);
+    // Every mesh carries an ID; the body is 1, props come last.
+    for (const [, id] of tables[0] ?? []) expect(id).toBeGreaterThanOrEqual(1);
+  });
+
+  it('REQ-PIX-014: a custom slot registry order drives the IDs; unknown slots follow sorted', async () => {
+    const registry = createTestRegistry();
+    const slots = slotRegistrySchema.parse({
+      format: 'sprite-slot-registry',
+      version: 1,
+      slots: [
+        {
+          id: 'body',
+          label: 'b',
+          order: 0,
+          kinds: ['skinned'],
+          required: true,
+          randomize: {emptyChance: 0},
+        },
+        {
+          id: 'prop-main-hand',
+          label: 'p',
+          order: 1,
+          kinds: ['static'],
+          required: false,
+          defaultSocket: 'hand_r',
+          randomize: {emptyChance: 0},
+        },
+        {
+          id: 'torso',
+          label: 't',
+          order: 2,
+          kinds: ['skinned'],
+          required: false,
+          randomize: {emptyChance: 0},
+        },
+      ],
+    });
+    const assembly = createCharacterAssembly({registry, slots});
+    expect((await assembly.setCharacter(fixtureSpec())).ok).toBe(true);
+    expect(Object.fromEntries(assembly.partIds)).toEqual({
+      body: 1,
+      'prop-main-hand': 2,
+      torso: 3,
+    });
+    assembly.dispose();
+  });
+
+  it('REQ-PIX-011, REQ-PIX-014: with TintMaterialOptions every mesh, the static prop included, gets a toon material and a part ID; setMaterialOptions switches back', async () => {
+    const binder = new SettingsBinder(defaultRenderSettings());
+    const registry = createTestRegistry();
+    const assembly = createCharacterAssembly({
+      registry,
+      material: {binder, backend: 'webgl2', mode: 'export'},
+    });
+    expect((await assembly.setCharacter(fixtureSpec())).ok).toBe(true);
+    const toonKinds = () =>
+      meshes(assembly.root).map(m => ({
+        toon: (m.material as Material).userData[TOON_MATERIAL_USER_DATA],
+        id: m.userData[PART_ID_USER_DATA],
+      }));
+    const sword = assembly.parts.get('prop-main-hand')!;
+    expect(sword.part.entry.kind).toBe('static');
+    expect(meshes(sword.attached.object).length).toBeGreaterThan(0);
+    for (const m of meshes(sword.attached.object)) {
+      expect((m.material as Material).userData[TOON_MATERIAL_USER_DATA]).toBe(
+        'toon',
+      );
+    }
+    for (const k of toonKinds()) {
+      expect(k.toon).toBe('toon');
+      expect(k.id).toBeGreaterThanOrEqual(1);
+    }
+    assembly.setMaterialOptions(undefined);
+    for (const k of toonKinds()) expect(k.toon).toBeUndefined();
+    expect(assembly.log).toContain('materials:unlit');
+    assembly.dispose();
+    binder.dispose();
+  });
+
+  it('exposes the held clip duration', async () => {
+    const {assembly} = await built();
+    expect(assembly.clipDurationSec).toBeNull();
+    expect((await assembly.setClip(ref('fixture-clip'))).ok).toBe(true);
+    expect(assembly.clipDurationSec).toBe(1);
+    assembly.dispose();
   });
 });

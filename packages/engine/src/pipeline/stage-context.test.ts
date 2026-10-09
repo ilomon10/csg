@@ -106,7 +106,8 @@ describe('stage context (spec 007 CompileContext, REQ-PIX-035)', () => {
   it('REQ-SGF-043: target rules and export time follow the Built-in values table', () => {
     const binder = new SettingsBinder(defaultRenderSettings());
     const p = post(binder);
-    expect(() => p.builtin('light.dir')).toThrow(/only available in materials/);
+    // FX-J: light.dir is available in post too (post.rimEdge@1).
+    expect(p.builtin('light.dir')).toBe(binder.lightDir);
     expect(() => p.builtin('viewDir')).toThrow(/only available in materials/);
     const material = createStageContext({
       binder,

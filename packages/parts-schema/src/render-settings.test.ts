@@ -1,5 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {
+  defaultPivotRowPx,
   defaultRenderSettings,
   DIRECTION_ORDER,
   parseRenderSettings,
@@ -129,11 +130,11 @@ describe('render settings', () => {
     expect(v.lighting).toEqual({
       azimuthDeg: 135,
       elevationDeg: 45,
-      ambient: 0.15,
+      ambient: 0.1,
     });
     expect(v.toon).toEqual({
       bands: 3,
-      rim: {enabled: true, strength: 0.35, width: 0.25},
+      rim: {enabled: true, strength: 0.5},
     });
     expect(v.outline).toEqual({
       outer: {enabled: true, widthPx: 1},
@@ -144,8 +145,9 @@ describe('render settings', () => {
         normal: false,
         depthThresholdPx: 4,
         normalThresholdDeg: 60,
+        colorMode: 'darken',
       },
-      colorMode: 'darken',
+      colorMode: 'black',
       darkenAmount: 0.6,
     });
     expect(v.palette).toEqual({
@@ -172,9 +174,69 @@ describe('render settings', () => {
       ];
     };
     const r = {width: 64, height: 64};
-    expect(pick('side')).toEqual([r, 2, 'e', 2, 'auto', 0]);
-    expect(pick('three-quarter')).toEqual([r, 8, 's', 4, 'auto', 35]);
-    expect(pick('isometric')).toEqual([r, 8, 's', 6, 'auto', 30]);
+    expect(pick('side')).toEqual([r, 2, 'e', 3, 'auto', 0]);
+    expect(pick('three-quarter')).toEqual([r, 8, 's', 12, 'auto', 35]);
+    expect(pick('isometric')).toEqual([r, 8, 's', 10, 'auto', 30]);
+  });
+
+  it('AC-PIX-008.5: resolution-relative pivotRowPx defaults; explicit values override', () => {
+    const pivot = (input: unknown) => {
+      const result = parseRenderSettings(input);
+      if (!result.ok) throw new Error('expected ok');
+      return result.value.camera.pivotRowPx;
+    };
+    const at = (preset: string, h: number, outline?: unknown) =>
+      pivot({
+        resolution: {width: h, height: h},
+        camera: {preset},
+        ...(outline === undefined ? {} : {outline: {outer: outline}}),
+      });
+    const heights = [32, 64, 128];
+    expect(heights.map(h => at('side', h))).toEqual([3, 3, 3]);
+    expect(heights.map(h => at('three-quarter', h))).toEqual([6, 12, 24]);
+    expect(heights.map(h => at('isometric', h))).toEqual([5, 10, 20]);
+    expect(heights.map(h => at('custom', h))).toEqual([6, 12, 24]);
+    expect(heights.map(h => at('side', h, {enabled: false}))).toEqual([
+      2, 2, 2,
+    ]);
+    expect(at('side', 64, {widthPx: 3})).toBe(5);
+    expect(
+      pivot({
+        resolution: {width: 64, height: 40},
+        camera: {preset: 'three-quarter'},
+      }),
+    ).toBe(8);
+    expect(pivot({camera: {preset: 'isometric', pivotRowPx: 4}})).toBe(4);
+    expect(defaultPivotRowPx('three-quarter', 40, 1)).toBe(8);
+  });
+
+  it('AC-PIX-004.3: custom preset with every other field omitted gets the three-quarter values; side ignores elevation 91', () => {
+    const custom = parseRenderSettings({camera: {preset: 'custom'}});
+    if (!custom.ok) throw new Error('expected ok');
+    expect([
+      custom.value.camera.elevationDeg,
+      custom.value.directions,
+      custom.value.singleFacing,
+      custom.value.camera.pivotRowPx,
+    ]).toEqual([35, 8, 's', 12]);
+    const side = parseRenderSettings({
+      camera: {preset: 'side', elevationDeg: 91},
+    });
+    expect(side.ok).toBe(true);
+  });
+
+  it('FX-J: inner and outer outline colour modes are separate; custom in either needs outline.color', () => {
+    const v = defaultRenderSettings();
+    expect([v.outline.colorMode, v.outline.inner.colorMode]).toEqual([
+      'black',
+      'darken',
+    ]);
+    expect(failure({outline: {inner: {colorMode: 'custom'}}})[0]?.path).toBe(
+      'outline.color',
+    );
+    // Deprecated rim width still loads (0..1) and is range-checked.
+    expect(parseRenderSettings({toon: {rim: {width: 0.3}}}).ok).toBe(true);
+    expect(parseRenderSettings({toon: {rim: {width: 2}}}).ok).toBe(false);
   });
 
   it('REQ-PIX-037: explicit values override preset defaults; pivot row is bounded by height', () => {

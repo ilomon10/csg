@@ -180,6 +180,10 @@ function settingsWith(
 ): RenderSettings {
   const s = structuredClone(defaultRenderSettings()) as Mutable<RenderSettings>;
   s.outline.inner.enabled = false;
+  // These cases were written for one mode on both line kinds (FX-J made the
+  // outer default `black` and added `inner.colorMode`).
+  s.outline.colorMode = 'darken';
+  s.outline.inner.colorMode = 'darken';
   // 0.5 keeps every expected channel away from a .5 rounding boundary.
   s.outline.darkenAmount = 0.5;
   edit(s);

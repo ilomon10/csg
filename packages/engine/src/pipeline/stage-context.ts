@@ -33,6 +33,7 @@ export const HOST_BUILTINS = [
   'scene.normal',
   'scene.depth',
   'scene.partId',
+  'scene.light',
 ] as const;
 
 /** Name of a host-supplied builtin. */
@@ -63,13 +64,13 @@ export type EngineBuiltin = (typeof ENGINE_BUILTINS)[number];
 const MATERIAL_ONLY: ReadonlySet<string> = new Set([
   'normal',
   'viewDir',
-  'light.dir',
   'part.albedo',
   'partId',
 ]);
 
 /** Builtins valid only when compiling the post pipeline (spec 007 Built-in values, target P). */
 const POST_ONLY: ReadonlySet<string> = new Set([
+  'scene.light',
   'scene.color',
   'scene.normal',
   'scene.depth',
@@ -119,12 +120,13 @@ export interface StageContext extends CompileContext {
  * REQ-PIX-035).
  *
  * Material (M): `normal` (`normalView`), `viewDir` (`vec3(0, 0, 1)`,
- * orthographic), `light.dir` (CPU-derived view-space uniform, REQ-PIX-013),
- * `uv` (mesh UV), `tint.<slot>`, `part.albedo`, `partId` (host).
- * Both: `screenPos` (`vec2` integer cell pixel, top-left origin), `resolution`
+ * orthographic), `uv` (mesh UV), `tint.<slot>`, `part.albedo`, `partId` (host).
+ * Both: `light.dir` (CPU-derived view-space uniform, REQ-PIX-013; in post
+ * since FX-J for `post.rimEdge@1`), `screenPos` (`vec2` integer cell pixel, top-left origin), `resolution`
  * (`vec2` W, H), `texelSize`, `time` (host-set uniform in preview, constant 0
  * in export, REQ-SGF-032); in post `uv` is `(screenPos + 0.5) / resolution`.
- * Post (P): `scene.color|normal|depth|partId` (host), `render.paletteLut`,
+ * Post (P): `scene.color|normal|depth|partId|light` (host; `scene.light` is
+ * the float band brightness `light_k`, spec 007), `render.paletteLut`,
  * `render.paletteDarkest` (linear RGBA, A = 1), `render.paletteEnabled` (bool),
  * `render.ditherMode` (`int` matrix size 0/2/4/8; the typed mode is
  * {@link StageContext.ditherMode}), `render.ditherStrength` and

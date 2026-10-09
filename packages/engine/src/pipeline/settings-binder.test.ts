@@ -77,11 +77,11 @@ describe('settings binder: reserved IDs (spec 007)', () => {
     expect(v['toon.bands']).toBe(3);
     expect(v['toon.thresholds']).toEqual([1 / 3, 2 / 3, 2]);
     expect(v['rim.enabled']).toBe(true);
-    expect(v['rim.strength']).toBe(0.35);
+    expect(v['rim.strength']).toBe(0.5);
     expect(v['rim.width']).toBe(0.25);
     expect(v['light.azimuthDeg']).toBe(135);
     expect(v['light.elevationDeg']).toBe(45);
-    expect(v['light.ambient']).toBe(0.15);
+    expect(v['light.ambient']).toBe(0.1);
     expect(v['outline.outer.enabled']).toBe(true);
     expect(v['outline.outer.widthPx']).toBe(1);
     expect(v['outline.inner.enabled']).toBe(true);
@@ -127,7 +127,7 @@ describe('settings binder: uniform cache', () => {
     const binder = new SettingsBinder(defaultRenderSettings());
     const a = binder.uniform('rim.strength', 'float', 0.9);
     expect(binder.uniform('rim.strength', 'float', 0.1)).toBe(a);
-    expect(binder.uniformNode('rim.strength')?.value).toBe(0.35);
+    expect(binder.uniformNode('rim.strength')?.value).toBe(0.5);
     expect(() => binder.uniform('rim.strength', 'vec3', 0)).toThrow(/is float/);
   });
 
@@ -269,7 +269,14 @@ describe('diffRenderSettings (REQ-PIX-034, m2-plan 2.7)', () => {
       ...base,
       outline: {...base.outline, inner: {...base.outline.inner, depth: true}},
     });
-    post({...base, outline: {...base.outline, colorMode: 'black'}});
+    post({...base, outline: {...base.outline, colorMode: 'darken'}});
+    post({
+      ...base,
+      outline: {
+        ...base.outline,
+        inner: {...base.outline.inner, colorMode: 'black'},
+      },
+    });
     post({...base, palette: {...base.palette, id: 'pico-8'}});
     post({...base, postGraph: 'user:x'});
     expect(

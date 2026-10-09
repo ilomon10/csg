@@ -60,6 +60,13 @@ function nodesOf(material: Material): unknown[] {
   return out;
 }
 
+function isTextureOf(node: unknown, map: unknown): boolean {
+  return (
+    (node as {isTextureNode?: boolean}).isTextureNode === true &&
+    (node as {value?: unknown}).value === map
+  );
+}
+
 function syntheticPart(
   materials: Material[],
   withRegion: boolean,
@@ -160,7 +167,7 @@ describe('tint materials', () => {
     expect(m.map).toBe(WHITE);
   });
 
-  it('AC-CMP-014.1: multiply mode is luminance(texel) x tint (texture and tint in the graph); without a map the color is the tint', () => {
+  it('AC-CMP-014.1: multiply mode is texel.rgb x tint (texture and tint in the graph, no luminance); without a map the color is the tint', () => {
     const uniforms = createTintUniforms({...INITIAL, primary: '#808080'});
     const textured = syntheticPart(
       [Object.assign(new MeshStandardMaterial({map: WHITE}), {name: 'Cloth'})],
@@ -199,7 +206,7 @@ describe('tint materials', () => {
     expect(material(plain).colorNode).toBe(uniforms.primary);
   });
 
-  it('AC-CMP-014.2: replace mode colors the material with the flat tint', () => {
+  it('AC-CMP-014.2: replace mode colors the material with the flat tint and keeps the texel alpha (cut-out cards)', () => {
     const uniforms = createTintUniforms({...INITIAL, metal: '#ff0000'});
     const part = syntheticPart(
       [Object.assign(new MeshStandardMaterial({map: WHITE}), {name: 'Metal'})],
@@ -212,9 +219,26 @@ describe('tint materials', () => {
       undefined,
     );
     const m = material(part);
-    expect(m.colorNode).toBe(uniforms.metal);
+    // vec4(tint, texel.a): the color is the flat tint, the alpha the texture's.
+    expect(m.colorNode).not.toBe(uniforms.metal);
+    const nodes = nodesOf(m);
+    expect(nodes).toContain(uniforms.metal);
+    expect(nodes.some(n => isTextureOf(n, WHITE))).toBe(true);
     expect(m.userData['tintSlot']).toBe('metal');
     expect(uniforms.metal.value.getHexString()).toBe('ff0000');
+
+    // Without a map there is no alpha to keep: the flat tint itself.
+    const flat = syntheticPart(
+      [Object.assign(new MeshStandardMaterial(), {name: 'Metal'})],
+      false,
+    );
+    applyTintMaterial(
+      flat,
+      [{material: 'Metal', slot: 'metal', mode: 'replace'}],
+      uniforms,
+      undefined,
+    );
+    expect(material(flat).colorNode).toBe(uniforms.metal);
   });
 
   it('AC-CMP-011.1: only geometry with regionId gets the region discard, driven by the shared mask uniform', () => {
@@ -354,6 +378,26 @@ describe('tint materials', () => {
       const version = m.version;
       setTint(uniforms, 'primary', '#3a5fcd');
       expect(m.version).toBe(version);
+    });
+
+    it('AC-CMP-014.2: replace-mode toon materials use the flat tint with the texel alpha (cut-out cards)', () => {
+      const {opts} = options();
+      const uniforms = createTintUniforms(INITIAL);
+      const withMap = syntheticPart(
+        [Object.assign(new MeshStandardMaterial({map: WHITE}), {name: 'Hair'})],
+        false,
+      );
+      applyTintMaterial(
+        withMap,
+        [{material: 'Hair', slot: 'hair', mode: 'replace'}],
+        uniforms,
+        undefined,
+        opts,
+      );
+      const nodes = nodesOf(material(withMap));
+      expect(nodes).toContain(uniforms.hair);
+      // The albedo is read only for its alpha in replace mode.
+      expect(nodes.some(n => isTextureOf(n, WHITE))).toBe(true);
     });
 
     it('AC-CMP-013.2: an unmapped toon material references no tint uniform', () => {

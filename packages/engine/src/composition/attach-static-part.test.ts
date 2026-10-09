@@ -8,11 +8,17 @@ import {
   Skeleton,
   Vector3,
 } from 'three';
-import type {Object3D} from 'three';
+import type {Mesh, Object3D} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {partEntrySchema, rigDefinitionSchema} from '@csg/parts-schema';
+import {
+  TINT_SLOTS,
+  partEntrySchema,
+  rigDefinitionSchema,
+} from '@csg/parts-schema';
 import type {
   AssetRef,
+  HexColor,
+  TintSlot,
   PartEntry,
   PartSocket,
   RigDefinition,
@@ -21,6 +27,11 @@ import type {BodySkeleton} from '../contracts/composition';
 import type {LoadedPartInternal} from '../contracts/registry';
 import type {RestPose} from '../retarget/types';
 import {attachStaticPart} from './attach-static-part';
+import {
+  applyTintMaterial,
+  createTintUniforms,
+  restoreMaterials,
+} from './tint-material';
 import {
   resolveSocketBone,
   resolveSocketJoint,
@@ -396,5 +407,48 @@ describe('composition: attachStaticPart (REQ-ANA-007, REQ-ANA-019)', () => {
     const before = new Matrix4().copy(sword.object.matrixWorld);
     body.root.updateMatrixWorld(true);
     expect(sword.object.matrixWorld.equals(before)).toBe(true);
+  });
+});
+
+describe('composition: static props follow re-tints (M2-16)', () => {
+  it('REQ-CMP-013: a later applyTintMaterial / restoreMaterials on the part scene reaches the attached prop clone; dispose unlinks', () => {
+    const body = buildBody();
+    const scene = swordScene.clone(true);
+    const p: LoadedPartInternal = {...part(), scene};
+    const prop = attachOk(body, hatSocket(), p);
+    const propMeshes = (): Mesh[] => {
+      const out: Mesh[] = [];
+      prop.object.traverse(o => {
+        if ((o as Partial<Mesh>).isMesh === true) out.push(o as Mesh);
+      });
+      return out;
+    };
+    const sourceMeshes: Mesh[] = [];
+    scene.traverse(o => {
+      if ((o as Partial<Mesh>).isMesh === true) sourceMeshes.push(o as Mesh);
+    });
+    const originals = sourceMeshes.map(m => m.material);
+    expect(propMeshes().length).toBe(sourceMeshes.length);
+    expect(sourceMeshes.length).toBeGreaterThan(0);
+
+    const tints = createTintUniforms(
+      Object.fromEntries(TINT_SLOTS.map(s => [s, '#ffffff'])) as Record<
+        TintSlot,
+        HexColor
+      >,
+    );
+    applyTintMaterial(p, p.entry.tintSlots, tints);
+    propMeshes().forEach((m, i) => {
+      expect(m.material).toBe((sourceMeshes[i] as Mesh).material);
+      expect(m.material).not.toBe(originals[i]);
+    });
+    restoreMaterials(scene);
+    propMeshes().forEach((m, i) => expect(m.material).toBe(originals[i]));
+
+    const clones = propMeshes();
+    prop.dispose();
+    applyTintMaterial(p, p.entry.tintSlots, tints);
+    clones.forEach((m, i) => expect(m.material).toBe(originals[i]));
+    restoreMaterials(scene);
   });
 });

@@ -10,7 +10,13 @@ export type {RenderSettings};
 
 /** Post stages in pipeline order (AC-PIX-025.1). */
 export type PostStageId =
-  'coverage' | 'outline' | 'srgb' | 'dither' | 'palette' | 'final-alpha';
+  | 'coverage'
+  | 'rim'
+  | 'outline'
+  | 'srgb'
+  | 'dither'
+  | 'palette'
+  | 'final-alpha';
 
 /** Axis-aligned box in the camera plane, world units, pivot at the origin. */
 export interface ScreenBox {

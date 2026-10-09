@@ -23,6 +23,9 @@ import {
 
 const CLIP: ClipRef = ref('fixture-clip') as ClipRef;
 
+/** Largest per-side gap between the conservative and the exact screen box (m). */
+const LOOSENESS_M = 0.05;
+
 function settings(input: Record<string, unknown>): RenderSettings {
   const result = parseRenderSettings(input);
   if (!result.ok) throw new Error(JSON.stringify(result.issues));
@@ -142,23 +145,31 @@ describe('union bounds on the fixture character', () => {
     const jobs = planFrames(s, new Map([[CLIP, 1]]));
     const labels = activeDirectionLabels(s);
     let checked = 0;
+    let maxLoose = 0;
     for (const elevationDeg of [0, 30, 35, 90]) {
       for (const job of jobs) {
         assembly.evaluate(job.timeSec);
         const corners = collectStageCorners(assembly.root, stage);
-        // body, shirt and sword
-        expect(corners.length).toBe(3 * CORNER_FLOATS_PER_BOX);
+        // Body and shirt per bone cluster, plus the sword's one box.
+        expect(corners.length % CORNER_FLOATS_PER_BOX).toBe(0);
+        expect(corners.length).toBeGreaterThan(3 * CORNER_FLOATS_PER_BOX);
         const yaw = stageYawRad(labels[job.direction]!);
         const conservative = projectCorners(corners, yaw, elevationDeg);
         const exact = exactScreenBox(assembly.root, stage, yaw, elevationDeg);
         expectContains(conservative, exact);
-        // Slightly loose at diagonals only: within 25 cm of the exact box.
-        expect(exact.minX - conservative.minX).toBeLessThan(0.25);
-        expect(conservative.maxY - exact.maxY).toBeLessThan(0.25);
+        // Per-bone boxes stay close to the exact box at every yaw (FX-G).
+        for (const k of ['minX', 'minY'] as const)
+          maxLoose = Math.max(maxLoose, exact[k] - conservative[k]);
+        for (const k of ['maxX', 'maxY'] as const)
+          maxLoose = Math.max(maxLoose, conservative[k] - exact[k]);
         checked++;
       }
     }
     expect(checked).toBe(4 * 64);
+    console.log(
+      `[fx-g] fixture max per-side looseness ${maxLoose.toFixed(4)} m`,
+    );
+    expect(maxLoose).toBeLessThan(LOOSENESS_M);
     assembly.dispose();
   });
 

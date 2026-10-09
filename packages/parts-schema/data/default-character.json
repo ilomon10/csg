@@ -28,13 +28,13 @@
     },
     "morphs": {},
     "tints": {
-      "skin": "#e0ac8a",
-      "hair": "#4a3222",
-      "eyes": "#3b5b8c",
-      "primary": "#5b7fa6",
-      "secondary": "#a65b5b",
-      "metal": "#a8afb5",
-      "leather": "#7a5230"
+      "skin": "#ffffff",
+      "hair": "#7a4a26",
+      "eyes": "#ffffff",
+      "primary": "#ffffff",
+      "secondary": "#ffffff",
+      "metal": "#ffffff",
+      "leather": "#ffffff"
     }
   },
   "clips": ["builtin:quaternius-ual/idle", "builtin:quaternius-ual/walk"]

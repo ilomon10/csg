@@ -1,7 +1,8 @@
 /**
  * Union screen bounds of the export (spec 003 REQ-PIX-007, AC-PIX-007.2): per
- * planned frame, the stage-space axis-aligned box of every visible mesh's
- * CPU-skinned vertices, projected for each direction yaw into the camera plane. The
+ * planned frame, the stage-space axis-aligned boxes of every visible mesh (one
+ * per bone cluster of its CPU-skinned vertices), projected for each direction
+ * yaw into the camera plane. The
  * result is conservative: it always contains every skinned vertex (an AABB
  * contains its vertices and the projection is linear), and is slightly loose
  * when the yaw is not a multiple of 90 degrees. No GPU, no pixel readback.
@@ -119,56 +120,165 @@ function froundOutward(v: number, up: boolean): number {
   return _f32[0] as number;
 }
 
-/** Expands `_min`/`_max` by `_v` transformed with `_toStage`. */
-function expandStage(): void {
+/** Per-cluster stage-space bounds: 6 floats (min xyz, max xyz) per cluster. */
+let _clusterBounds = new Float64Array(0);
+
+/** Grows {@link _clusterBounds} to `clusters` entries and resets them to empty. */
+function resetClusters(clusters: number): Float64Array {
+  if (_clusterBounds.length < clusters * 6)
+    _clusterBounds = new Float64Array(clusters * 6);
+  for (let c = 0; c < clusters; c++) {
+    const o = c * 6;
+    _clusterBounds[o] = Infinity;
+    _clusterBounds[o + 1] = Infinity;
+    _clusterBounds[o + 2] = Infinity;
+    _clusterBounds[o + 3] = -Infinity;
+    _clusterBounds[o + 4] = -Infinity;
+    _clusterBounds[o + 5] = -Infinity;
+  }
+  return _clusterBounds;
+}
+
+/** Expands cluster `c` of `bounds` by `_v` transformed with `_toStage`. */
+function expandCluster(bounds: Float64Array, c: number): void {
   _v.applyMatrix4(_toStage);
-  _min.min(_v);
-  _max.max(_v);
+  const o = c * 6;
+  if (_v.x < (bounds[o] as number)) bounds[o] = _v.x;
+  if (_v.y < (bounds[o + 1] as number)) bounds[o + 1] = _v.y;
+  if (_v.z < (bounds[o + 2] as number)) bounds[o + 2] = _v.z;
+  if (_v.x > (bounds[o + 3] as number)) bounds[o + 3] = _v.x;
+  if (_v.y > (bounds[o + 4] as number)) bounds[o + 4] = _v.y;
+  if (_v.z > (bounds[o + 5] as number)) bounds[o + 5] = _v.z;
+}
+
+/** Appends the 8 corners of one stage box, rounded outward to float32. */
+function pushBox(
+  out: number[],
+  minX: number,
+  minY: number,
+  minZ: number,
+  maxX: number,
+  maxY: number,
+  maxZ: number,
+): void {
+  const x0 = froundOutward(minX, false);
+  const y0 = froundOutward(minY, false);
+  const z0 = froundOutward(minZ, false);
+  const x1 = froundOutward(maxX, true);
+  const y1 = froundOutward(maxY, true);
+  const z1 = froundOutward(maxZ, true);
+  for (let c = 0; c < 8; c++)
+    out.push(c & 1 ? x1 : x0, c & 2 ? y1 : y0, c & 4 ? z1 : z0);
 }
 
 /**
- * Expands `_min`/`_max` (stage space) by `mesh`: every CPU-skinned vertex for
- * a skinned mesh, the 8 geometry-box corners otherwise.
+ * Index of the bone with the largest skin weight of vertex `i` (ties: the
+ * first of the four influences), the vertex's cluster.
  */
-function expandByMesh(mesh: Mesh): void {
+function dominantBone(
+  skinIndex: {getComponent(i: number, c: number): number},
+  skinWeight: {getComponent(i: number, c: number): number},
+  i: number,
+): number {
+  let best = 0;
+  let bestWeight = -Infinity;
+  for (let c = 0; c < 4; c++) {
+    const w = skinWeight.getComponent(i, c);
+    if (w > bestWeight) {
+      bestWeight = w;
+      best = c;
+    }
+  }
+  return skinIndex.getComponent(i, best);
+}
+
+/**
+ * Appends the boxes of `mesh` in stage space: for a skinned mesh one box per
+ * bone cluster (the CPU-skinned vertices whose largest skin weight is that
+ * bone, ascending bone index), otherwise the transformed geometry box.
+ */
+function pushMeshBoxes(mesh: Mesh, out: number[]): void {
   const position = mesh.geometry.getAttribute('position');
   if (position === undefined || position.count === 0) return;
   _toStage.multiplyMatrices(_stageInverse, mesh.matrixWorld);
   if (isSkinned(mesh)) {
-    // getVertexPosition applies morph targets and linear blend skinning.
+    const skinIndex = mesh.geometry.getAttribute('skinIndex');
+    const skinWeight = mesh.geometry.getAttribute('skinWeight');
+    const clusters =
+      skinIndex === undefined || skinWeight === undefined
+        ? 1
+        : Math.max(mesh.skeleton.bones.length, 1);
+    const bounds = resetClusters(clusters);
     for (let i = 0; i < position.count; i++) {
+      // getVertexPosition applies morph targets and linear blend skinning.
       mesh.getVertexPosition(i, _v);
-      expandStage();
+      const c =
+        clusters === 1
+          ? 0
+          : Math.min(
+              Math.max(
+                dominantBone(
+                  skinIndex as NonNullable<typeof skinIndex>,
+                  skinWeight as NonNullable<typeof skinWeight>,
+                  i,
+                ),
+                0,
+              ),
+              clusters - 1,
+            );
+      expandCluster(bounds, c);
+    }
+    for (let c = 0; c < clusters; c++) {
+      const o = c * 6;
+      if (!((bounds[o] as number) <= (bounds[o + 3] as number))) continue;
+      pushBox(
+        out,
+        bounds[o] as number,
+        bounds[o + 1] as number,
+        bounds[o + 2] as number,
+        bounds[o + 3] as number,
+        bounds[o + 4] as number,
+        bounds[o + 5] as number,
+      );
     }
     return;
   }
   if (mesh.geometry.boundingBox === null) mesh.geometry.computeBoundingBox();
   const box = mesh.geometry.boundingBox;
   if (box === null || box.isEmpty()) return;
+  _min.set(Infinity, Infinity, Infinity);
+  _max.set(-Infinity, -Infinity, -Infinity);
   for (let c = 0; c < 8; c++) {
     _v.set(
       c & 1 ? box.max.x : box.min.x,
       c & 2 ? box.max.y : box.min.y,
       c & 4 ? box.max.z : box.min.z,
     );
-    expandStage();
+    _v.applyMatrix4(_toStage);
+    _min.min(_v);
+    _max.max(_v);
   }
+  pushBox(out, _min.x, _min.y, _min.z, _max.x, _max.y, _max.z);
 }
 
 /**
  * The current pose's box corners of every visible mesh under `root`, in the
- * local space of `stage` (so the direction yaw on `stage` is excluded). Per
- * mesh, the stage-space AABB of its CPU-skinned vertices (skinned meshes,
- * REQ-PIX-007) or of its transformed geometry box (static meshes such as
- * socket props), packed as 8 corners rounded outward to float32 so the packed
- * box always contains the exact one. Meshes are visited in scene-graph order,
- * so the output is deterministic.
+ * local space of `stage` (so the direction yaw on `stage` is excluded).
+ * Skinned meshes (REQ-PIX-007) give one stage-space AABB per bone cluster:
+ * the CPU-skinned vertices grouped by the bone with their largest skin
+ * weight. Small per-bone boxes follow the pose closely, so their projection
+ * at diagonal yaws and elevated cameras stays near the exact vertex bounds
+ * (one whole-mesh box would pair the head's height with the heel's depth;
+ * FX-G). Static meshes such as socket props give their transformed geometry
+ * box. Every box is packed as 8 corners rounded outward to float32 so it
+ * always contains the exact one. Meshes are visited in scene-graph order and
+ * clusters in bone order, so the output is deterministic.
  *
  * Updates world matrices of `stage` and its subtree before reading them.
  *
  * @param root Character root (a descendant of `stage`, or `stage` itself).
  * @param stage The object whose local space is "stage space".
- * @returns {@link CORNER_FLOATS_PER_BOX} floats per non-empty mesh.
+ * @returns {@link CORNER_FLOATS_PER_BOX} floats per non-empty box.
  */
 export function collectStageCorners(
   root: Object3D,
@@ -178,19 +288,7 @@ export function collectStageCorners(
   _stageInverse.copy(stage.matrixWorld).invert();
   const out: number[] = [];
   root.traverseVisible(o => {
-    if (!isMesh(o)) return;
-    _min.set(Infinity, Infinity, Infinity);
-    _max.set(-Infinity, -Infinity, -Infinity);
-    expandByMesh(o);
-    if (!(_min.x <= _max.x)) return;
-    const x0 = froundOutward(_min.x, false);
-    const y0 = froundOutward(_min.y, false);
-    const z0 = froundOutward(_min.z, false);
-    const x1 = froundOutward(_max.x, true);
-    const y1 = froundOutward(_max.y, true);
-    const z1 = froundOutward(_max.z, true);
-    for (let c = 0; c < 8; c++)
-      out.push(c & 1 ? x1 : x0, c & 2 ? y1 : y0, c & 4 ? z1 : z0);
+    if (isMesh(o)) pushMeshBoxes(o, out);
   });
   return Float32Array.from(out);
 }

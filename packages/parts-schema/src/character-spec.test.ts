@@ -32,6 +32,12 @@ describe('character spec', () => {
     ).toBe(true);
     const spec = createDefaultCharacterSpec();
     expect(Object.keys(spec.parts)).toHaveLength(6);
+    // PM 2026-10-09 (FX-K/FX-L): `multiply` is texel × tint, so white tints
+    // show the authored Quaternius colours; only hair (a grey texture made to
+    // be tinted) defaults to natural brown.
+    expect(Object.values(spec.tints)).toHaveLength(7);
+    for (const [slot, hex] of Object.entries(spec.tints))
+      expect(hex).toBe(slot === 'hair' ? '#7a4a26' : '#ffffff');
     expect(spec.parts['hair']?.ref).toBe(
       'builtin:quaternius-ubc/hair-simple-parted',
     );

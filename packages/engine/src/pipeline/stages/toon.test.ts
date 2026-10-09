@@ -162,11 +162,11 @@ describe('toon stages (REQ-PIX-011..013, A5)', () => {
     const rim = defaultToonRimInputs(ctx);
     expect(rim.width).toBe(binder.uniformNode('rim.width'));
     expect(rim.strength).toBe(binder.uniformNode('rim.strength'));
-    toonShade(ctx, vec3(1, 1, 1));
+    const shade = toonShade(ctx, vec3(1, 1, 1));
+    expect(Object.keys(shade)).toEqual([...TOON_RAMP_OUTPUTS]);
     expect(binder.keys()).toEqual(
       expect.arrayContaining([
         'light.ambient',
-        'rim.enabled',
         'rim.strength',
         'rim.width',
         'toon.bands',
