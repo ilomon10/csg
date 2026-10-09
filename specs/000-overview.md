@@ -58,6 +58,7 @@ Fixed decisions are in `.tagconn/work/research.md` and `docs/adr/*`. This file i
 | **M4: Shader graph** | Graph model and compiler to TSL, material and post-process graphs, built-in stages as editable subgraphs, React Flow editor, blackboard, presets. | 006, 007 |
 | **M5: Custom upload** | GLB/glTF + VRM upload in a worker, validation and budgets, bone auto-map + manual mapping, retargeting, socket props, OPFS storage, license capture. FBX/OBJ beta. | 008 |
 | **Website track** (parallel, from M1) | Next.js landing page, Fumadocs user guide built from `docs/guide/**`, perf/a11y bars. | 010 |
+| **M6: 2D lighting maps** | Auxiliary maps for dynamic lighting in 2D engines, from the same single scene render. Depends on M3 export; independent of M4/M5. P1 scope: normal map (`_n`), albedo (unlit) colour sheet and their metadata. Later: mask, specular, UV lookup map, engine presets (P2); depth, emission, options (P3). *(Added 2026-10-09 (LIT).)* | 012 |
 
 ## Feature map
 
@@ -74,6 +75,7 @@ Fixed decisions are in `.tagconn/work/research.md` and `docs/adr/*`. This file i
 | 009 | [009-editor-shell-ux.md](./009-editor-shell-ux.md) | UX | Layout, panels, canonical shortcut registry, command palette, single shared undo history, projects/autosave, multi-tab policy, notifications, theming, a11y, crash recovery |
 | 010 | [010-website.md](./010-website.md) | WEB | Landing page, Fumadocs guide, docs IA, perf/a11y |
 | 011 | [011-asset-pipeline.md](./011-asset-pipeline.md) | AST | Source packs, `verify-rig` (M1 spike), `build-parts`, manifests, thumbnails, licensing, fixtures, contributions |
+| 012 | [012-lighting-maps.md](./012-lighting-maps.md) | LIT | Normal, albedo, mask, specular, UV lookup, depth and emission maps for 2D engine lighting; map metadata; Godot/Unity/Phaser lighting presets *(added 2026-10-09 (LIT))* |
 
 ## Area-prefix registry
 
@@ -93,6 +95,7 @@ Each prefix is owned by exactly one spec file. You can only add a new prefix by 
 | UX | Editor shell UX | 009-editor-shell-ux.md | Layout, shortcuts, undo, persistence |
 | WEB | Website | 010-website.md | Landing, docs site |
 | AST | Asset pipeline | 011-asset-pipeline.md | Bundled asset ingestion, rig verification, manifests, licensing records (PM decision 2026-10-08) |
+| LIT | 2D lighting maps | 012-lighting-maps.md | Auxiliary export maps (normal, albedo, mask, specular, UV, depth, emission) and their metadata/presets (PM decision 2026-10-09; added 2026-10-09 (LIT)) |
 
 ## Glossary
 
@@ -131,6 +134,7 @@ Each prefix is owned by exactly one spec file. You can only add a new prefix by 
 | **Retarget** | Transferring animation from the shared skeleton to an uploaded rig (or the reverse) using the bone map and rest-pose correction. |
 | **Budget** | Upload limits (tris, textures, bones, influences, file size) enforced before a model is accepted. |
 | **OPFS** | Origin Private File System: browser-local storage for uploaded binaries. Metadata lives in IndexedDB. |
+| **Lighting map** | An auxiliary export image with the same layout and alpha as the colour sheet that carries data for runtime 2D lighting or recolouring instead of final colour (normal `_n`, albedo `_albedo`, mask `_m`, specular `_s`, UV lookup `_uv`, depth `_d`, emission `_e`). Spec 012. *(Added 2026-10-09 (LIT).)* |
 | **Credits** | Auto-generated `CREDITS.txt` that lists the license, author and source of every asset in an export. |
 | **Backend** | The active renderer path: WebGPU, or the WebGL2 fallback of `WebGPURenderer`. |
 | **Dedicated origin** | A scheme + host + port that serves only this project's deploy artifact, so no other site can read its browser storage (REQ-GEN-009). |

@@ -4,6 +4,26 @@
  */
 import type {ClipRef, RenderSettings} from '@csg/parts-schema';
 import type {EngineError, Result} from './errors';
+import type {
+  FrameLogEntry,
+  FrameProgress,
+  FrameSamplerTarget,
+  FrameWarning,
+  PreparedFrames,
+  PrepareFramesOptions,
+  RenderFramesOptions,
+} from '../sampler/frame-sampler';
+
+/** Sampler types (implemented in `sampler/frame-sampler.ts`), re-exported as contracts. */
+export type {
+  FrameLogEntry,
+  FrameProgress,
+  FrameSamplerTarget,
+  FrameWarning,
+  PreparedFrames,
+  PrepareFramesOptions,
+  RenderFramesOptions,
+};
 
 /** Validated render settings (spec 003 Data and contracts), re-exported from `@csg/parts-schema`. */
 export type {RenderSettings};
@@ -132,19 +152,25 @@ export interface FrameTarget {
   read(): Promise<Uint8ClampedArray>;
 }
 
-/** Computes the union-bounds framing of every planned frame. */
+/**
+ * Phase 1 of the frame sampler (`sampler/frame-sampler.ts`): plan, union
+ * bounds and the one fixed framing of an export, with warnings.
+ */
 export type PrepareFrames = (
-  target: FrameTarget,
+  target: FrameSamplerTarget,
   settings: RenderSettings,
-  signal?: AbortSignal,
-) => Promise<Result<Framing, EngineError>>;
+  options?: PrepareFramesOptions,
+) => Promise<Result<PreparedFrames, EngineError>>;
 
-/** Renders every planned frame in {@link FrameJob} order. */
+/**
+ * Phase 2 of the frame sampler: renders every prepared frame in
+ * {@link FrameJob} order. Throws `FrameSamplerError` (`EXP_CANCELLED` on
+ * abort, or the failing `setClip` code).
+ */
 export type SampleFrames = (
-  target: FrameTarget,
-  settings: RenderSettings,
-  framing: Framing,
-  signal?: AbortSignal,
+  target: FrameSamplerTarget,
+  prepared: PreparedFrames,
+  options?: RenderFramesOptions,
 ) => AsyncIterable<RenderedFrame>;
 
 /** Plans the frame list (pure, deterministic). */

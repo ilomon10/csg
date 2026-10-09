@@ -11,5 +11,7 @@ export * from './composition';
 export * from './anatomy';
 export * from './animation';
 export * from './renderer';
+export * from './pipeline';
+export * from './sampler';
 export * from './rig';
 export * from './retarget';

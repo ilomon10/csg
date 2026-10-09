@@ -47,7 +47,7 @@ const gpuProjects =
         test: {
           name: `gpu-${backend}`,
           root: 'packages/engine',
-          include: ['test/gpu/**/*.gpu.ts'],
+          include: ['test/gpu/**/*.gpu.ts', 'test/golden/**/*.gpu.ts'],
           provide: {csgBackend: backend},
           testTimeout: 60_000,
           hookTimeout: 60_000,

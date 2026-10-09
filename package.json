@@ -12,7 +12,7 @@
     "fix": "eslint . --fix && prettier --write .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc -b && tsc -p packages/engine/test/gpu && pnpm --filter @csg/site typecheck",
+    "typecheck": "tsc -b && tsc -p packages/engine/test/gpu && tsc -p packages/engine/test/golden && pnpm --filter @csg/site typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:gpu": "CSG_GPU=1 vitest run --project 'gpu-*'",

@@ -33,12 +33,17 @@ Hex colors have six digits and start with `#`, for example `#3a5fcd`. Uppercase 
 
 The picker offers three kinds of swatches:
 
-- **Palette colors**, when a palette is active in the **Render** tab. Choosing one sets the tint to that exact color.
+- **Palette colors**, when a palette is active in the **Render** tab. Choosing one sets the tint to that exact color. This swatch group is planned with the Render tab.
 - **Skin tones**, **hair colors** and **general** swatches.
 
 ## How a tint is applied
 
-Some materials keep their shading and texture detail when you recolor them. Others become a flat color. The part data decides which. A material that is not linked to any tint never changes.
+Each material uses one of two modes. The part data decides which one.
+
+- **Multiply** (the usual mode). The tint is multiplied with the colors of the texture, so the shading and detail of the texture stay. White leaves the authored colors unchanged, and a grey tint darkens them. The hair texture is neutral grey, so hair starts as brown (`#7a4a26`). Most other tints start as white, so a new character keeps its authored colors.
+- **Replace**. The whole part becomes the flat tint color. Its shape is kept, so transparent areas stay transparent.
+
+In both modes, transparent areas of a part stay transparent. A material that is not linked to any tint never changes.
 
 ## Keyboard use
 

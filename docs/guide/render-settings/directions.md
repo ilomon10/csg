@@ -7,6 +7,9 @@ description: Choose 1, 2, 4 or 8 facing directions for your sprites, the label e
 
 A direction is one way the character faces. The editor turns the character to each direction in turn and renders every animation frame for it. The character itself turns. The camera does not move.
 
+> [!NOTE]
+> **Planned.** The direction controls are planned with the Render tab. The labels and rules on this page are the ones the pipeline uses.
+
 ## Choose how many
 
 | Directions | Facings you get                  | Typical use                                  |
@@ -15,6 +18,8 @@ A direction is one way the character faces. The editor turns the character to ea
 | 2          | `e` and `w`                      | Side-scrolling games that flip sprites       |
 | 4          | `e`, `n`, `w` and `s`            | Top-down games with four directions          |
 | 8          | All eight, listed below          | Top-down and isometric games                 |
+
+3 and 6 directions are not allowed. The editor rejects them.
 
 ## Direction labels
 
@@ -42,7 +47,8 @@ With one direction, choose which facing to draw. The default is `e` for the side
 Every direction uses the same animation timing and the same body proportions. Only the facing changes, so frame 3 of `walk` lines up across all directions.
 
 > [!NOTE]
-> **Planned.** Creating the west-facing directions by mirroring the east-facing ones is planned for a later release. Mirroring flips the sprite, so an item held in one hand moves to the other.
+> **Planned.** Creating the west-facing directions by mirroring the east-facing ones is planned for a later release. Mirroring flips the sprite, so an item held in one hand moves to the other. Mirroring is off by default.
 
 <!-- spec: REQ-PIX-005 -->
+<!-- spec: REQ-PIX-006 -->
 <!-- spec: REQ-ANM-011 -->
