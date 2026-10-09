@@ -1,0 +1,533 @@
+{
+  "format": "sprite-pack-config",
+  "version": 1,
+  "packId": "quaternius-ual",
+  "name": "Universal Animation Library (Standard)",
+  "license": {
+    "license": "CC0-1.0",
+    "author": "Quaternius",
+    "sourceUrl": "https://quaternius.itch.io/universal-animation-library",
+    "commercialUse": "yes",
+    "attributionRequired": false
+  },
+  "rig": "quaternius-ue5-65",
+  "parts": [],
+  "clips": [
+    {
+      "id": "a-tpose",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "A_TPose"
+      },
+      "name": "A TPose",
+      "category": "misc",
+      "loop": false,
+      "defaultFrameCount": 1,
+      "tags": ["a"]
+    },
+    {
+      "id": "crouch-fwd",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Crouch_Fwd_Loop"
+      },
+      "name": "Crouch forward",
+      "category": "locomotion",
+      "loop": true,
+      "defaultFrameCount": 8,
+      "tags": ["crouch", "loop"]
+    },
+    {
+      "id": "crouch-idle",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Crouch_Idle_Loop"
+      },
+      "name": "Crouch Idle",
+      "category": "locomotion",
+      "loop": true,
+      "defaultFrameCount": 12,
+      "tags": ["crouch", "loop"]
+    },
+    {
+      "id": "dance",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Dance_Loop"
+      },
+      "name": "Dance",
+      "category": "emote",
+      "loop": true,
+      "defaultFrameCount": 6,
+      "tags": ["dance", "loop"]
+    },
+    {
+      "id": "death",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Death01"
+      },
+      "name": "Death01",
+      "category": "death",
+      "loop": false,
+      "defaultFrameCount": 12,
+      "tags": ["death01"]
+    },
+    {
+      "id": "driving",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Driving_Loop"
+      },
+      "name": "Driving",
+      "category": "misc",
+      "loop": true,
+      "defaultFrameCount": 8,
+      "tags": ["driving", "loop"]
+    },
+    {
+      "id": "fixing-kneeling",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Fixing_Kneeling"
+      },
+      "name": "Fixing Kneeling",
+      "category": "misc",
+      "loop": false,
+      "defaultFrameCount": 12,
+      "tags": ["fixing"]
+    },
+    {
+      "id": "hit-chest",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Hit_Chest"
+      },
+      "name": "Hit Chest",
+      "category": "reaction",
+      "loop": false,
+      "defaultFrameCount": 4,
+      "tags": ["hit"]
+    },
+    {
+      "id": "hit-head",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Hit_Head"
+      },
+      "name": "Hit Head",
+      "category": "reaction",
+      "loop": false,
+      "defaultFrameCount": 4,
+      "tags": ["hit"]
+    },
+    {
+      "id": "idle",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Idle_Loop"
+      },
+      "name": "Idle",
+      "category": "locomotion",
+      "loop": true,
+      "defaultFrameCount": 12,
+      "tags": ["idle", "loop"]
+    },
+    {
+      "id": "idle-talking",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Idle_Talking_Loop"
+      },
+      "name": "Idle Talking",
+      "category": "emote",
+      "loop": true,
+      "defaultFrameCount": 12,
+      "tags": ["idle", "loop"]
+    },
+    {
+      "id": "idle-torch",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Idle_Torch_Loop"
+      },
+      "name": "Idle Torch",
+      "category": "misc",
+      "loop": true,
+      "defaultFrameCount": 8,
+      "tags": ["idle", "loop"]
+    },
+    {
+      "id": "interact",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Interact"
+      },
+      "name": "Interact",
+      "category": "misc",
+      "loop": false,
+      "defaultFrameCount": 8,
+      "tags": ["interact"]
+    },
+    {
+      "id": "jog",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Jog_Fwd_Loop"
+      },
+      "name": "Jog forward",
+      "category": "locomotion",
+      "loop": true,
+      "defaultFrameCount": 6,
+      "tags": ["jog", "loop"]
+    },
+    {
+      "id": "jump-land",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Jump_Land"
+      },
+      "name": "Jump Land",
+      "category": "locomotion",
+      "loop": false,
+      "defaultFrameCount": 8,
+      "tags": ["jump"]
+    },
+    {
+      "id": "jump",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Jump_Loop"
+      },
+      "name": "Jump",
+      "category": "locomotion",
+      "loop": true,
+      "defaultFrameCount": 12,
+      "tags": ["jump", "loop"]
+    },
+    {
+      "id": "jump-start",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Jump_Start"
+      },
+      "name": "Jump Start",
+      "category": "locomotion",
+      "loop": false,
+      "defaultFrameCount": 8,
+      "tags": ["jump"]
+    },
+    {
+      "id": "pickup-table",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "PickUp_Table"
+      },
+      "name": "PickUp Table",
+      "category": "misc",
+      "loop": false,
+      "defaultFrameCount": 6,
+      "tags": ["pickup"]
+    },
+    {
+      "id": "pistol-aim-down",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Pistol_Aim_Down"
+      },
+      "name": "Pistol Aim Down",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 4,
+      "tags": ["pistol"]
+    },
+    {
+      "id": "pistol-aim-neutral",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Pistol_Aim_Neutral"
+      },
+      "name": "Pistol Aim Neutral",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 4,
+      "tags": ["pistol"]
+    },
+    {
+      "id": "pistol-aim-up",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Pistol_Aim_Up"
+      },
+      "name": "Pistol Aim Up",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 4,
+      "tags": ["pistol"]
+    },
+    {
+      "id": "pistol-idle",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Pistol_Idle_Loop"
+      },
+      "name": "Pistol Idle",
+      "category": "combat",
+      "loop": true,
+      "defaultFrameCount": 8,
+      "tags": ["pistol", "loop"]
+    },
+    {
+      "id": "pistol-reload",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Pistol_Reload"
+      },
+      "name": "Pistol Reload",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 8,
+      "tags": ["pistol"]
+    },
+    {
+      "id": "pistol-shoot",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Pistol_Shoot"
+      },
+      "name": "Pistol Shoot",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 6,
+      "tags": ["pistol"]
+    },
+    {
+      "id": "punch-cross",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Punch_Cross"
+      },
+      "name": "Punch Cross",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 6,
+      "tags": ["punch"]
+    },
+    {
+      "id": "punch-jab",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Punch_Jab"
+      },
+      "name": "Punch Jab",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 6,
+      "tags": ["punch"]
+    },
+    {
+      "id": "push",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Push_Loop"
+      },
+      "name": "Push",
+      "category": "locomotion",
+      "loop": true,
+      "defaultFrameCount": 12,
+      "tags": ["push", "loop"]
+    },
+    {
+      "id": "roll",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Roll"
+      },
+      "name": "Roll",
+      "category": "locomotion",
+      "loop": false,
+      "defaultFrameCount": 8,
+      "tags": ["roll"]
+    },
+    {
+      "id": "sitting-enter",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Sitting_Enter"
+      },
+      "name": "Sitting Enter",
+      "category": "misc",
+      "loop": false,
+      "defaultFrameCount": 8,
+      "tags": ["sitting"]
+    },
+    {
+      "id": "sitting-exit",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Sitting_Exit"
+      },
+      "name": "Sitting Exit",
+      "category": "misc",
+      "loop": false,
+      "defaultFrameCount": 8,
+      "tags": ["sitting"]
+    },
+    {
+      "id": "sitting-idle",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Sitting_Idle_Loop"
+      },
+      "name": "Sitting Idle",
+      "category": "misc",
+      "loop": true,
+      "defaultFrameCount": 8,
+      "tags": ["sitting", "loop"]
+    },
+    {
+      "id": "sitting-talking",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Sitting_Talking_Loop"
+      },
+      "name": "Sitting Talking",
+      "category": "emote",
+      "loop": true,
+      "defaultFrameCount": 12,
+      "tags": ["sitting", "loop"]
+    },
+    {
+      "id": "spell-simple-enter",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Spell_Simple_Enter"
+      },
+      "name": "Spell Simple Enter",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 6,
+      "tags": ["spell"]
+    },
+    {
+      "id": "spell-simple-exit",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Spell_Simple_Exit"
+      },
+      "name": "Spell Simple Exit",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 4,
+      "tags": ["spell"]
+    },
+    {
+      "id": "spell-simple-idle",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Spell_Simple_Idle_Loop"
+      },
+      "name": "Spell Simple Idle",
+      "category": "combat",
+      "loop": true,
+      "defaultFrameCount": 12,
+      "tags": ["spell", "loop"]
+    },
+    {
+      "id": "spell-simple-shoot",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Spell_Simple_Shoot"
+      },
+      "name": "Spell Simple Shoot",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 4,
+      "tags": ["spell"]
+    },
+    {
+      "id": "sprint",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Sprint_Loop"
+      },
+      "name": "Sprint",
+      "category": "locomotion",
+      "loop": true,
+      "defaultFrameCount": 6,
+      "tags": ["sprint", "loop"]
+    },
+    {
+      "id": "swim-fwd",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Swim_Fwd_Loop"
+      },
+      "name": "Swim forward",
+      "category": "locomotion",
+      "loop": true,
+      "defaultFrameCount": 8,
+      "tags": ["swim", "loop"]
+    },
+    {
+      "id": "swim-idle",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Swim_Idle_Loop"
+      },
+      "name": "Swim Idle",
+      "category": "locomotion",
+      "loop": true,
+      "defaultFrameCount": 12,
+      "tags": ["swim", "loop"]
+    },
+    {
+      "id": "sword-attack",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Sword_Attack"
+      },
+      "name": "Sword Attack",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 8,
+      "tags": ["sword"]
+    },
+    {
+      "id": "sword-idle",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Sword_Idle"
+      },
+      "name": "Sword Idle",
+      "category": "combat",
+      "loop": false,
+      "defaultFrameCount": 8,
+      "tags": ["sword"]
+    },
+    {
+      "id": "walk-formal",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Walk_Formal_Loop"
+      },
+      "name": "Walk Formal",
+      "category": "locomotion",
+      "loop": true,
+      "defaultFrameCount": 8,
+      "tags": ["walk", "loop"]
+    },
+    {
+      "id": "walk",
+      "match": {
+        "file": "Unreal-Godot/UAL1_Standard.glb",
+        "animation": "Walk_Loop"
+      },
+      "name": "Walk",
+      "category": "locomotion",
+      "loop": true,
+      "defaultFrameCount": 8,
+      "tags": ["walk", "loop"]
+    }
+  ]
+}

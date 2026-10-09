@@ -1,0 +1,29 @@
+{
+  "format": "sprite-clips-manifest",
+  "version": 1,
+  "packId": "fixture-pack",
+  "name": "Fixture pack",
+  "license": {
+    "license": "CC0-1.0",
+    "author": "character-sprite-generator contributors",
+    "sourceUrl": "https://example.com/character-sprite-generator/fixtures",
+    "commercialUse": "yes",
+    "attributionRequired": false
+  },
+  "clips": [
+    {
+      "id": "fixture-clip",
+      "name": "Fixture clip",
+      "category": "locomotion",
+      "file": "clips/fixture-clip.glb",
+      "sourceName": "fixture-clip",
+      "rig": "fixture-ue5-22",
+      "durationSec": 1,
+      "loop": true,
+      "defaultFrameCount": 8,
+      "hasRootMotion": true,
+      "tags": ["fixture"],
+      "sha256": "3731d85d92420f379ce19762bbeec35818c8bf39d7a1739bb096d9efe3b14682"
+    }
+  ]
+}

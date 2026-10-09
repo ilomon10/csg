@@ -1,0 +1,219 @@
+{
+  "format": "sprite-pack-config",
+  "version": 1,
+  "packId": "quaternius-ubc",
+  "name": "Universal Base Characters (Standard)",
+  "license": {
+    "license": "CC0-1.0",
+    "author": "Quaternius",
+    "sourceUrl": "https://quaternius.itch.io/universal-base-characters",
+    "commercialUse": "yes",
+    "attributionRequired": false
+  },
+  "rig": "quaternius-ue5-65",
+  "parts": [
+    {
+      "id": "superhero-m",
+      "match": {
+        "file": "Base Characters/Godot - UE/Superhero_Male_FullBody.gltf"
+      },
+      "name": "Superhero (male)",
+      "slot": "body",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Superhero_Male",
+          "slot": "skin",
+          "mode": "multiply"
+        },
+        {
+          "material": "MI_Eyes",
+          "slot": "eyes",
+          "mode": "multiply"
+        },
+        {
+          "material": "MI_Hair_1",
+          "slot": "hair",
+          "mode": "multiply"
+        }
+      ],
+      "bodyType": "superhero",
+      "characterSkeletonGroup": "male",
+      "tags": ["superhero", "male", "base-body"]
+    },
+    {
+      "id": "superhero-f",
+      "match": {
+        "file": "Base Characters/Godot - UE/Superhero_Female_FullBody.gltf"
+      },
+      "name": "Superhero (female)",
+      "slot": "body",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Superhero_Female",
+          "slot": "skin",
+          "mode": "multiply"
+        },
+        {
+          "material": "MI_Eyes",
+          "slot": "eyes",
+          "mode": "multiply"
+        },
+        {
+          "material": "MI_Hair_2",
+          "slot": "hair",
+          "mode": "multiply"
+        }
+      ],
+      "bodyType": "superhero",
+      "characterSkeletonGroup": "female",
+      "tags": ["superhero", "female", "base-body"]
+    },
+    {
+      "id": "hair-simple-parted",
+      "match": {
+        "file": "Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_SimpleParted.gltf"
+      },
+      "name": "Simple parted",
+      "slot": "hair",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Hair_1",
+          "slot": "hair",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["hair", "short", "male"]
+    },
+    {
+      "id": "hair-buzzed",
+      "match": {
+        "file": "Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Buzzed.gltf"
+      },
+      "name": "Buzzed",
+      "slot": "hair",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Hair_1",
+          "slot": "hair",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["hair", "short", "male"]
+    },
+    {
+      "id": "beard-full",
+      "match": {
+        "file": "Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Beard.gltf"
+      },
+      "name": "Full beard",
+      "slot": "beard",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Hair_1",
+          "slot": "hair",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["beard", "male"]
+    },
+    {
+      "id": "eyebrows-regular",
+      "match": {
+        "file": "Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Eyebrows_Regular.gltf"
+      },
+      "name": "Regular eyebrows",
+      "slot": "eyebrows",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Hair_1",
+          "slot": "hair",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-m"],
+      "tags": ["eyebrows", "male"]
+    },
+    {
+      "id": "hair-buns",
+      "match": {
+        "file": "Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Buns.gltf"
+      },
+      "name": "Buns",
+      "slot": "hair",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Hair_2",
+          "slot": "hair",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["hair", "updo", "female"]
+    },
+    {
+      "id": "hair-long",
+      "match": {
+        "file": "Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_Long.gltf"
+      },
+      "name": "Long",
+      "slot": "hair",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Hair_2",
+          "slot": "hair",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["hair", "long", "female"]
+    },
+    {
+      "id": "hair-buzzed-female",
+      "match": {
+        "file": "Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Hair_BuzzedFemale.gltf"
+      },
+      "name": "Buzzed (female)",
+      "slot": "hair",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Hair_1",
+          "slot": "hair",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["hair", "short", "female"]
+    },
+    {
+      "id": "eyebrows-female",
+      "match": {
+        "file": "Hairstyles/Rigged to Head Bone/glTF (Godot -Unreal)/Eyebrows_Female.gltf"
+      },
+      "name": "Female eyebrows",
+      "slot": "eyebrows",
+      "hides": [],
+      "tintSlots": [
+        {
+          "material": "MI_Hair_2",
+          "slot": "hair",
+          "mode": "multiply"
+        }
+      ],
+      "bodies": ["superhero-f"],
+      "tags": ["eyebrows", "female"]
+    }
+  ],
+  "clips": []
+}

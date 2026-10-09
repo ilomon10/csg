@@ -19,7 +19,17 @@ export function readSpecs(): SpecFile[] {
     }));
 }
 
-/** Recursively lists test files (not tools/: its tests use fixture IDs). */
+/**
+ * Whether a repo-relative test path is excluded from traceability: the spec-ID tool's own tests
+ * (`tools/spec-*.test.ts`, `tools/hooks/guard-spec-ids.test.ts`) use fake IDs as fixtures.
+ */
+export function isTraceExcluded(relPath: string): boolean {
+  return /^tools\/(spec-[^/]*|hooks\/guard-spec-ids)\.test\.tsx?$/.test(
+    relPath.split('\\').join('/'),
+  );
+}
+
+/** Recursively lists test files under packages/, apps/ and tools/ (minus {@link isTraceExcluded}). */
 export function readTests(): SpecFile[] {
   const out: SpecFile[] = [];
   const skip = new Set([
@@ -38,13 +48,12 @@ export function readTests(): SpecFile[] {
       if (statSync(path).isDirectory()) {
         walk(path);
       } else if (/\.(test|spec)\.tsx?$/.test(entry)) {
-        out.push({
-          name: relative(ROOT, path),
-          content: readFileSync(path, 'utf8'),
-        });
+        const name = relative(ROOT, path);
+        if (isTraceExcluded(name)) continue;
+        out.push({name, content: readFileSync(path, 'utf8')});
       }
     }
   };
-  for (const top of ['packages', 'apps']) walk(join(ROOT, top));
+  for (const top of ['packages', 'apps', 'tools']) walk(join(ROOT, top));
   return out;
 }

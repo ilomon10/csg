@@ -1382,6 +1382,22 @@
       }
     },
     {
+      "file": "og/docs/contribute/adr/0008-shared-rig-skeleton-groups-runtime-retarget.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: 0008. Shared rig with skeleton groups and runtime retargeting",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
       "file": "og/docs/contribute/adr.png",
       "width": 1200,
       "height": 630,

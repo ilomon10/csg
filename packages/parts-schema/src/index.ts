@@ -1,10 +1,12 @@
-import {z} from 'zod';
-
-/** Hex sRGB color such as `#a0c4ff`. */
-export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
-
-/** Inferred type of {@link hexColorSchema}. */
-export type HexColor = z.infer<typeof hexColorSchema>;
-
-/** Current version of the persisted `sprite-character` document format. */
-export const CHARACTER_FORMAT_VERSION = 1;
+export * from './primitives';
+export * from './license';
+export * from './body';
+export * from './slots';
+export * from './rig';
+export * from './part-manifest';
+export * from './json';
+export * from './clip-manifest';
+export * from './anatomy';
+export * from './animation-selection';
+export * from './character-spec';
+export * from './pack-config';

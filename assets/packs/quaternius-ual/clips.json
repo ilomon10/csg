@@ -1,0 +1,765 @@
+{
+  "clips": [
+    {
+      "category": "misc",
+      "defaultFrameCount": 1,
+      "durationSec": 2.5,
+      "file": "clips/a-tpose.glb",
+      "hasRootMotion": false,
+      "id": "a-tpose",
+      "loop": false,
+      "name": "A TPose",
+      "rig": "quaternius-ue5-65",
+      "sha256": "085be8948fab368d4da5d2c49301c7203bcc63b019c16c90b422fa667c22973f",
+      "skeletonGroup": "ual",
+      "sourceName": "A_TPose",
+      "tags": [
+        "a"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 8,
+      "durationSec": 2,
+      "file": "clips/crouch-fwd.glb",
+      "hasRootMotion": false,
+      "id": "crouch-fwd",
+      "loop": true,
+      "name": "Crouch forward",
+      "rig": "quaternius-ue5-65",
+      "sha256": "c290227f90a56b128a440a6afd7fe3e9727520c2341c5a8d293b2c0a365978e5",
+      "skeletonGroup": "ual",
+      "sourceName": "Crouch_Fwd_Loop",
+      "tags": [
+        "crouch",
+        "loop"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 12,
+      "durationSec": 2.933333,
+      "file": "clips/crouch-idle.glb",
+      "hasRootMotion": false,
+      "id": "crouch-idle",
+      "loop": true,
+      "name": "Crouch Idle",
+      "rig": "quaternius-ue5-65",
+      "sha256": "05f3ab193748be2b13c0080bd69f86781226e3ed3aa6a10e75eb96f0759e1c4b",
+      "skeletonGroup": "ual",
+      "sourceName": "Crouch_Idle_Loop",
+      "tags": [
+        "crouch",
+        "loop"
+      ]
+    },
+    {
+      "category": "emote",
+      "defaultFrameCount": 6,
+      "durationSec": 1,
+      "file": "clips/dance.glb",
+      "hasRootMotion": false,
+      "id": "dance",
+      "loop": true,
+      "name": "Dance",
+      "rig": "quaternius-ue5-65",
+      "sha256": "3da7b5b983a73d7c4ea9d5c7f412c8a30017c439f2b2ea0639ddd7327887078f",
+      "skeletonGroup": "ual",
+      "sourceName": "Dance_Loop",
+      "tags": [
+        "dance",
+        "loop"
+      ]
+    },
+    {
+      "category": "death",
+      "defaultFrameCount": 12,
+      "durationSec": 2.4,
+      "file": "clips/death.glb",
+      "hasRootMotion": false,
+      "id": "death",
+      "loop": false,
+      "name": "Death01",
+      "rig": "quaternius-ue5-65",
+      "sha256": "bb10e235e67f9e34fc141eeaa73b39989371d441b0a87db701a6b7871698173c",
+      "skeletonGroup": "ual",
+      "sourceName": "Death01",
+      "tags": [
+        "death01"
+      ]
+    },
+    {
+      "category": "misc",
+      "defaultFrameCount": 8,
+      "durationSec": 1.666667,
+      "file": "clips/driving.glb",
+      "hasRootMotion": false,
+      "id": "driving",
+      "loop": true,
+      "name": "Driving",
+      "rig": "quaternius-ue5-65",
+      "sha256": "6304a01ce9df68cfe823d0dadb4559a90dcb62473c916229f6a5458e24ea9fb9",
+      "skeletonGroup": "ual",
+      "sourceName": "Driving_Loop",
+      "tags": [
+        "driving",
+        "loop"
+      ]
+    },
+    {
+      "category": "misc",
+      "defaultFrameCount": 12,
+      "durationSec": 5.2,
+      "file": "clips/fixing-kneeling.glb",
+      "hasRootMotion": false,
+      "id": "fixing-kneeling",
+      "loop": false,
+      "name": "Fixing Kneeling",
+      "rig": "quaternius-ue5-65",
+      "sha256": "1db64b10e5e3fc204733c3fd1cb4692a694363458adef3be5811462b8d34be23",
+      "skeletonGroup": "ual",
+      "sourceName": "Fixing_Kneeling",
+      "tags": [
+        "fixing"
+      ]
+    },
+    {
+      "category": "reaction",
+      "defaultFrameCount": 4,
+      "durationSec": 0.333333,
+      "file": "clips/hit-chest.glb",
+      "hasRootMotion": false,
+      "id": "hit-chest",
+      "loop": false,
+      "name": "Hit Chest",
+      "rig": "quaternius-ue5-65",
+      "sha256": "c1a2003c5aa00c34cd9e7d7f5dc330eb29cbf4995624b4ecc4b66bd906769890",
+      "skeletonGroup": "ual",
+      "sourceName": "Hit_Chest",
+      "tags": [
+        "hit"
+      ]
+    },
+    {
+      "category": "reaction",
+      "defaultFrameCount": 4,
+      "durationSec": 0.433333,
+      "file": "clips/hit-head.glb",
+      "hasRootMotion": false,
+      "id": "hit-head",
+      "loop": false,
+      "name": "Hit Head",
+      "rig": "quaternius-ue5-65",
+      "sha256": "2aa21a2f3e55c882e4d3d23f1c03fa323126a884edf8a66c70d8d8cdc985719f",
+      "skeletonGroup": "ual",
+      "sourceName": "Hit_Head",
+      "tags": [
+        "hit"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 12,
+      "durationSec": 2.5,
+      "file": "clips/idle.glb",
+      "hasRootMotion": false,
+      "id": "idle",
+      "loop": true,
+      "name": "Idle",
+      "rig": "quaternius-ue5-65",
+      "sha256": "8b89a998f0bd29a0d233df9a64b73df573d46fa889b9d55ad5b497e318b3c365",
+      "skeletonGroup": "ual",
+      "sourceName": "Idle_Loop",
+      "tags": [
+        "idle",
+        "loop"
+      ]
+    },
+    {
+      "category": "emote",
+      "defaultFrameCount": 12,
+      "durationSec": 2.933333,
+      "file": "clips/idle-talking.glb",
+      "hasRootMotion": false,
+      "id": "idle-talking",
+      "loop": true,
+      "name": "Idle Talking",
+      "rig": "quaternius-ue5-65",
+      "sha256": "3f80d2f11359994c7cd7e669cc3a9b585366ad0ed6e0737d6c1308f61a6fe42c",
+      "skeletonGroup": "ual",
+      "sourceName": "Idle_Talking_Loop",
+      "tags": [
+        "idle",
+        "loop"
+      ]
+    },
+    {
+      "category": "misc",
+      "defaultFrameCount": 8,
+      "durationSec": 1.266667,
+      "file": "clips/idle-torch.glb",
+      "hasRootMotion": false,
+      "id": "idle-torch",
+      "loop": true,
+      "name": "Idle Torch",
+      "rig": "quaternius-ue5-65",
+      "sha256": "2fd091b59f3c8d8d8d38b8bf2c1baa35748da37d8226755c144a53027c7a4d42",
+      "skeletonGroup": "ual",
+      "sourceName": "Idle_Torch_Loop",
+      "tags": [
+        "idle",
+        "loop"
+      ]
+    },
+    {
+      "category": "misc",
+      "defaultFrameCount": 8,
+      "durationSec": 2,
+      "file": "clips/interact.glb",
+      "hasRootMotion": false,
+      "id": "interact",
+      "loop": false,
+      "name": "Interact",
+      "rig": "quaternius-ue5-65",
+      "sha256": "218c9eb4afc0ac60c9cf89657a59b28558de45670098449cefadb77f317ed770",
+      "skeletonGroup": "ual",
+      "sourceName": "Interact",
+      "tags": [
+        "interact"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 6,
+      "durationSec": 0.933333,
+      "file": "clips/jog.glb",
+      "hasRootMotion": false,
+      "id": "jog",
+      "loop": true,
+      "name": "Jog forward",
+      "rig": "quaternius-ue5-65",
+      "sha256": "68e437ba383129d1da0a70ec9ade1ee6a37dfb4dc1778d3c6621e320a9dfdbaf",
+      "skeletonGroup": "ual",
+      "sourceName": "Jog_Fwd_Loop",
+      "tags": [
+        "jog",
+        "loop"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 12,
+      "durationSec": 2.5,
+      "file": "clips/jump.glb",
+      "hasRootMotion": false,
+      "id": "jump",
+      "loop": true,
+      "name": "Jump",
+      "rig": "quaternius-ue5-65",
+      "sha256": "0ac7a0fdaa1b3336d5d335628847ed077db33d54aeb0c352ec3d891745d66c18",
+      "skeletonGroup": "ual",
+      "sourceName": "Jump_Loop",
+      "tags": [
+        "jump",
+        "loop"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 8,
+      "durationSec": 1.266667,
+      "file": "clips/jump-land.glb",
+      "hasRootMotion": false,
+      "id": "jump-land",
+      "loop": false,
+      "name": "Jump Land",
+      "rig": "quaternius-ue5-65",
+      "sha256": "84b49372a190653f329ff05c5a29778d684655774011d686b5a89a0377869af8",
+      "skeletonGroup": "ual",
+      "sourceName": "Jump_Land",
+      "tags": [
+        "jump"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 8,
+      "durationSec": 1.333333,
+      "file": "clips/jump-start.glb",
+      "hasRootMotion": false,
+      "id": "jump-start",
+      "loop": false,
+      "name": "Jump Start",
+      "rig": "quaternius-ue5-65",
+      "sha256": "8a1ea484ab5f41673f0a6a6804e89253495fe5227df94cb3f20855caef936309",
+      "skeletonGroup": "ual",
+      "sourceName": "Jump_Start",
+      "tags": [
+        "jump"
+      ]
+    },
+    {
+      "category": "misc",
+      "defaultFrameCount": 6,
+      "durationSec": 0.833333,
+      "file": "clips/pickup-table.glb",
+      "hasRootMotion": false,
+      "id": "pickup-table",
+      "loop": false,
+      "name": "PickUp Table",
+      "rig": "quaternius-ue5-65",
+      "sha256": "fe3f24572c1ead4faa51d43f2836c2f54ddf1cfb7fbb54814a9e8d7a6da6f889",
+      "skeletonGroup": "ual",
+      "sourceName": "PickUp_Table",
+      "tags": [
+        "pickup"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 4,
+      "durationSec": 0.166667,
+      "file": "clips/pistol-aim-down.glb",
+      "hasRootMotion": false,
+      "id": "pistol-aim-down",
+      "loop": false,
+      "name": "Pistol Aim Down",
+      "rig": "quaternius-ue5-65",
+      "sha256": "11efa630cecd6193945a2ae4ac5be4af4d62c7914500e5f1b559edb6d87aa408",
+      "skeletonGroup": "ual",
+      "sourceName": "Pistol_Aim_Down",
+      "tags": [
+        "pistol"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 4,
+      "durationSec": 0.166667,
+      "file": "clips/pistol-aim-neutral.glb",
+      "hasRootMotion": false,
+      "id": "pistol-aim-neutral",
+      "loop": false,
+      "name": "Pistol Aim Neutral",
+      "rig": "quaternius-ue5-65",
+      "sha256": "864f59eeee6351e09a741e4aa7e402dc2ef8184bfd41763641b1bb35f55a87d1",
+      "skeletonGroup": "ual",
+      "sourceName": "Pistol_Aim_Neutral",
+      "tags": [
+        "pistol"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 4,
+      "durationSec": 0.166667,
+      "file": "clips/pistol-aim-up.glb",
+      "hasRootMotion": false,
+      "id": "pistol-aim-up",
+      "loop": false,
+      "name": "Pistol Aim Up",
+      "rig": "quaternius-ue5-65",
+      "sha256": "ff3f6879fca625824ddb79ac8477ebb618cec6878980ab482f9dcc1d423ae396",
+      "skeletonGroup": "ual",
+      "sourceName": "Pistol_Aim_Up",
+      "tags": [
+        "pistol"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 8,
+      "durationSec": 1.666667,
+      "file": "clips/pistol-idle.glb",
+      "hasRootMotion": false,
+      "id": "pistol-idle",
+      "loop": true,
+      "name": "Pistol Idle",
+      "rig": "quaternius-ue5-65",
+      "sha256": "aa9dcf263bf18fecba1ca82051d91b3cf57a51cc4bc405635caae1a7296d010a",
+      "skeletonGroup": "ual",
+      "sourceName": "Pistol_Idle_Loop",
+      "tags": [
+        "pistol",
+        "loop"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 8,
+      "durationSec": 1.666667,
+      "file": "clips/pistol-reload.glb",
+      "hasRootMotion": false,
+      "id": "pistol-reload",
+      "loop": false,
+      "name": "Pistol Reload",
+      "rig": "quaternius-ue5-65",
+      "sha256": "73f0cc7c97289ed51f607d9d371c032598916552c64786281c30795342d2d427",
+      "skeletonGroup": "ual",
+      "sourceName": "Pistol_Reload",
+      "tags": [
+        "pistol"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 6,
+      "durationSec": 0.633333,
+      "file": "clips/pistol-shoot.glb",
+      "hasRootMotion": false,
+      "id": "pistol-shoot",
+      "loop": false,
+      "name": "Pistol Shoot",
+      "rig": "quaternius-ue5-65",
+      "sha256": "a889f7cb87d24537dd2367ef4343cbe1cdae5b38974179a081fe9410bda0def0",
+      "skeletonGroup": "ual",
+      "sourceName": "Pistol_Shoot",
+      "tags": [
+        "pistol"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 6,
+      "durationSec": 1,
+      "file": "clips/punch-cross.glb",
+      "hasRootMotion": false,
+      "id": "punch-cross",
+      "loop": false,
+      "name": "Punch Cross",
+      "rig": "quaternius-ue5-65",
+      "sha256": "b70aac42147ff19fc4d4e0293381cb257cfc22af520ce433b43abd339456d1c1",
+      "skeletonGroup": "ual",
+      "sourceName": "Punch_Cross",
+      "tags": [
+        "punch"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 6,
+      "durationSec": 0.866667,
+      "file": "clips/punch-jab.glb",
+      "hasRootMotion": false,
+      "id": "punch-jab",
+      "loop": false,
+      "name": "Punch Jab",
+      "rig": "quaternius-ue5-65",
+      "sha256": "c0a38f1bbf71f7076237560febcaf400ae5455f31d2ad956eba15570bfae1054",
+      "skeletonGroup": "ual",
+      "sourceName": "Punch_Jab",
+      "tags": [
+        "punch"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 12,
+      "durationSec": 2.666667,
+      "file": "clips/push.glb",
+      "hasRootMotion": false,
+      "id": "push",
+      "loop": true,
+      "name": "Push",
+      "rig": "quaternius-ue5-65",
+      "sha256": "2fe0b187a1bf242307af8e372c2a1c8a656c7111505efd62968ba6818d7837e6",
+      "skeletonGroup": "ual",
+      "sourceName": "Push_Loop",
+      "tags": [
+        "push",
+        "loop"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 8,
+      "durationSec": 1.466667,
+      "file": "clips/roll.glb",
+      "hasRootMotion": false,
+      "id": "roll",
+      "loop": false,
+      "name": "Roll",
+      "rig": "quaternius-ue5-65",
+      "sha256": "03cc0babf6fc47393c781a93723af3451393aad1f4f78ddb57f9c85ea7384643",
+      "skeletonGroup": "ual",
+      "sourceName": "Roll",
+      "tags": [
+        "roll"
+      ]
+    },
+    {
+      "category": "misc",
+      "defaultFrameCount": 8,
+      "durationSec": 1.3,
+      "file": "clips/sitting-enter.glb",
+      "hasRootMotion": false,
+      "id": "sitting-enter",
+      "loop": false,
+      "name": "Sitting Enter",
+      "rig": "quaternius-ue5-65",
+      "sha256": "28341e9d41b2f9267a00522d5acb5b88d95216ab577c30b527979162de0ddb69",
+      "skeletonGroup": "ual",
+      "sourceName": "Sitting_Enter",
+      "tags": [
+        "sitting"
+      ]
+    },
+    {
+      "category": "misc",
+      "defaultFrameCount": 8,
+      "durationSec": 1.033333,
+      "file": "clips/sitting-exit.glb",
+      "hasRootMotion": false,
+      "id": "sitting-exit",
+      "loop": false,
+      "name": "Sitting Exit",
+      "rig": "quaternius-ue5-65",
+      "sha256": "cd06e79be15baaee4070449f776d46b5994fbe12393dff55c50c548129000d52",
+      "skeletonGroup": "ual",
+      "sourceName": "Sitting_Exit",
+      "tags": [
+        "sitting"
+      ]
+    },
+    {
+      "category": "misc",
+      "defaultFrameCount": 8,
+      "durationSec": 1.666667,
+      "file": "clips/sitting-idle.glb",
+      "hasRootMotion": false,
+      "id": "sitting-idle",
+      "loop": true,
+      "name": "Sitting Idle",
+      "rig": "quaternius-ue5-65",
+      "sha256": "2eaac6d0f96629f7b038db1eca8b24889453ead2f98428e3b9e7cf98ac4e4821",
+      "skeletonGroup": "ual",
+      "sourceName": "Sitting_Idle_Loop",
+      "tags": [
+        "sitting",
+        "loop"
+      ]
+    },
+    {
+      "category": "emote",
+      "defaultFrameCount": 12,
+      "durationSec": 2.933333,
+      "file": "clips/sitting-talking.glb",
+      "hasRootMotion": false,
+      "id": "sitting-talking",
+      "loop": true,
+      "name": "Sitting Talking",
+      "rig": "quaternius-ue5-65",
+      "sha256": "8e3c7c3b233cdc0ce81a7ac329c6a8215ab05d7701f91e7c3936373876405d09",
+      "skeletonGroup": "ual",
+      "sourceName": "Sitting_Talking_Loop",
+      "tags": [
+        "sitting",
+        "loop"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 6,
+      "durationSec": 0.533333,
+      "file": "clips/spell-simple-enter.glb",
+      "hasRootMotion": false,
+      "id": "spell-simple-enter",
+      "loop": false,
+      "name": "Spell Simple Enter",
+      "rig": "quaternius-ue5-65",
+      "sha256": "907e1b885188745b652b8774172a5137eaec0119194bb6b7ca56073b8fce772f",
+      "skeletonGroup": "ual",
+      "sourceName": "Spell_Simple_Enter",
+      "tags": [
+        "spell"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 4,
+      "durationSec": 0.433333,
+      "file": "clips/spell-simple-exit.glb",
+      "hasRootMotion": false,
+      "id": "spell-simple-exit",
+      "loop": false,
+      "name": "Spell Simple Exit",
+      "rig": "quaternius-ue5-65",
+      "sha256": "e6656fb3d4c55b5de8167c8e21ec38fdb78758575c43ec214b700bba878dc9b9",
+      "skeletonGroup": "ual",
+      "sourceName": "Spell_Simple_Exit",
+      "tags": [
+        "spell"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 12,
+      "durationSec": 2.1,
+      "file": "clips/spell-simple-idle.glb",
+      "hasRootMotion": false,
+      "id": "spell-simple-idle",
+      "loop": true,
+      "name": "Spell Simple Idle",
+      "rig": "quaternius-ue5-65",
+      "sha256": "0ab921057653ee3f174fa01d9460503a412ae436b3bea3aaf75f82f3d5a3eb34",
+      "skeletonGroup": "ual",
+      "sourceName": "Spell_Simple_Idle_Loop",
+      "tags": [
+        "spell",
+        "loop"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 4,
+      "durationSec": 0.5,
+      "file": "clips/spell-simple-shoot.glb",
+      "hasRootMotion": false,
+      "id": "spell-simple-shoot",
+      "loop": false,
+      "name": "Spell Simple Shoot",
+      "rig": "quaternius-ue5-65",
+      "sha256": "4a592e7e06c4c52d7c41fd311a0e3710495c4293c8099a37053c6556b87ca0ac",
+      "skeletonGroup": "ual",
+      "sourceName": "Spell_Simple_Shoot",
+      "tags": [
+        "spell"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 6,
+      "durationSec": 0.666667,
+      "file": "clips/sprint.glb",
+      "hasRootMotion": false,
+      "id": "sprint",
+      "loop": true,
+      "name": "Sprint",
+      "rig": "quaternius-ue5-65",
+      "sha256": "fc2938a46f661222b936940cdcc4d8ada94ef036f06c73a8fac6daaf79aba8af",
+      "skeletonGroup": "ual",
+      "sourceName": "Sprint_Loop",
+      "tags": [
+        "sprint",
+        "loop"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 8,
+      "durationSec": 1.333333,
+      "file": "clips/swim-fwd.glb",
+      "hasRootMotion": false,
+      "id": "swim-fwd",
+      "loop": true,
+      "name": "Swim forward",
+      "rig": "quaternius-ue5-65",
+      "sha256": "a99ebbb0a966feb79e969dd0e99f484a7ef6c5157d3d742edc56b4d294a389e3",
+      "skeletonGroup": "ual",
+      "sourceName": "Swim_Fwd_Loop",
+      "tags": [
+        "swim",
+        "loop"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 12,
+      "durationSec": 3.333333,
+      "file": "clips/swim-idle.glb",
+      "hasRootMotion": false,
+      "id": "swim-idle",
+      "loop": true,
+      "name": "Swim Idle",
+      "rig": "quaternius-ue5-65",
+      "sha256": "0d884eba8107be49b24939efd4b4bf4f7b2291f358963a24f747739bf48af95a",
+      "skeletonGroup": "ual",
+      "sourceName": "Swim_Idle_Loop",
+      "tags": [
+        "swim",
+        "loop"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 8,
+      "durationSec": 1.533333,
+      "file": "clips/sword-attack.glb",
+      "hasRootMotion": false,
+      "id": "sword-attack",
+      "loop": false,
+      "name": "Sword Attack",
+      "rig": "quaternius-ue5-65",
+      "sha256": "e3173a5da539e00bd7b33d9b5861f1bd7a083582a7de168503e683501ec060b6",
+      "skeletonGroup": "ual",
+      "sourceName": "Sword_Attack",
+      "tags": [
+        "sword"
+      ]
+    },
+    {
+      "category": "combat",
+      "defaultFrameCount": 8,
+      "durationSec": 1.666667,
+      "file": "clips/sword-idle.glb",
+      "hasRootMotion": false,
+      "id": "sword-idle",
+      "loop": false,
+      "name": "Sword Idle",
+      "rig": "quaternius-ue5-65",
+      "sha256": "e3bf142cb69d18cd4b0e5b662080ddf6a27c423c8530547065790e897b2123f0",
+      "skeletonGroup": "ual",
+      "sourceName": "Sword_Idle",
+      "tags": [
+        "sword"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 8,
+      "durationSec": 1.333333,
+      "file": "clips/walk.glb",
+      "hasRootMotion": false,
+      "id": "walk",
+      "loop": true,
+      "name": "Walk",
+      "rig": "quaternius-ue5-65",
+      "sha256": "d08fcc58e032eea2e12cb0649d063f803a0c5c20f6c57bb80493abf13111477f",
+      "skeletonGroup": "ual",
+      "sourceName": "Walk_Loop",
+      "tags": [
+        "walk",
+        "loop"
+      ]
+    },
+    {
+      "category": "locomotion",
+      "defaultFrameCount": 8,
+      "durationSec": 1.333333,
+      "file": "clips/walk-formal.glb",
+      "hasRootMotion": false,
+      "id": "walk-formal",
+      "loop": true,
+      "name": "Walk Formal",
+      "rig": "quaternius-ue5-65",
+      "sha256": "c21a64f70465ba1c3d8d2d132183d4a004d6e0df266b4e24d060bd6df22dc3c4",
+      "skeletonGroup": "ual",
+      "sourceName": "Walk_Formal_Loop",
+      "tags": [
+        "walk",
+        "loop"
+      ]
+    }
+  ],
+  "format": "sprite-clips-manifest",
+  "license": {
+    "attributionRequired": false,
+    "author": "Quaternius",
+    "commercialUse": "yes",
+    "license": "CC0-1.0",
+    "sourceUrl": "https://quaternius.itch.io/universal-animation-library"
+  },
+  "name": "Universal Animation Library (Standard)",
+  "packId": "quaternius-ual",
+  "version": 1
+}

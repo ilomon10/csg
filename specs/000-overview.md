@@ -4,7 +4,7 @@ title: Product overview, roadmap, prefix registry and glossary
 status: draft
 owner: spec-writer
 depends_on: [constitution]
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 ---
 
 # 000 – Overview
@@ -100,11 +100,13 @@ Each prefix is owned by exactly one spec file. You can only add a new prefix by 
 |------|-----------|
 | **Slot** | A named place on a character that holds at most one part at a time (e.g. `hair`, `torso`, `legs`, `feet`, `prop-main-hand`). Defined in the slot registry (spec 001 REQ-CMP-001). |
 | **Part** | One selectable asset (skinned mesh or static prop) that fills a slot. It has an ID, a slot, tint slots, `hides` flags and license info. |
-| **Socket** | A skeleton bone that static props attach to, with an offset transform (`hand_r`, `hand_l`, `head`, `spine_03`, `pelvis`). |
+| **Socket** | A skeleton joint that static props attach to, with an offset transform. Parts name it by its socket ID (`hand_r`, `hand_l`, `head`, `spine_03`, `pelvis`), not by the joint name (spec 002 REQ-ANA-019). |
+| **Socket ID** | Semantic, rig-independent name of a socket (`hand_r`, `hand_l`, `head`, `spine_03`, `pelvis`) used in part manifests and the slot registry. `RigDefinition.socketBones` maps each socket ID to an exact source joint name, e.g. socket `head` → joint `Head` in the Quaternius rig (spec 002 REQ-ANA-019/020). *(Added 2026-10-09 (M1-33).)* |
+| **Skeleton group** | A set of bundled files (bodies, parts, clips) that share one rig (same joint names and hierarchy) **and** the same rest pose within the verify-rig tolerances. One rig has one or more groups, stored in `RigDefinition.skeletonGroups` with their rest poses. The character skeleton uses the body's group (spec 001 REQ-CMP-037); meshes from other groups keep their own inverse bind matrices, and clips from other groups are rest-pose retargeted (spec 004 REQ-ANM-023). The group does not affect part compatibility (spec 001 REQ-CMP-008). Classified by spec 011 REQ-AST-026. *(Added 2026-10-09 (M1-33).)* |
 | **Hides flags** | A part's list of body regions hidden while it is equipped, to avoid clipping. |
 | **Tint slot** | A named recolorable channel (skin, hair, eyes, primary, secondary, metal, leather) mapped to material regions of parts. |
 | **Parts manifest** | Data file (validated by `packages/parts-schema`) that lists slots, parts, sockets and tint slots. |
-| **Shared skeleton** | The single 65-joint UE5-style rig that bundled bodies, outfits and clips are expected to share. To be verified in M1. |
+| **Shared skeleton** | The single 65-joint UE5-style rig (`quaternius-ue5-65`) that bundled bodies, outfits and clips share. M1 result (amended 2026-10-09 (M1-33)): joint names, hierarchy and length axis are shared; bind poses differ and form skeleton groups (outcome `mapped`, spec 011 REQ-AST-007, ADR-0008). |
 | **Rebind** | Binding a skinned part to the character's shared skeleton by matching bone names. |
 | **CharacterSpec** | Versioned, serializable JSON that is the source of truth for a character: name, seed, body, parts per slot, tints, anatomy and morph values, face decal. It does **not** contain clip selection; selected clips live in the render settings (`RenderSettings.animations`, spec 004). Used for save, load, share and randomize. |
 | **Anatomy** | User-adjustable proportions (height, head/chibi, torso, shoulders, limbs, hands, feet), applied as bone scales with child compensation and/or morph targets. |
@@ -232,7 +234,7 @@ See constitution P-03 (privacy), P-04 (determinism), P-05 (stability), P-06 (acc
 
 ## Open questions
 
-- [NEEDS CLARIFICATION: Is the shared 65-joint skeleton across Quaternius packs real? Blocks the final 001/002/004 contracts. Resolved by the M1 asset spike `tools/verify-rig.ts`.]
+- ~~[NEEDS CLARIFICATION: Is the shared 65-joint skeleton across Quaternius packs real? Blocks the final 001/002/004 contracts. Resolved by the M1 asset spike `tools/verify-rig.ts`.]~~ Resolved 2026-10-09 (M1-33): outcome `mapped`. Names, hierarchy and length axis are shared across all checked files; bind poses form skeleton groups, handled by rebinding with per-mesh inverse bind matrices and runtime rest-pose retargeting (spec 011 REQ-AST-007/026, spec 004 REQ-ANM-023, ADR-0008).
 - ~~Does the AST area get its own spec?~~ Resolved 2026-10-08 (PM): yes, `011-asset-pipeline.md`.
 - ~~Which Safari version is the minimum?~~ Resolved 2026-10-08 (PM): latest stable plus the previous major. REQ-GEN-001 and AC-GEN-001.1 updated.
 - [NEEDS CLARIFICATION: Exact specification of the reference mid-range machine for perf CI. Partly resolved 2026-10-08 (PM): CI uses software throttling (e.g. Chromium 4× CPU throttling, as in AC-EDT-053.1 and AC-SGF-025.2); runs on real reference hardware are deferred, so this question stays open.]
