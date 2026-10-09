@@ -101,10 +101,31 @@ export async function expectClean(page: Page, w: Watchers): Promise<void> {
 }
 
 /**
+ * Waits until no finite CSS animation or transition is running, so axe measures settled colors
+ * (a menu fading in reads as low contrast mid-fade on a slow CI runner). Infinite animations,
+ * such as a loading spinner, are ignored.
+ */
+export async function settleAnimations(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      document
+        .getAnimations()
+        .every(
+          a =>
+            a.playState !== 'running' ||
+            a.effect?.getComputedTiming().iterations === Infinity,
+        ),
+    undefined,
+    {timeout: 10_000},
+  );
+}
+
+/**
  * Runs axe and returns one line per violation. The default tag set is the project's gate
  * (WCAG 2.0, 2.1 and 2.2 A/AA, as in `workspaces.spec.ts`), including label-in-name (2.5.3).
  */
 export async function axeViolations(page: Page): Promise<string[]> {
+  await settleAnimations(page);
   await page.evaluate(AXE);
   return page.evaluate(
     async tags => {

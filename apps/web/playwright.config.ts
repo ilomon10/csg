@@ -33,7 +33,12 @@ export default defineConfig({
           args: [
             '--enable-unsafe-webgpu',
             '--enable-features=Vulkan',
-            '--use-angle=vulkan',
+            // CI runners have no GPU: pin the SwiftShader WebGPU adapter and ANGLE backend, as the
+            // canonical GPU tests do (vitest.config.ts), so pages actually render. Locally, use
+            // the host's Vulkan GPU. Set CSG_E2E_SOFTWARE=1 to force the CI path on a GPU host.
+            ...(process.env['CI'] || process.env['CSG_E2E_SOFTWARE'] === '1'
+              ? ['--use-webgpu-adapter=swiftshader', '--use-angle=swiftshader']
+              : ['--use-angle=vulkan']),
             ...KEEP_PAGES_ACTIVE,
           ],
         },

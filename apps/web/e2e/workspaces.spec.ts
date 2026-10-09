@@ -4,6 +4,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {expect, test} from '@playwright/test';
 import type {Page} from '@playwright/test';
+import {settleAnimations} from './fixtures/qa';
 
 const SHOT_DIR = process.env['CSG_SHOT_DIR'];
 const require = createRequire(import.meta.url);
@@ -102,6 +103,7 @@ async function shot(page: Page, name: string): Promise<void> {
 }
 
 async function axeViolations(page: Page): Promise<string[]> {
+  await settleAnimations(page);
   await page.evaluate(AXE);
   return page.evaluate(async () => {
     const axe = (
