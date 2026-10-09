@@ -70,6 +70,7 @@ import {computeFraming, cameraElevationDeg} from '../pipeline/framing';
 import {stageYawRad} from '../pipeline/directions';
 import type {PaletteLutWorker} from '../pipeline/palette-lut';
 import {createPaletteLutSource} from '../pipeline/palette-lut-source';
+import type {PaletteLutSourceStats} from '../pipeline/palette-lut-source';
 import {createPixelPipeline} from '../pipeline/render-pipeline';
 import type {
   PaletteLutBuilder,
@@ -114,12 +115,21 @@ export interface RendererPipeline {
   readonly cellTarget: RenderTarget;
   /** Rebuild and frame counters (AC-PIX-034.1 spy). */
   readonly stats: PixelPipelineStats;
-  /** Applies validated settings; resolves after the palette LUT upload. */
+  /**
+   * Applies validated settings; resolves after the palette LUT upload. Must
+   * be atomic: when it rejects (LUT build failed) the previous settings stay
+   * fully applied.
+   */
   setRenderSettings(settings: RenderSettings): Promise<RenderSettingsDiff>;
   /** Places the camera for a framing. */
   setFraming(framing: Framing): unknown;
-  /** Renders one frame into {@link cellTarget}. */
-  render(): void;
+  /**
+   * Renders one frame into {@link cellTarget}.
+   *
+   * @param frameTimeSec Node-frame time (0 = export; the preview passes the
+   *   clip time of the drawn frame). Never the wall clock (P-04).
+   */
+  render(frameTimeSec?: number): void;
   /** Reads {@link cellTarget}: tight RGBA8, top-left origin (REQ-PIX-029). */
   read(): Promise<Uint8ClampedArray>;
   dispose(): void;
@@ -170,16 +180,23 @@ export interface CharacterRendererOptions<
   /** Presenter factory (tests); default `createCanvasPresenter`. */
   readonly presenterFactory?: PresenterFactory<R>;
   /**
-   * Starts the palette LUT worker (AC-PIX-021.2). Default: the bundled
-   * module worker when `Worker` exists; `null` builds LUTs on the main
-   * thread. A failing worker falls back to the main thread. Under Trusted
-   * Types the host needs a policy that allows the same-origin worker URL.
+   * Starts the palette LUT worker (AC-PIX-021.2), supplied by the host
+   * (REQ-GEN-014: the engine never constructs a `Worker` itself), e.g.
+   * `() => createPaletteLutWorker({createWorker})`. Omitted or `null`: LUTs
+   * are built on the main thread. With a worker, a failed build rejects
+   * (REQ-GEN-016, no silent main-thread fallback): the settings change
+   * fails with {@link PIX_PALETTE_LUT_FAILED}, reported once through
+   * `onError`, and the previous palette and settings stay active.
    */
   readonly paletteLutWorker?: (() => PaletteLutWorker) | null;
   /**
    * Called with the error when `play()` / `playClip()` cannot load or retarget
-   * its clip, or when the preview framing cannot be computed after a
-   * character or clip change. Never called after `dispose()`.
+   * its clip; when the preview framing cannot be computed after a character
+   * or clip change; once per failed palette LUT build of a settings change
+   * ({@link PIX_PALETTE_LUT_FAILED}, REQ-GEN-016; the previous settings stay
+   * active); when restoring the preview after an export fails; and when a
+   * preview frame throws ({@link PIX_PREVIEW_FAILED}: the loop stops and
+   * playback pauses). Never called after `dispose()`.
    */
   readonly onError?: (error: EngineError) => void;
 }
@@ -215,6 +232,12 @@ export interface EngineCharacterRenderer<
   readonly playing: boolean;
   /** True while an exclusive operation holds the renderer. */
   readonly busy: boolean;
+  /**
+   * Diagnostics: how the palette LUTs were built so far (worker, main
+   * thread, failures; cache hits are not counted). For e2e checks that the
+   * worker path is used (AC-GEN-014.4); not part of the render contract.
+   */
+  readonly paletteLutStats: PaletteLutSourceStats;
   /**
    * Preview timing (REQ-ANM-018). `null` (default): "Show export frames" on,
    * stepping through the export sample times of the previewed clip's
@@ -263,6 +286,41 @@ export interface EngineCharacterRenderer<
   draw(): void;
   /** Reads the preview cell (tight RGBA8, top-left origin, REQ-PIX-029). */
   readCell(): Promise<Uint8ClampedArray>;
+}
+
+/**
+ * Error code of a failed palette LUT build during a settings change or an
+ * export (REQ-PIX-021 note, AC-PIX-021.6 to .8; REQ-GEN-016: reported, the
+ * previous palette stays active).
+ */
+export const PIX_PALETTE_LUT_FAILED = 'PIX_PALETTE_LUT_FAILED';
+
+/**
+ * Error code of a preview frame that threw (review M3): the loop stops and
+ * playback pauses, or restoring the preview after an export threw
+ * (REQ-PIX-039, AC-PIX-039.1/.2).
+ */
+export const PIX_PREVIEW_FAILED = 'PIX_PREVIEW_FAILED';
+
+/** An `EngineError` for a thrown value; keeps the code of an `EngineError`-like value. */
+function toEngineError(error: unknown, code: string): EngineError {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    typeof (error as {code?: unknown}).code === 'string' &&
+    typeof (error as {message?: unknown}).message === 'string'
+  ) {
+    const e = error as EngineError;
+    return {
+      code: e.code,
+      message: e.message,
+      ...(e.details === undefined ? {} : {details: e.details}),
+    };
+  }
+  return {
+    code,
+    message: error instanceof Error ? error.message : String(error),
+  };
 }
 
 /** The previewed clip and how it was bound. */
@@ -383,7 +441,16 @@ export async function createCharacterRenderer<
     ((r: R, p: RendererPipeline) =>
       createCanvasPresenter(r as unknown as WebGPURenderer, p.cellTarget))
   )(renderer, pipeline);
-  await pipeline.setRenderSettings(settings);
+  try {
+    await pipeline.setRenderSettings(settings);
+  } catch (error) {
+    presenter.dispose();
+    pipeline.dispose();
+    lut.dispose();
+    binder.dispose();
+    renderer.dispose();
+    return {ok: false, error: toEngineError(error, PIX_PALETTE_LUT_FAILED)};
+  }
 
   const assembly = createCharacterAssembly({
     registry: options.registry,
@@ -407,6 +474,12 @@ export async function createCharacterRenderer<
   let elapsedSec = 0;
   let disposed = false;
   let busyDepth = 0;
+  /**
+   * The pipeline still holds other settings than {@link settings} (restoring
+   * them after an export failed). Draws are skipped until an exclusive
+   * operation re-applies them.
+   */
+  let pipelineStale = false;
   let direction = 0;
   let framing: Framing | undefined;
   /** Framing inputs changed since {@link framing} was computed. */
@@ -468,6 +541,7 @@ export async function createCharacterRenderer<
     busyDepth++;
     if (pauseLoop) stopLoop();
     try {
+      await resyncPipeline();
       return await fn();
     } finally {
       busyDepth--;
@@ -478,6 +552,49 @@ export async function createCharacterRenderer<
       }
     }
   };
+
+  /**
+   * Re-applies {@link settings} to the pipeline after a failed restore
+   * (exclusive section only). A new failure is reported and keeps it stale.
+   */
+  async function resyncPipeline(): Promise<void> {
+    if (!pipelineStale || disposed) return;
+    try {
+      await pipeline.setRenderSettings(settings);
+      pipelineStale = false;
+    } catch (error) {
+      if (!disposed) {
+        options.onError?.(toEngineError(error, PIX_PALETTE_LUT_FAILED));
+      }
+    }
+  }
+
+  /**
+   * Restores the preview after an export (exclusive section only). Never
+   * throws (review M1): a failure is reported through `onError`; a failed
+   * settings restore leaves the pipeline stale until the next exclusive
+   * operation re-applies {@link settings}.
+   */
+  async function restoreAfterExport(): Promise<void> {
+    if (disposed) return;
+    try {
+      await pipeline.setRenderSettings(settings);
+    } catch (error) {
+      pipelineStale = true;
+      if (!disposed) {
+        options.onError?.(toEngineError(error, PIX_PALETTE_LUT_FAILED));
+      }
+    }
+    try {
+      target.restore();
+      await restorePreviewClip();
+      if (!disposed) bindPreview();
+    } catch (error) {
+      if (!disposed) {
+        options.onError?.(toEngineError(error, PIX_PREVIEW_FAILED));
+      }
+    }
+  }
 
   // ---- preview selection, timing and binding ----
   const selectionFor = (
@@ -628,18 +745,32 @@ export async function createCharacterRenderer<
   const activeTiming = (): PreviewTiming => timing ?? clipTiming;
 
   const draw = (): void => {
-    if (disposed || busyDepth > 0 || framing === undefined) return;
+    if (disposed || busyDepth > 0 || pipelineStale || framing === undefined)
+      return;
     if (!previewBound) bindPreview();
     target.pose(timeSec, shownIndex[direction] ?? direction);
-    pipeline.render();
+    // Node-frame time = the drawn clip time, never the wall clock (L1).
+    pipeline.render(timeSec);
     presenter.present(shownMirror[direction] ?? null);
   };
 
+  /**
+   * One animation-loop frame. A throw would escape into three's rAF loop
+   * and repeat every frame (review M3): it stops the loop, pauses playback
+   * (`resume()` restarts it) and is reported once as {@link PIX_PREVIEW_FAILED}.
+   */
   function tick(nowMs: number): void {
-    if (startMs === null) startMs = nowMs - elapsedSec * 1000;
-    elapsedSec = (nowMs - startMs) / 1000;
-    timeSec = previewTimeAt(activeTiming(), elapsedSec);
-    draw();
+    try {
+      if (startMs === null) startMs = nowMs - elapsedSec * 1000;
+      elapsedSec = (nowMs - startMs) / 1000;
+      timeSec = previewTimeAt(activeTiming(), elapsedSec);
+      draw();
+    } catch (error) {
+      playing = false;
+      stopLoop();
+      if (!disposed)
+        options.onError?.(toEngineError(error, PIX_PREVIEW_FAILED));
+    }
   }
 
   // ---- operations ----
@@ -728,6 +859,9 @@ export async function createCharacterRenderer<
     get busy() {
       return busyDepth > 0;
     },
+    get paletteLutStats() {
+      return {...lut.stats};
+    },
 
     setCharacter(spec: CharacterSpec) {
       return exclusive(async () => {
@@ -785,9 +919,23 @@ export async function createCharacterRenderer<
           error: validationError(parsed.issues),
         });
       }
+      /** The LUT failure of this call, reported once (REQ-GEN-016). */
+      const lutFailed = (error: unknown): Result<void, EngineError> => {
+        const e = toEngineError(error, PIX_PALETTE_LUT_FAILED);
+        if (!disposed) options.onError?.(e);
+        return {ok: false, error: e};
+      };
       const apply = async (): Promise<Result<void, EngineError>> => {
         if (disposed) return {ok: false, error: DISPOSED_ERROR};
-        const diff = await pipeline.setRenderSettings(parsed.value);
+        let diff: RenderSettingsDiff;
+        try {
+          // Atomic (review M2): the pipeline applies nothing unless its LUT
+          // is ready, so on failure both keep the previous settings.
+          diff = await pipeline.setRenderSettings(parsed.value);
+        } catch (error) {
+          return lutFailed(error);
+        }
+        if (disposed) return {ok: false, error: DISPOSED_ERROR};
         settings = parsed.value;
         if (diff.resize) {
           layout = previewLayout(
@@ -826,16 +974,23 @@ export async function createCharacterRenderer<
         colors !== null && !disposed && !lut.has(colors, metric);
       if (!needsBuild && pendingSettings === 0) return exclusive(apply);
       pendingSettings++;
-      const turn = settingsTurn.then(() =>
+      // A failed worker build ends this call (error reported once, previous
+      // settings kept, REQ-GEN-016); later calls still run in order.
+      const turn: Promise<unknown> = settingsTurn.then(() =>
         colors === null || !needsBuild
           ? undefined
-          : lut.warm(colors, metric).catch(() => {
-              // The pipeline's own build reports the error.
-            }),
+          : lut.warm(colors, metric).then(
+              () => undefined,
+              (error: unknown) => ({failed: error}),
+            ),
       );
-      settingsTurn = turn;
-      return turn.then(() => {
+      settingsTurn = turn.then(() => undefined);
+      return turn.then(outcome => {
         pendingSettings--;
+        if (typeof outcome === 'object' && outcome !== null) {
+          if (disposed) return {ok: false, error: DISPOSED_ERROR};
+          return lutFailed((outcome as {failed: unknown}).failed);
+        }
         return exclusive(apply);
       });
     },
@@ -871,23 +1026,37 @@ export async function createCharacterRenderer<
       prepared: PreparedFrames,
       renderOptions: RenderFramesOptions = {},
     ): AsyncGenerator<RenderedFrame, void, undefined> {
+      // Lock lifetime (review M1): the lock is taken on the first `next()` and
+      // released in the outer `finally`, which runs when the iteration ends,
+      // throws, or the consumer stops early: a `for await` `break`, or an
+      // explicit `return()` / `throw()`. A consumer that keeps the iterator
+      // suspended without finishing it holds the renderer; abandoning an
+      // export therefore means calling `return()`. A failing restore (e.g.
+      // the preview palette's LUT build) is reported through `onError` and
+      // never skips the release; the pipeline then re-applies the preview
+      // settings at the next exclusive operation (draws are skipped until).
       return (async function* exportFrames() {
         const release = await acquire();
         busyDepth++;
         stopLoop();
         try {
-          if (disposed) throw new FrameSamplerError(DISPOSED_ERROR);
-          unbindPreview();
-          // The export settings first (REQ-PIX-001: the frames have their size).
-          await pipeline.setRenderSettings(prepared.settings);
-          yield* sampleRender(target, prepared, renderOptions);
-        } finally {
-          if (!disposed) {
-            await pipeline.setRenderSettings(settings);
-            target.restore();
-            await restorePreviewClip();
-            if (!disposed) bindPreview();
+          try {
+            if (disposed) throw new FrameSamplerError(DISPOSED_ERROR);
+            await resyncPipeline();
+            unbindPreview();
+            // The export settings first (REQ-PIX-001: the frames have their size).
+            try {
+              await pipeline.setRenderSettings(prepared.settings);
+            } catch (error) {
+              throw new FrameSamplerError(
+                toEngineError(error, PIX_PALETTE_LUT_FAILED),
+              );
+            }
+            yield* sampleRender(target, prepared, renderOptions);
+          } finally {
+            await restoreAfterExport();
           }
+        } finally {
           busyDepth--;
           release();
           if (!disposed && busyDepth === 0) {

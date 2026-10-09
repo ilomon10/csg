@@ -187,8 +187,7 @@ Details:
 M2 state (2026-10-09): the pixel pipeline (`PixelPipeline`), the emitter-shaped stages, the camera,
 framing and the frame sampler are implemented and tested on both backends. Wiring them into
 `createCharacterRenderer` (preview through the pipeline, `setRenderSettings`, `prepareFrames`,
-`renderFrames`, the new `resize`) is **in progress (M2-17)**; until it lands the renderer still
-draws the M1 unlit preview scene directly. Material and post **graphs** remain M4.
+`renderFrames`, `resize`) is implemented (M2-17, §3.6.3). Material and post **graphs** remain M4.
 
 ### 2.2 Upload path
 
@@ -332,7 +331,8 @@ with an exact 0/1 weight instead of `select` (ADR-0009 §6.2).
   recompile, visible on the next frame.
 - `palette`: id, colors or metric changed. The LUT is rebuilt and re-uploaded with no recompile;
   `PixelPipeline` waits for `binder.paletteReady`. Preview builds it in the module worker
-  `palette-lut.worker.ts` (loaded by URL, CSP `worker-src 'self'`), export builds it synchronously.
+  `palette-lut.worker.ts`, which the host starts through the `csg-worker-url` policy (§4.10; CSP
+  `worker-src 'self'`). Export builds it synchronously.
 - `post`: dither mode, inner sources, outer or inner color mode, palette `none` ↔ preset, post
   graph. The post node is rebuilt (`stats.rebuilds` increments) within 300 ms (§4.3).
 - `material`: material graph (M4).
@@ -400,10 +400,10 @@ phases:
    (AC-EXP-024.1). The target is restored in `finally`. The optional `log` records every frame
    (`rendered` or `mirrored`) for AC-ANM-011.1.
 
-**Preview presentation** (in progress, M2-17). The preview draws `cellTarget` to the W×H canvas
+**Preview presentation** (M2-17, implemented). The preview draws `cellTarget` to the W×H canvas
 with a second `RenderPipeline` whose output is `texture(cellTarget.texture).load(ivec2(screenCoordinate))`,
-with `outputColorTransform` off. The shell sets the canvas CSS size returned by `resize(cssW,
-cssH, dpr)`, which is the largest integer device scale (REQ-PIX-031). The preview framing comes
+with `outputColorTransform` off. The shell sets the canvas CSS size from the `{cssW, cssH}` returned
+by `resize(viewportCssW, viewportCssH, dpr)`, which is the largest integer device scale (REQ-PIX-031). The preview framing comes
 from the animations currently selected (REQ-PIX-030).
 
 ## 3. Core contracts
@@ -1061,7 +1061,7 @@ export interface EngineCharacterRenderer<R> extends CharacterRenderer {
   setPreviewTiming(timing: PreviewTiming | null): void;
   playClip(clipId: ClipRef, rootMotion?: RootMotionMode): Promise<Result<void, EngineError>>;
   resume(): boolean;
-  /** M1 only; replaced by resize(cssW, cssH, dpr) in M2-17 (3.6.3). */
+  /** M1 signature; replaced in M2-17 by resize(viewportCssW, viewportCssH, dpr?) (3.6.3). */
   resize(width: number, height: number): void; // CSS px / previewScale
   draw(): void;
 }
@@ -1427,32 +1427,65 @@ export function mirrorFrame(pixels: Uint8ClampedArray, width: number, height: nu
 export function planFrames(settings: RenderSettings, durations: ReadonlyMap<ClipRef, number>): FrameJob[];
 ```
 
-**Renderer surface (in progress, M2-17).** `createCharacterRenderer` wires one `PixelPipeline`, the
-assembly (toon materials, `userData.partId`) and the frame target. `contracts/renderer.ts` still
-declares the M2 members separately (`CharacterRendererM2`, `EngineRendererM2`); M2-17 merges them
-into `CharacterRenderer` and `EngineCharacterRenderer`:
+**Renderer surface (M2-17, implemented).** `createCharacterRenderer` wires one `PixelPipeline`, the
+assembly (toon materials, `userData.partId`) and the frame target. The public contract is
+`CharacterRenderer` in `contracts/renderer.ts`. `EngineCharacterRenderer` in
+`renderer/character-renderer.ts` extends it with the preview controls and read-only state below.
+The §3.6.2 members `setGraph`, `setParam`, `renderNodePreview` and `attachGizmo` are not part of the
+contract yet; they belong to later milestones.
 
 ```ts
-interface CharacterRenderer { /* M1 members + */
-  /** Zod-validated (parseRenderSettings); failures carry PIX_* codes and details.issues[]. */
+interface CharacterRenderer {                        // contracts/renderer.ts
+  readonly backend: RendererBackend;
+  setCharacter(spec: CharacterSpec): Promise<Result<void, EngineError>>;
+  play(clipId: ClipRef): void;
+  pause(): void;
+  seek(timeSec: number): void;
+  setDirection(index: number): void;                 // yaw = index * 45 degrees
+  /** Validated (parseRenderSettings); PIX_* codes and details.issues[]; failure keeps the previous settings. */
   setRenderSettings(settings: RenderSettings): Promise<Result<void, EngineError>>;
-  /** Union bounds + framing for the export (pivotPx for ExportContext, clipping warnings). */
-  prepareFrames(settings?: RenderSettings, signal?: AbortSignal): Promise<Result<Framing, EngineError>>;
-  /** Takes the renderer exclusively (preview paused, state restored in finally; D5). */
-  renderFrames(settings?: RenderSettings, signal?: AbortSignal): AsyncIterable<RenderedFrame>;
+  /** Exclusive (D5): plan, union bounds and the one fixed framing (REQ-PIX-007). */
+  prepareFrames(settings?: RenderSettings, options?: PrepareFramesOptions): Promise<Result<PreparedFrames, EngineError>>;
+  /** Exclusive until the iteration ends; finish it or call return(). */
+  renderFrames(prepared: PreparedFrames, options?: RenderFramesOptions): AsyncIterable<RenderedFrame>;
+  dispose(): void;
 }
-interface EngineCharacterRenderer { /* M1 members; breaking change to resize: */
-  /** Drawing buffer stays W×H; returns the CSS size for the largest integer device scale
-   *  (REQ-PIX-031): k = largest integer ≥ 1 with k·W ≤ cssW·dpr and k·H ≤ cssH·dpr;
-   *  cssW' = k·W / dpr, cssH' = k·H / dpr. */
-  resize(viewportCssW: number, viewportCssH: number, dpr: number): PreviewResize; // {deviceScale, cssW, cssH}
-  readonly cellTarget: RenderTarget; // AC-PIX-030.1 reads the preview cell here
-  readonly pipelineStats: {readonly rebuilds: number}; // AC-PIX-034.1 spy
+
+interface EngineCharacterRenderer<R> extends CharacterRenderer {   // renderer/character-renderer.ts
+  readonly renderer: R;                              // the three renderer
+  readonly preview: PreviewScene;                    // scene, camera, direction stage
+  readonly assembly: CharacterAssembly;
+  readonly binder: SettingsBinder;                   // the one settings binder
+  readonly renderSettings: RenderSettings;           // applied settings
+  readonly framing: Framing | undefined;             // undefined before the first character
+  readonly cellTarget: RenderTarget;                 // RGBA8 preview cell; export reads the same bytes
+  readonly pipelineStats: PixelPipelineStats;        // { rebuilds, frames } (AC-PIX-034.1)
+  readonly layout: PreviewResize;                    // last resize(); starts as a 1 x 1 viewport at dpr 1
+  readonly timeSec: number;                          // clip time last drawn
+  readonly playing: boolean;                         // user intent; paused during exclusive work
+  readonly busy: boolean;                            // an exclusive operation holds the renderer
+  readonly paletteLutStats: PaletteLutSourceStats;   // { workerBuilds, mainThreadBuilds, failures }; diagnostics
+  setPreviewTiming(timing: PreviewTiming | null): void;  // null = export-frame stepping (REQ-ANM-018)
+  playClip(clipId: ClipRef, rootMotion?: RootMotionMode): Promise<Result<void, EngineError>>;
+  resume(): boolean;                                 // restarts the loop after pause()
+  /** Lays out the preview (REQ-PIX-031). The drawing buffer stays cellW x cellH. */
+  resize(viewportCssW: number, viewportCssH: number, dpr?: number): PreviewResize;
+  draw(): void;                                      // one pose and draw; no-op while busy
+  readCell(): Promise<Uint8ClampedArray>;            // tight RGBA8, top-left origin (REQ-PIX-029)
 }
+
+/** Returned by resize(): the cell, the integer device scale and the CSS size of the canvas. */
+interface PreviewResize { cellW: number; cellH: number; scale: number; cssW: number; cssH: number }
 ```
 
-The only callers of the old `resize(width, height)` are the preview viewport in `apps/web`
-`src/app/`. It moves to the new signature in M2-20.
+**Exclusive lock (D5).** `setCharacter`, `playClip`, `setRenderSettings`, `prepareFrames` and
+`renderFrames` run one at a time. The `renderFrames` lock is taken on the first `next()`.
+`prepareFrames` and `renderFrames` also stop the preview loop. On exit the preview clip, framing and
+loop are restored. `busy` is `true` while the lock is held, and `draw()` does nothing then.
+`setRenderSettings` waits for an uncached palette LUT before it takes the lock, so the preview keeps
+the previous palette until the new one is ready (AC-PIX-021.2).
+
+The preview viewport in `apps/web/src/app/preview-session.ts` uses the new `resize` signature.
 
 ## 4. Cross-cutting concerns
 
@@ -1514,6 +1547,13 @@ The constitution (P-07) is binding; a spec may tighten a budget but not loosen i
 | Bundled packs in git (`assets/packs/**`) | ≤ 30 MB total, ≤ 3 MB per GLB (M1: about 18 MB) | M1 plan R1, `assets:check` |
 | Upload analysis, 30 MB GLB | ≤ 5 s, hard timeout 20 s | REQ-UPL-051, spec 008 limits |
 | Website | Lighthouse Performance ≥ 90, Accessibility ≥ 95 (mobile); LCP ≤ 2.0 s, CLS ≤ 0.05 | P-07, spec 010 |
+
+**Where the initial JS budget is measured (AC-GEN-007.3).** The 400 KB gzip budget is measured on the
+production build, on the entry chunk plus every chunk in its static import graph, including
+`modulepreload`ed chunks. That sum must contain no `three` or `@csg/engine` module. The engine loads
+after first paint through a dynamic `import()` (`apps/web/src/app/preview-engine.ts`), so its chunk
+is outside the measured set. In a cold-load Chromium trace, the request for the engine chunk must
+start after first contentful paint.
 
 **Where GPU budgets are measured.** Pixel-pipeline budgets (REQ-PIX-032/033, AC-PIX-007.2,
 AC-PIX-021.2, AC-PIX-034.2, AC-GEN-007.2) are gated only on the reference machine with
@@ -1587,7 +1627,7 @@ CI hardening for the golden workflow (ADR-0009 §4):
 |-------|------|-------|
 | Unit | Vitest (Node) | schemas, migrations, graph model, compiler structure, retarget math, exporters, PRNG, sample times; pipeline CPU modules (framing, snap, Bayer, palette LUT, readback, part IDs, directions, settings diff, rim offset/combine) and the frame sampler over a fake `FrameSamplerTarget` |
 | GPU (browser) | Vitest browser mode, `@vitest/browser-playwright`, Chromium; projects `gpu-webgpu` and `gpu-webgl2` (`forceWebGL`) | `packages/engine/test/gpu/**/*.gpu.ts`: real renderer on both backends. Covers the stages, toon material, MRT, render pipeline, readback marker, frame sampler and the look-review gates (AC-PIX-012.7/012.8). Opt-in with `CSG_GPU=1` (`pnpm test:gpu`), so `pnpm test` needs no browser |
-| Golden image | GPU projects + `compareGolden` (Node browser command) | REQ-PIX-028 matrix (9 cases per backend) and AC goldens, rendered in the engine and compared with per-backend PNGs at tolerance 0; overrides need `{maxDiffPixels, reason}`. Generated and gated only in the canonical container (below, ADR-0009). Matrix suite: M2-18, in progress |
+| Golden image | GPU projects + `compareGolden` (Node browser command) | REQ-PIX-028 matrix (9 cases per backend) and AC goldens, rendered in the engine and compared with per-backend PNGs at tolerance 0; overrides need `{maxDiffPixels, reason}`. Generated and gated only in the canonical container (below, ADR-0009). Matrix suite: M2-18, frozen |
 | Perf | GPU projects, `packages/engine/test/perf/` (M2-19) | Reports to `test-results/perf/*.json`; gates only with `CSG_PERF_GATE=1` on the reference machine (§4.3) |
 | Component | Vitest + Testing Library (jsdom) | apps/web panels, shortcut handling, history, graph editor commands |
 | E2E | Playwright | compose, export, upload, graph edit flows; Firefox run on WebGL2 |
@@ -1658,7 +1698,7 @@ packages/engine/src/
   retarget/    # DOM-free and three-free retarget math (@csg/engine/retarget)
   rig/         # DOM-free rig math: rest pose per group, FK (@csg/engine/rig)
   renderer/    # backend selection + fallback, character renderer, preview scene, preview clock
-               # (M2-17: pipeline wiring, prepareFrames/renderFrames, resize(cssW, cssH, dpr))
+               # (M2-17: pipeline wiring, prepareFrames/renderFrames, resize(viewportCssW, viewportCssH, dpr))
   pipeline/    # determinism-linted. Pure CPU: snap, framing, bayer, readback, part-ids, directions,
                # srgb8, oklab, palette-lut (+ palette-lut.worker.ts). GPU: settings-binder,
                # stage-context (CompileContext impl), toon-material (scene MRT), camera,
@@ -1671,7 +1711,7 @@ packages/engine/test/
   fixtures/    # synthetic pack (body, shirts, sword, clip), rigs, variants
   gpu/         # *.gpu.ts browser tests + harness (renderer per backend, guard), golden-node /
                # golden-commands (Node compare + update rules), png codec
-  golden/      # golden matrix and AC golden suites (M2-18, in progress)
+  golden/      # golden matrix and AC golden suites (M2-18, frozen)
   goldens/     # committed PNGs: webgpu/<case>.png, webgl2/<case>.png, environment.json
   perf/        # perf reports and the CSG_PERF_GATE mode (M2-19)
 packages/shader-graph/src/
@@ -1744,8 +1784,12 @@ that is the first element in `<head>` (only `<meta charset>` may precede it; no 
 must equal the REQ-GEN-010 policy byte for byte (AC-GEN-010.1); copied here verbatim:
 
 ```
-default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; require-trusted-types-for 'script'
+default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; require-trusted-types-for 'script'; trusted-types csg-worker-url
 ```
+
+The `trusted-types csg-worker-url` directive was added on 2026-10-09 (M2-23s). It allows only the
+one policy name below and no `default` policy, and it forbids a second `csg-worker-url`
+(no `'allow-duplicates'`). The superseded policy without it fails AC-GEN-010.1.
 
 The policy applies to production builds only (Vite dev needs inline scripts and HMR); E2E always
 runs against the production build and fails on any CSP violation (AC-GEN-010.2). Implementation
@@ -1753,6 +1797,51 @@ consequences: no `blob:` workers (`worker-src 'self'`; the palette-LUT worker is
 loaded with `new URL(..., import.meta.url)`); `connect-src 'self'` means main-thread code must not
 `fetch` `blob:` or `data:` URLs; `require-trusted-types-for 'script'` plus the `innerHTML` lint ban
 (rule 9) means no string-to-DOM sinks.
+
+**Trusted Types policy `csg-worker-url` (REQ-GEN-014).** `apps/web/src/app/trusted-types.ts` creates
+the only policy. It is the first import of the entry module (`main.tsx`), before `csp-setup` and
+before any other application module (AC-GEN-014.6). Its only factory is `createScriptURL`, and it
+defines no `createHTML` or `createScript`. The factory returns a `TrustedScriptURL` only when all of
+these hold for the input resolved against `document.baseURI`:
+
+- the scheme is `https:` or `http:`, and the origin is the editor's own origin;
+- there are no credentials and no fragment;
+- the serialized URL equals one entry of `WORKER_URL_ALLOWLIST`, the module-worker URLs that the
+  build emits. The list is fixed at build time and never extended at runtime.
+
+Every other input throws a `TypeError`, including `blob:` and `data:` URLs, cross-origin and
+protocol-relative URLs, other paths on a shared origin, backslashes, `.` and `..` segments, and
+`%2e`. These checks live in `apps/web/src/app/worker-url-policy.ts`, a pure function. Where Trusted
+Types are not supported, the same checks run and return the plain string.
+
+**Worker hygiene (REQ-GEN-015).** No file matching `**/*.worker.ts` may call `fetch`,
+`importScripts`, dynamic `import()`, `WebSocket`, `EventSource`, `XMLHttpRequest`, `new Function`,
+`eval` or `Function()`. The worker override in `eslint.config.js` reports these in `pnpm lint`. A
+module worker loaded from a same-origin URL does not inherit the document's `<meta>` policy, so on a
+host that cannot set headers this lint rule is the worker's only network and eval guard. Where the
+host can set headers, every worker script must also be served with the REQ-GEN-010 policy as a
+`Content-Security-Policy` header (AC-GEN-015.3). That host decision is open (REQ-GEN-009).
+
+**Worker robustness (REQ-GEN-016).** `createPaletteLutWorker` (`pipeline/palette-lut.ts`) checks
+every reply before use. A reply must have a known `type`, an `id` that is pending, and a LUT of exactly
+1,048,576 bytes (512 × 512 × 4). A reply that fails is ignored with a debug log, and its request stays
+pending. Each request times out after 5,000 ms (`PALETTE_LUT_WORKER_TIMEOUT_MS`). The `error` and
+`messageerror` events reject every pending request of that worker. A failed build keeps the previous
+palette (AC-PIX-021.2) and is reported once through `onError` as `PIX_PALETTE_LUT_FAILED` (spec 003,
+REQ-PIX-021, AC-PIX-021.6–.8). There is no silent fallback: once a worker factory is injected, a
+failing build rejects and does not run on the main thread.
+
+**Injected worker factory.** In browser builds the engine never constructs a `Worker` from a URL
+(REQ-GEN-014). The host does. `apps/web/src/app/preview-engine.ts` exports
+`createPreviewPaletteLutWorker`, which creates `new Worker(createWorkerScriptUrl(PALETTE_WORKER_URL),
+{type: 'module'})`. `use-preview.ts` passes it as `paletteLutWorker` through the preview session to
+`createCharacterRenderer`, which hands it to the palette LUT source. The option has two cases:
+
+- a factory: the worker is created on the first LUT cache miss;
+- `null` or absent: LUTs are built on the main thread, and no worker is tried.
+
+`apps/web` loads `preview-engine.ts` with a dynamic `import()`, so the engine is outside the initial
+bundle (§4.3).
 
 **Texture loading under CSP.** three r186 `GLTFParser` uses an `ImageBitmapLoader` whenever
 `createImageBitmap` exists, and that loader `fetch`es the `blob:` URL the parser creates for each
@@ -1810,10 +1899,11 @@ preference falls back to its default individually.
 | Milestone | Content | Exit criteria |
 |-----------|---------|---------------|
 | **M1** Asset spike + engine core | `tools/verify-rig.ts` (bone names, hierarchy, bind poses across UBC, Outfits, Animation Library); asset build (`gltf-transform`, spec 011); `@csg/parts-schema` v1 incl. slot registry, rigs and clip manifests; built-in manifests; engine: renderer creation with fallback, registry, loaders, rebinding, hides, anatomy with child compensation, animation playback; unlit test page | Spike report committed: shared skeleton confirmed, or per-pack retarget map defined (fallback: KayKit Adventurers). A fixture `CharacterSpec` renders with an animation on both backends. **Outcome (2026-10-09):** spike `mapped`, resolved by skeleton groups + runtime retargeting (ADR-0008); three Quaternius packs built; preview renders the default character with idle/walk on WebGPU and WebGL2 (E2E, §4.7 caveat). |
-| **M2** Pixel pipeline | Low-res RT, toon ramp (material), screen-space rim (post), MRT pass, outline (depth/normal/partId), palette LUT, Bayer dither, alpha cutoff, texel snapping, camera presets, directions, frame sampler | Golden images for side, 3/4, isometric at 32/64/128 px pass on WebGPU and WebGL2; determinism test passes. Post stages are implemented as functions with the same shape as node emitters so M4 can wrap them. **Status (2026-10-09):** pipeline, stages, framing and sampler implemented and GPU-tested on both backends in the canonical container (ADR-0009); default look approved by the user (D2); renderer wiring (M2-17), golden matrix (M2-18), perf (M2-19) and the web preview (M2-20) in progress. |
+| **M2** Pixel pipeline | Low-res RT, toon ramp (material), screen-space rim (post), MRT pass, outline (depth/normal/partId), palette LUT, Bayer dither, alpha cutoff, texel snapping, camera presets, directions, frame sampler | Golden images for side, 3/4, isometric at 32/64/128 px pass on WebGPU and WebGL2; determinism test passes. Post stages are implemented as functions with the same shape as node emitters so M4 can wrap them. **Status (2026-10-09):** pipeline, stages, framing and sampler implemented and GPU-tested on both backends in the canonical container (ADR-0009); default look approved by the user (D2); renderer wiring (M2-17), golden matrix frozen on both backends (M2-18), P-07 budgets met on the reference machine (M2-19: export 0.64–0.79 s, settings rebuild 88–116 ms, 60 fps preview, initial JS 104.6 kB gz) and the web preview (M2-20) done; review fix wave and final QA (M2-24) in progress. |
 | **M3** Composer UI + export | apps/web shell (single history, shortcut registry), part picker, anatomy sliders, tints, animation picker, look panel, randomize, save/load, URL share, sprite sheet + metadata + CREDITS export, license warnings | E2E: compose, randomize, export a sheet; binding budgets in 4.3 met for preview and export. |
 | **M4** Shader graph | Graph model, schema, migrations, compiler to TSL, built-in material/post graphs as documents (output identical to M2 goldens), React Flow editor, search popup, groups, reroutes, frames, blackboard, previews, undo/redo via the shared history, copy/paste, presets | Default graphs reproduce M2 goldens pixel-exact; param slider updates without recompile; compile errors shown on nodes. |
 | **M5** Custom upload | Worker analysis, validator, budgets, VRM, FBX/OBJ beta, bone map presets + auto-map + manual mapping UI (extending the M1 retargeter), static prop gizmo, OPFS/IndexedDB storage, licensing UX | Mixamo and VRM fixtures retarget built-in clips without visible twisting (golden images); malicious fixture suite rejected; no network requests during upload (E2E asserts). |
+| **M6** 2D lighting maps | Auxiliary maps from the same single scene render: normal map (`_n`) and albedo (unlit) colour sheet, with their metadata (spec 012). Planned: `ExportSettings.maps?: LightingMapSettings` (spec 005). Later: mask, specular, UV lookup (P2); depth, emission, options (P3) | Spec 012 P1 acceptance criteria met. Depends on M3 export; independent of M4 and M5. Planned, not started (spec 012 is draft). |
 
 **Website track** (parallel, independent of the engine):
 
@@ -1865,6 +1955,6 @@ preference falls back to its default individually.
 | Clipping between outfit parts | `hides` regions, `alsoOccupies`; manifest QA in M1 |
 | FBX import quality | Marked beta; recommend GLB conversion |
 | Pixel-exact goldens may be flaky across GPU drivers | Goldens generated and gated only in the pinned canonical container (image digest, Chromium, three, adapter in `environment.json`); real-GPU runs report only; tolerance override per test with reason (ADR-0009) |
-| Structural settings rebuild slower than 300 ms (M2-14 measured 500–1180 ms, mostly readback) | Measured on the reference machine in M2-19; the 300 ms limit (AC-PIX-034.2) stays, implementation or measurement point changes per the result (§4.3) |
-| Export render budget (CPU skinned bounds, serial readback with WebGPU `mapAsync` per frame) | Measured in M2-19; if over budget, a ring of 2–3 cell targets to overlap readback, or vertex-stride bounds |
+| ~~Structural settings rebuild slower than 300 ms (M2-14 measured 500–1180 ms, mostly readback)~~ Resolved in M2-19: 88–116 ms after the fast WebGL2 readback and the LUT worker | Measured on the reference machine in M2-19; the 300 ms limit (AC-PIX-034.2) stays, implementation or measurement point changes per the result (§4.3) |
+| ~~Export render budget (CPU skinned bounds, serial readback with WebGPU `mapAsync` per frame)~~ Resolved in M2-19: 0.64–0.79 s against the 10 s budget | Measured in M2-19; if over budget, a ring of 2–3 cell targets to overlap readback, or vertex-stride bounds |
 | Hosting origin not yet decided (shared `<owner>.github.io` would expose persisted uploads to other repos' scripts) | §4.10 dedicated-origin requirement; `DEDICATED_ORIGIN=false` disables persistence until the owner decides the domain (REQ-GEN-009) |

@@ -10,7 +10,7 @@ import {
   LinearMipmapNearestFilter,
   NearestFilter,
 } from 'three';
-import type {Material} from 'three';
+import type {Material, Texture} from 'three';
 import {MeshBasicNodeMaterial} from 'three/webgpu';
 import {TINT_SLOTS, defaultRenderSettings} from '@csg/parts-schema';
 import type {HexColor, PartEntry, TintSlot} from '@csg/parts-schema';
@@ -35,6 +35,8 @@ import {
   applyTintMaterial,
   createTintUniforms,
   ensureMipmapped,
+  mipmappedTexture,
+  releaseMipmappedTexture,
   restoreMaterials,
   setTint,
 } from './tint-material';
@@ -60,10 +62,19 @@ function nodesOf(material: Material): unknown[] {
   return out;
 }
 
-function isTextureOf(node: unknown, map: unknown): boolean {
+/** Samples `map`: the texture itself or its mipmapped clone (same image source, review L7). */
+function samples(value: unknown, map: Texture): boolean {
+  return (
+    value === map ||
+    ((value as {isTexture?: boolean} | null)?.isTexture === true &&
+      (value as Texture).source === map.source)
+  );
+}
+
+function isTextureOf(node: unknown, map: Texture): boolean {
   return (
     (node as {isTextureNode?: boolean}).isTextureNode === true &&
-    (node as {value?: unknown}).value === map
+    samples((node as {value?: unknown}).value, map)
   );
 }
 
@@ -164,7 +175,7 @@ describe('tint materials', () => {
     for (const slot of TINT_SLOTS) setTint(uniforms, slot, '#ff0000');
     expect(m.color.getHex()).toBe(before);
     expect(m.color.getHex()).toBe(0x336699);
-    expect(m.map).toBe(WHITE);
+    expect(samples(m.map, WHITE)).toBe(true);
   });
 
   it('AC-CMP-014.1: multiply mode is texel.rgb x tint (texture and tint in the graph, no luminance); without a map the color is the tint', () => {
@@ -181,13 +192,7 @@ describe('tint materials', () => {
     );
     const nodes = nodesOf(material(textured));
     expect(nodes).toContain(uniforms.primary);
-    expect(
-      nodes.some(
-        n =>
-          (n as {isTextureNode?: boolean}).isTextureNode === true &&
-          (n as {value?: unknown}).value === WHITE,
-      ),
-    ).toBe(true);
+    expect(nodes.some(n => isTextureOf(n, WHITE))).toBe(true);
 
     const plain = syntheticPart(
       [
@@ -368,13 +373,7 @@ describe('tint materials', () => {
       expect(nodes).toContain(uniforms.primary);
       expect(nodes).toContain(binder.lightDir);
       expect(nodes).toContain(binder.uniformNode('alpha.cutoff'));
-      expect(
-        nodes.some(
-          n =>
-            (n as {isTextureNode?: boolean}).isTextureNode === true &&
-            (n as {value?: unknown}).value === WHITE,
-        ),
-      ).toBe(true);
+      expect(nodes.some(n => isTextureOf(n, WHITE))).toBe(true);
       const version = m.version;
       setTint(uniforms, 'primary', '#3a5fcd');
       expect(m.version).toBe(version);
@@ -478,13 +477,68 @@ describe('tint materials', () => {
         undefined,
         opts,
       );
-      expect(nearest.minFilter).toBe(LinearMipmapLinearFilter);
-      expect(nearest.generateMipmaps).toBe(true);
+      // The material samples a mipmapped clone over the same image source.
+      const sampled = nodesOf(material(part))
+        .map(n => (n as {value?: Texture}).value)
+        .filter((v): v is Texture => v?.isTexture === true);
+      expect(sampled.length).toBeGreaterThan(0);
+      for (const t of sampled) {
+        expect(t).not.toBe(nearest);
+        expect(t.source).toBe(nearest.source);
+        expect(t.minFilter).toBe(LinearMipmapLinearFilter);
+        expect(t.generateMipmaps).toBe(true);
+      }
       const kept = new DataTexture(new Uint8Array(4), 1, 1);
       kept.minFilter = LinearMipmapNearestFilter;
       kept.generateMipmaps = true;
       expect(ensureMipmapped(kept)).toBe(false);
       expect(kept.minFilter).toBe(LinearMipmapNearestFilter);
+    });
+
+    it('AC-PIX-038.1 / review L7: registry textures are never mutated; clones are shared and disposed with their last user', () => {
+      const shared = new DataTexture(new Uint8Array(4), 1, 1);
+      shared.minFilter = NearestFilter;
+      shared.generateMipmaps = false;
+      const versionBefore = shared.version;
+      const {opts} = options();
+      const parts = [0, 1].map(() =>
+        syntheticPart(
+          [
+            Object.assign(new MeshStandardMaterial({map: shared}), {
+              name: 'Cloth',
+            }),
+          ],
+          false,
+        ),
+      );
+      for (const part of parts) {
+        applyTintMaterial(
+          part,
+          [{material: 'Cloth', slot: 'primary'}],
+          createTintUniforms(INITIAL),
+          undefined,
+          opts,
+        );
+      }
+      expect(shared.minFilter).toBe(NearestFilter);
+      expect(shared.generateMipmaps).toBe(false);
+      expect(shared.version).toBe(versionBefore);
+      // One clone for both parts.
+      const clone = mipmappedTexture(shared);
+      releaseMipmappedTexture(shared, clone);
+      let disposed = 0;
+      clone.addEventListener('dispose', () => disposed++);
+      const [first, second] = parts as [LoadedPartInternal, LoadedPartInternal];
+      restoreMaterials(first.scene);
+      expect(disposed).toBe(0);
+      restoreMaterials(second.scene);
+      expect(disposed).toBe(1);
+      // Already mipmapped: used as is, never disposed by a release.
+      const ready = new DataTexture(new Uint8Array(4), 1, 1);
+      ready.minFilter = LinearMipmapLinearFilter;
+      ready.generateMipmaps = true;
+      expect(mipmappedTexture(ready)).toBe(ready);
+      releaseMipmappedTexture(ready, ready);
     });
 
     it('re-applying the toon path disposes the previous toon materials', () => {

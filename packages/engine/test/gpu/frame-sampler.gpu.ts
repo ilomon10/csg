@@ -10,7 +10,7 @@
  *   cell edge unless the frame is reported clipped.
  * - AC-PIX-014.1: the part-ID attachment reads back identically when the
  *   parts finish loading in opposite orders.
- * - AC-EXP-024.1: abort at 50 % rejects with EXP_CANCELLED within 250 ms.
+ * - AC-EXP-024.1: a timer abort during a pending (delayed) readback rejects with EXP_CANCELLED within 250 ms.
  * - Review strip (not a golden, D2): `test-results/m2-16/<backend>/sampler-three-quarter-64.png`.
  */
 import {
@@ -421,43 +421,63 @@ describe(`frame sampler on the pipeline (${currentBackend()})`, () => {
     expect(Array.from(second)).toEqual(Array.from(first));
   });
 
-  it('AC-EXP-024.1: an abort at 50 % render progress rejects with EXP_CANCELLED within 250 ms', async () => {
+  it('AC-EXP-024.1: an abort from a timer while a delayed readback is pending rejects with EXP_CANCELLED within 250 ms', async () => {
     const settings = exportSettings();
     const pipeline = await newPipeline(h, fixture, binder, settings);
     try {
-      const target = createPipelineFrameTarget({
+      const real = createPipelineFrameTarget({
         pipeline,
         character: fixture.assembly,
         stage: fixture.stage,
       });
+      // Every readback takes 10 s (never resolves within the test), so only the abort can end it.
+      let reads = 0;
+      const target: typeof real = Object.create(real, {
+        read: {
+          value: () => {
+            reads++;
+            return new Promise<Uint8ClampedArray>(resolve =>
+              setTimeout(() => resolve(new Uint8ClampedArray(0)), 10_000),
+            );
+          },
+        },
+      });
       const prepared = await prepareFrames(target, settings);
       if (!prepared.ok) throw new Error(prepared.error.message);
+      // Compared with the state before the run (a timed-out earlier test may leave the shared stage turned).
+      const rotationBefore = fixture.stage.rotation.y;
+      const positionBefore = fixture.stage.position.toArray();
       const controller = new AbortController();
       let abortedAt = 0;
+      let settledAt = 0;
       let count = 0;
       let error: unknown;
+      const timer = setTimeout(() => {
+        abortedAt = performance.now();
+        controller.abort();
+      }, 100);
       try {
         for await (const _frame of renderFrames(target, prepared.value, {
           signal: controller.signal,
         })) {
           count++;
-          if (count === 8) {
-            abortedAt = performance.now();
-            controller.abort();
-          }
         }
       } catch (e) {
         error = e;
+      } finally {
+        settledAt = performance.now();
+        clearTimeout(timer);
       }
-      const elapsed = performance.now() - abortedAt;
-      expect(count).toBe(8);
-      expect((error as {code?: string}).code).toBe(EXP_CANCELLED);
-      expect(elapsed).toBeLessThanOrEqual(250);
+      expect(abortedAt).toBeGreaterThan(0); // the timer fired, not a natural end
+      expect(reads).toBe(1); // stuck in the first pending read
+      expect(count).toBe(0);
+      expect((error as {code?: string} | undefined)?.code).toBe(EXP_CANCELLED);
+      expect(settledAt - abortedAt).toBeLessThanOrEqual(250);
       // The stage is restored for the preview.
-      expect(fixture.stage.rotation.y).toBe(0);
-      expect(fixture.stage.position.toArray()).toEqual([0, 0, 0]);
+      expect(fixture.stage.rotation.y).toBe(rotationBefore);
+      expect(fixture.stage.position.toArray()).toEqual(positionBefore);
       console.log(
-        `[m2-16] ${h.backend} abort → reject ${elapsed.toFixed(1)} ms`,
+        `[m2-16] ${h.backend} abort → reject ${(settledAt - abortedAt).toFixed(1)} ms`,
       );
     } finally {
       pipeline.dispose();

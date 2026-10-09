@@ -106,7 +106,7 @@ describe(`GPU harness (${currentBackend()})`, () => {
     expect(runs[2]).toEqual(runs[0]);
   });
 
-  it('AC-PIX-028.1/.3/.5: golden round trip, mismatch artifacts, tolerance override', async () => {
+  it('AC-PIX-028.1, AC-PIX-028.3, AC-PIX-028.5: golden round trip, mismatch artifacts, tolerance override', async () => {
     const env = await nodeEnv();
     // The mismatch assertions below do not apply when the run is a golden update.
     if (env.update) return;
@@ -173,7 +173,14 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 
 describe(`palette LUT module worker (${currentBackend()})`, () => {
   it('AC-PIX-021.5: the browser worker LUT equals the Node digest; AC-PIX-021.2: build time report', async () => {
-    const worker = createPaletteLutWorker();
+    const worker = createPaletteLutWorker({
+      // The host builds the worker (REQ-GEN-014); the test uses the same-origin module worker.
+      createWorker: () =>
+        new Worker(
+          new URL('../../src/pipeline/palette-lut.worker.ts', import.meta.url),
+          {type: 'module'},
+        ),
+    });
     try {
       const pico = [...PALETTE_PRESETS['pico-8'].colors];
       const lut = await worker.build(pico, 'oklab');

@@ -74,6 +74,7 @@ export type ReservedUniformId = keyof typeof RESERVED_UNIFORM_PARAMS;
 export const RESERVED_NON_UNIFORM_IDS = [
   'outline.inner.sources',
   'outline.colorMode',
+  'outline.inner.colorMode',
   'palette.id',
   'palette.colors',
   'palette.metric',

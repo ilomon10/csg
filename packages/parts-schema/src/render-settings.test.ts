@@ -120,6 +120,38 @@ describe('render settings', () => {
     ]);
   });
 
+  it('AC-PIX-017.5 (validation): inner.colorMode defaults to darken; custom needs outline.color', () => {
+    const ok = parseRenderSettings({});
+    if (!ok.ok) throw new Error('expected ok');
+    expect(ok.value.outline.inner.colorMode).toBe('darken');
+    const bad = failure({outline: {inner: {colorMode: 'custom'}}});
+    expect(bad.map(i => [i.path, i.code])).toEqual([
+      ['outline.color', 'PIX_INVALID_SETTINGS'],
+    ]);
+    const custom = parseRenderSettings({
+      outline: {inner: {colorMode: 'custom'}, color: '#203040'},
+    });
+    expect(custom.ok).toBe(true);
+  });
+
+  it('AC-PIX-037.3: unknown palette id, alphaCutoff 2 and ambient -0.1 are listed with their codes; bad custom colors', () => {
+    const issues = failure({
+      palette: {id: 'gameboy'},
+      alphaCutoff: 2,
+      lighting: {ambient: -0.1},
+    });
+    const byPath = new Map(issues.map(i => [i.path, i.code]));
+    expect(byPath.get('palette.id')).toBe('PIX_PALETTE_PARSE');
+    expect(byPath.get('alphaCutoff')).toBe('PIX_INVALID_SETTINGS');
+    expect(byPath.get('lighting.ambient')).toBe('PIX_INVALID_SETTINGS');
+    for (const colorsIn of [[], ['#12345g']]) {
+      const bad = failure({palette: {id: 'custom', colors: colorsIn}});
+      expect(bad.find(i => i.path.startsWith('palette.colors'))?.code).toBe(
+        'PIX_PALETTE_PARSE',
+      );
+    }
+  });
+
   it('AC-PIX-037.2: omitted lighting, toon and outline get the defaults', () => {
     const result = parseRenderSettings({
       resolution: {width: 64, height: 64},

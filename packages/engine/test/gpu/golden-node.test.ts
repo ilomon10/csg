@@ -80,7 +80,7 @@ describe('REQ-PIX-028 golden harness (Node)', () => {
     expect(compareGoldenNode(req(img(9)), CANON).status).toBe('match');
   });
 
-  it('AC-PIX-028.1/.5: canonical mismatch fails and writes actual, expected and diff images', () => {
+  it('AC-PIX-028.1, AC-PIX-028.5: canonical mismatch fails and writes actual, expected and diff images', () => {
     compareGoldenNode(req(img(9)), UPDATE);
     const bent = img(9);
     bent[0] = 0;

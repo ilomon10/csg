@@ -13,7 +13,26 @@
  * `scene.depth` and `scene.partId` must be `TextureNode`s over the scene-pass
  * MRT attachments (spec 003 m2-plan 2.3). The stage reads `rgba` of
  * `scene.color`, `xyz` of `scene.normal`, `w` of `scene.depth` (the same
- * `normalDepth` attachment may back both) and `r` of `scene.partId`.
+ * `normalDepth` attachment may back both) and `r` of `scene.partId`. These
+ * builtins, `screenPos` and `resolution` come from the pipeline's post
+ * context in M2; the M4 graph compiler must supply the same ones.
+ *
+ * Cost (review L6): the outer outline always unrolls all
+ * `(2 · OUTLINE_MAX_WIDTH_PX + 1)² − 1 = 48` `scene.color` fetches (the
+ * `width` input only masks them, so a width change never recompiles). Inner
+ * lines add per enabled source up to 4 neighbours plus the centre on
+ * `normalDepth` and `partId` (about 10 fetches with every source). At 128 px
+ * that is about 1 M texel fetches per frame, cheap next to the scene pass;
+ * a dynamic loop bounded by `width` would trade it for a recompile or
+ * branching.
+ *
+ * Depth precision: `normalDepth` is a HalfFloat target (11-bit significand),
+ * so the depth in output pixels is quantized to steps of at most 1/8 px below 256 px,
+ * 1/4 px up to 512 px. `depthThresholdPx` comparisons and the farther-pixel
+ * test see those steps: two surfaces closer than one step tie (resolved by
+ * part ID, {@link neighbourPrecedes}), and a threshold below the step acts
+ * like the step. Depths are measured from the framing pivot plane, so
+ * characters stay in the fine range.
  */
 import {
   abs,

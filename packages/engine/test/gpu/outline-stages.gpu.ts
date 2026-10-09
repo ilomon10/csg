@@ -37,7 +37,11 @@ import {
   toUnorm8,
 } from '../../src/pipeline/stages/outline-test-cells';
 import type {OutlineParams} from '../../src/pipeline/stages/outline-test-cells';
-import {defaultOutlineInputs, outline} from '../../src/pipeline/stages/outline';
+import {
+  defaultOutlineInputs,
+  outline,
+  outlineFieldsFromSettings,
+} from '../../src/pipeline/stages/outline';
 import {createGpuHarness, currentBackend, readbackLayout} from './harness';
 import type {GpuHarness} from './harness';
 import {normalizeReadback} from '../../src/pipeline/readback';
@@ -123,7 +127,7 @@ class StageRig {
         source: e.source,
         ...defaultOutlineInputs(ctx),
       },
-      {mode: settings.outline.colorMode},
+      outlineFieldsFromSettings(settings.outline),
     );
     const node: TslNode =
       output === 'chain'
@@ -430,6 +434,131 @@ describe(`outline stages on synthetic MRT (${currentBackend()})`, () => {
     } finally {
       rig.dispose();
     }
+  });
+
+  it('AC-PIX-016.4: equal depth: the higher part ID draws the line, normals tie-break row-major; both backends equal the reference', async () => {
+    const lineSet = async (
+      cell: MrtCell,
+      sources: (x: Mutable<RenderSettings>) => void,
+    ) => {
+      const s = settingsWith(x => {
+        x.outline.inner.enabled = true;
+        x.outline.outer.enabled = false;
+        x.outline.inner.partId = false;
+        x.outline.inner.depth = false;
+        x.outline.inner.normal = false;
+        sources(x);
+      });
+      const masks = await renderOnce(h, cell, s, 'masks');
+      const ref = referenceEdgeDetect(cell, paramsOf(s));
+      expect(maskPixels(masks, cell.width, 1)).toEqual(
+        refPixels(ref.inner, cell.width),
+      );
+      return maskPixels(masks, cell.width, 1);
+    };
+    const ids = (left: number, right: number) =>
+      new CellBuilder(8, 8)
+        .rect(3, 3, 3, 3, {color: RED, id: left, depth: 1})
+        .rect(4, 3, 4, 3, {color: RED, id: right, depth: 1})
+        .build();
+    const byId = (x: Mutable<RenderSettings>) => {
+      x.outline.inner.partId = true;
+    };
+    expect(await lineSet(ids(3, 5), byId)).toEqual(['4,3']);
+    expect(await lineSet(ids(5, 3), byId)).toEqual(['3,3']);
+    const creased = new CellBuilder(8, 8)
+      .rect(3, 3, 3, 3, {color: RED, normal: [0, 0, 1], depth: 1})
+      .rect(3, 4, 3, 4, {color: RED, normal: [1, 0, 0], depth: 1})
+      .build();
+    expect(
+      await lineSet(creased, x => {
+        x.outline.inner.normal = true;
+        x.outline.inner.normalThresholdDeg = 60;
+      }),
+    ).toEqual(['3,4']);
+  });
+
+  it('AC-PIX-017.5: default outer black + inner darken 0.4; inner black; outer darken + inner black; inner custom #203040', async () => {
+    const cell = new CellBuilder(16, 16)
+      .rect(2, 2, 13, 13, {color: RED, id: 2, depth: 0})
+      .rect(7, 0, 8, 15, {color: BLUE, id: 5, depth: 3})
+      .build();
+    const make = (edit: (x: Mutable<RenderSettings>) => void) => {
+      const x = structuredClone(
+        defaultRenderSettings(),
+      ) as Mutable<RenderSettings>;
+      x.palette.id = 'none';
+      x.outline.inner.enabled = true;
+      x.outline.inner.partId = true;
+      x.outline.inner.depth = false;
+      x.outline.inner.normal = false;
+      edit(x);
+      return x as RenderSettings;
+    };
+    const defaults = make(() => {});
+    expect(defaults.outline.colorMode).toBe('black');
+    expect(defaults.outline.inner.colorMode).toBe('darken');
+    expect(defaults.outline.darkenAmount).toBe(0.6);
+    const ref = referenceEdgeDetect(cell, paramsOf(defaults));
+    const inner: number[] = [];
+    const outer: number[] = [];
+    for (let i = 0; i < 256; i++) {
+      if (ref.inner[i] === 1) inner.push(i);
+      if (ref.outer[i] === 1) outer.push(i);
+    }
+    expect(inner.length).toBe(24);
+    expect(outer.length).toBeGreaterThan(20);
+    const near = (got: Uint8ClampedArray, i: number, want: number[]) => {
+      for (let c = 0; c < 3; c++)
+        expect(
+          Math.abs((got[i * 4 + c] as number) - Math.round(want[c]! * 255)),
+        ).toBeLessThanOrEqual(1);
+      expect(got[i * 4 + 3]).toBe(255);
+    };
+    const own = (i: number) =>
+      [0, 1, 2].map(c => (cell.color[i * 4 + c] as number) * 0.4);
+    const src = (i: number) =>
+      [0, 1, 2].map(c => (ref.source[i * 4 + c] as number) * 0.4);
+    const black = [0, 0, 0];
+
+    const a = await renderOnce(h, cell, defaults, 'chain');
+    for (const i of outer) near(a, i, black);
+    for (const i of inner) near(a, i, own(i));
+
+    const b = await renderOnce(
+      h,
+      cell,
+      make(x => {
+        x.outline.inner.colorMode = 'black';
+      }),
+      'chain',
+    );
+    for (const i of outer) near(b, i, black);
+    for (const i of inner) near(b, i, black);
+
+    const c = await renderOnce(
+      h,
+      cell,
+      make(x => {
+        x.outline.colorMode = 'darken';
+        x.outline.inner.colorMode = 'black';
+      }),
+      'chain',
+    );
+    for (const i of outer) near(c, i, src(i));
+    for (const i of inner) near(c, i, black);
+
+    const d = await renderOnce(
+      h,
+      cell,
+      make(x => {
+        x.outline.inner.colorMode = 'custom';
+        x.outline.color = '#203040';
+      }),
+      'chain',
+    );
+    for (const i of outer) near(d, i, black);
+    for (const i of inner) near(d, i, linearHex('#203040'));
   });
 
   it('AC-PIX-017.1, AC-PIX-017.4: mode black = render.paletteDarkest (#000000 none/pico-8, #181425 endesga-32, #102030 custom)', async () => {

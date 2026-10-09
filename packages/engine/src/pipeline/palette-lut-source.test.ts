@@ -1,6 +1,6 @@
 import {PALETTE_PRESETS} from '@csg/parts-schema';
-import {describe, expect, it} from 'vitest';
-import {buildPaletteLut} from './palette-lut';
+import {describe, expect, it, vi} from 'vitest';
+import {buildPaletteLut, createPaletteLutWorker} from './palette-lut';
 import type {PaletteLutWorker} from './palette-lut';
 import {
   PALETTE_LUT_CACHE_SIZE,
@@ -56,18 +56,20 @@ describe('palette LUT source (M2-19)', () => {
     expect(source.has(['#000013'], 'srgb')).toBe(false);
   });
 
-  it('AC-PIX-021.2: a failing worker is dropped and the LUT is built on the main thread', async () => {
+  it('AC-GEN-016.2: a failing worker rejects the build, nothing is cached and there is no main-thread fallback', async () => {
     const {worker, stats} = fakeWorker(true);
     const source = createPaletteLutSource({createWorker: () => worker});
-    const lut = await source.build(PICO, 'srgb');
-    expect(Array.from(lut)).toEqual(Array.from(buildPaletteLut(PICO, 'srgb')));
+    await expect(source.build(PICO, 'srgb')).rejects.toThrow(/worker failed/);
+    expect(source.has(PICO, 'srgb')).toBe(false);
     expect(stats.disposed).toBe(1);
-    // Later builds skip the worker and return synchronously.
-    expect(source.build(['#ffffff'], 'oklab')).toBeInstanceOf(Uint8Array);
-    expect(stats.builds).toBe(1);
+    expect(source.stats).toEqual({
+      workerBuilds: 0,
+      mainThreadBuilds: 0,
+      failures: 1,
+    });
   });
 
-  it('AC-PIX-021.2: without a worker (Node, or null) builds synchronously', () => {
+  it('AC-PIX-021.2: without a worker factory (Node, or null) builds synchronously; a throwing factory rejects', async () => {
     expect(createPaletteLutSource().build(PICO, 'oklab')).toBeInstanceOf(
       Uint8Array,
     );
@@ -78,7 +80,87 @@ describe('palette LUT source (M2-19)', () => {
         throw new Error('blocked by CSP');
       },
     });
-    expect(source.build(PICO, 'oklab')).toBeInstanceOf(Uint8Array);
+    await expect(source.build(PICO, 'oklab')).rejects.toThrow(/CSP/);
     expect(threw).toBe(true);
+    expect(source.stats.mainThreadBuilds).toBe(0);
+    expect(source.stats.failures).toBe(1);
+  });
+
+  it('AC-GEN-014.4: stats and onBuild report which path built each LUT', async () => {
+    const paths: string[] = [];
+    const {worker} = fakeWorker();
+    const viaWorker = createPaletteLutSource({
+      createWorker: () => worker,
+      onBuild: p => paths.push(p),
+    });
+    await viaWorker.build(PICO, 'oklab');
+    void viaWorker.build(PICO, 'oklab'); // cache hit: not counted
+    expect(viaWorker.stats).toEqual({
+      workerBuilds: 1,
+      mainThreadBuilds: 0,
+      failures: 0,
+    });
+    const failing = fakeWorker(true);
+    const fallback = createPaletteLutSource({
+      createWorker: () => failing.worker,
+      onBuild: p => paths.push(p),
+    });
+    await expect(fallback.build(PICO, 'srgb')).rejects.toThrow();
+    expect(fallback.stats.failures).toBe(1);
+    const main = createPaletteLutSource({onBuild: p => paths.push(p)});
+    void main.build(PICO, 'oklab');
+    expect(main.stats.mainThreadBuilds).toBe(1);
+    expect(paths).toEqual(['worker', 'failure', 'main-thread']);
+  });
+
+  it('AC-GEN-014.4: without a factory no worker is attempted, even when Worker exists', () => {
+    const original = (globalThis as {Worker?: unknown}).Worker;
+    const ctor = vi.fn();
+    (globalThis as {Worker?: unknown}).Worker = ctor;
+    try {
+      const source = createPaletteLutSource();
+      void source.build(PICO, 'oklab');
+      expect(ctor).not.toHaveBeenCalled();
+      expect(source.stats.workerBuilds).toBe(0);
+    } finally {
+      (globalThis as {Worker?: unknown}).Worker = original;
+    }
+  });
+
+  it('AC-GEN-016.2: a timed-out worker rejects the build, is counted, and the next build starts a fresh worker', async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = new EventTarget() as EventTarget & {
+        postMessage(): void;
+        terminate(): void;
+      };
+      fake.postMessage = () => {};
+      fake.terminate = () => {};
+      let created = 0;
+      const source = createPaletteLutSource({
+        createWorker: () => {
+          created++;
+          return createPaletteLutWorker({
+            createWorker: () => fake as unknown as Worker,
+            timeoutMs: 500,
+          });
+        },
+      });
+      const p = source.build(PICO, 'oklab');
+      const assertion = expect(p).rejects.toThrow(/timed out/);
+      await vi.advanceTimersByTimeAsync(500);
+      await assertion;
+      expect(source.stats.failures).toBe(1);
+      expect(source.stats.mainThreadBuilds).toBe(0);
+      expect(source.has(PICO, 'oklab')).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+      const again = source.build(PICO, 'oklab');
+      const assertion2 = expect(again).rejects.toThrow(/timed out/);
+      await vi.advanceTimersByTimeAsync(500);
+      await assertion2;
+      expect(created).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -13,7 +13,7 @@ if (spec.errors.length > 0) {
 const rows = buildTrace(spec, readTests());
 const markdown = renderTrace(rows);
 writeFileSync(join(ROOT, 'specs/traceability.md'), markdown);
-const acs = rows.flatMap(r => r.acs);
+const acs = rows.flatMap(r => r.acs).filter(a => !a.deprecated);
 console.log(
   `spec:trace wrote specs/traceability.md: ${acs.filter(a => a.tests.length).length}/${acs.length} ACs covered.`,
 );

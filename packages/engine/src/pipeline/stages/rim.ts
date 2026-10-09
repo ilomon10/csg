@@ -5,7 +5,12 @@
  * input nodes and its fields; it creates no material and no render target.
  *
  * - Rim offset: the screen-projected light `L.xy` quantized to one of the 8
- *   neighbours ({@link rimOffset}); none when `|L.xy| < 1e-6`.
+ *   neighbours ({@link rimOffset}); none when `|L.xy| < 1e-6`. A direction
+ *   exactly on a sector boundary (`22.5° + k · 45°`) goes to the
+ *   counter-clockwise sector. GPU and CPU implement the tie the same way:
+ *   both turn `L.xy` counter-clockwise by {@link RIM_TIE_EPSILON_DEG} before
+ *   quantizing (review L3), so float rounding of the uniform can never put
+ *   a boundary light on different sides on the two paths.
  * - Rim pixel: a covered pixel `p` whose neighbour `p + o` is uncovered
  *   (positions outside the cell count as uncovered).
  * - Combine (PM decision FX-J, 2026-10-09): with the material band
@@ -16,7 +21,12 @@
  *   brightest band; pixels with `light_k = 0` keep their colour.
  *
  * `rim.enabled`, `rim.strength` and the light direction are uniforms: no
- * recompile when they change (REQ-PIX-034). The CPU twins
+ * recompile when they change (REQ-PIX-034).
+ *
+ * Builtins: the stage reads `scene.color`, `screenPos` and `resolution`
+ * through `ctx.builtin`. In M2 the pixel pipeline's post context supplies
+ * them; in M4 the graph compiler must supply the same builtins (scene-pass
+ * MRT `TextureNode`s, integer pixel position, cell size) for user graphs. The CPU twins
  * ({@link rimOffset}, {@link rimMask}, {@link rimCombine}) are the test
  * oracles.
  */
@@ -72,6 +82,18 @@ export const RIM_MIN_SCREEN_LIGHT = 1e-6;
  */
 const SECTOR_EDGE = 0.3826834323650898;
 
+/**
+ * Counter-clockwise turn (degrees) applied to the screen light before the
+ * 8-way quantization, on the GPU and in {@link rimOffset}: it resolves exact
+ * sector ties counter-clockwise (REQ-PIX-012 note) robustly. Directions
+ * within this angle clockwise of a boundary also go counter-clockwise;
+ * float32 rounding of the light uniform (about 1e-5°) stays well inside it.
+ */
+export const RIM_TIE_EPSILON_DEG = 1e-3;
+
+const TIE_COS = Math.cos((RIM_TIE_EPSILON_DEG * Math.PI) / 180);
+const TIE_SIN = Math.sin((RIM_TIE_EPSILON_DEG * Math.PI) / 180);
+
 /** The 8 offsets of the sectors `d = 0..7` (REQ-PIX-012 note), top-left pixel coordinates. */
 const SECTOR_OFFSETS: ReadonlyArray<readonly [number, number]> = [
   [1, 0],
@@ -115,8 +137,9 @@ export const rimEdge: StageEmitter<RimEdgeInput, RimEdgeOutput> = (
   const len = length(vec2(l.x, l.y));
   const hasOffset = step(float(RIM_MIN_SCREEN_LIGHT), len);
   const safeLen = max(len, float(RIM_MIN_SCREEN_LIGHT));
-  const nx = l.x.div(safeLen);
-  const ny = l.y.div(safeLen);
+  // Turned counter-clockwise by RIM_TIE_EPSILON_DEG: exact ties go CCW.
+  const nx = l.x.mul(TIE_COS).sub(l.y.mul(TIE_SIN)).div(safeLen);
+  const ny = l.x.mul(TIE_SIN).add(l.y.mul(TIE_COS)).div(safeLen);
   const dx = step(float(SECTOR_EDGE), nx).sub(
     step(float(SECTOR_EDGE), nx.negate()),
   );
@@ -183,7 +206,9 @@ export function defaultRimEdgeInputs(
 /**
  * Rim offset of REQ-PIX-012 (FX-J note): with `θ` the angle of `L.xy` in
  * degrees counter-clockwise from screen-right in `[0, 360)`, the sector is
- * `d = floor(θ / 45 + 0.5) mod 8` (exact ties go counter-clockwise) and the
+ * `d = floor((θ + ε) / 45 + 0.5) mod 8` with `ε =`
+ * {@link RIM_TIE_EPSILON_DEG} (exact ties go counter-clockwise, as on the
+ * GPU) and the
  * offset is `(1,0), (1,-1), (0,-1), (-1,-1), (-1,0), (-1,1), (0,1), (1,1)`
  * for `d = 0..7` (top-left pixel coordinates, y down).
  *
@@ -195,7 +220,7 @@ export function rimOffset(
 ): readonly [number, number] | null {
   const [x, y] = lightDir;
   if (Math.hypot(x, y) < RIM_MIN_SCREEN_LIGHT) return null;
-  let theta = (Math.atan2(y, x) * 180) / Math.PI;
+  let theta = (Math.atan2(y, x) * 180) / Math.PI + RIM_TIE_EPSILON_DEG;
   if (theta < 0) theta += 360;
   const d = Math.floor(theta / 45 + 0.5) % 8;
   return SECTOR_OFFSETS[d] ?? null;

@@ -10,7 +10,6 @@
  * @module
  */
 
-import {hexToRgb} from '@csg/parts-schema';
 import type {HexColor} from '@csg/parts-schema';
 import {linearSrgbToOklab} from './oklab';
 import type {Oklab} from './oklab';
@@ -31,6 +30,21 @@ export const PALETTE_LUT_MAX_COLORS = 256;
 
 /** Nearest-color metric of the palette mapping (`RenderSettings.palette.metric`). */
 export type PaletteMetric = 'oklab' | 'srgb';
+
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Local `#rrggbb` parser, equal to `hexToRgb` of `@csg/parts-schema`. Kept here so the palette
+ * LUT worker bundle does not pull in the parts-schema barrel and zod (FX-R2).
+ */
+function hexToRgb(hex: string): [number, number, number] | null {
+  if (!HEX_COLOR.test(hex)) return null;
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
+}
 
 function assertByte(name: string, v: number): void {
   if (!Number.isInteger(v) || v < 0 || v > 255) {
@@ -389,60 +403,101 @@ export interface PaletteLutWorker {
   dispose(): void;
 }
 
+/** Default per-request timeout of {@link createPaletteLutWorker}, in milliseconds. */
+export const PALETTE_LUT_WORKER_TIMEOUT_MS = 5000;
+
 /** Options of {@link createPaletteLutWorker}. */
 export interface PaletteLutWorkerOptions {
-  /** Creates the worker. Defaults to the bundled module worker (tests inject a fake). */
-  createWorker?: () => Worker;
+  /**
+   * Creates the worker. Required: the engine never constructs a `Worker` from a URL itself
+   * (REQ-GEN-014). The host builds it from the bundled worker URL, through its Trusted Types
+   * policy (`csg-worker-url`).
+   */
+  createWorker: () => Worker;
+  /** Per-request timeout in ms; a request that gets no response rejects. Default 5000. */
+  timeoutMs?: number;
 }
 
-function defaultWorker(): Worker {
-  // Same-origin module worker: allowed by CSP `worker-src 'self'`; no blob: URL.
-  return new Worker(new URL('./palette-lut.worker.ts', import.meta.url), {
-    type: 'module',
-  });
+interface PendingRequest {
+  resolve: (lut: Uint8Array) => void;
+  reject: (e: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 /**
- * Starts a palette LUT worker (`palette-lut.worker.ts`). Browser only, unless
- * `options.createWorker` is given.
+ * Checks a worker response (untrusted `postMessage` data, REQ-GEN-016). Returns `null` for
+ * anything that is not a known `type` with a numeric `id`, or a `built` reply whose LUT is not
+ * a `Uint8Array` of exactly {@link PALETTE_LUT_BYTES}. Exported for tests.
+ */
+export function readPaletteLutResponse(
+  data: unknown,
+): {id: number; lut: Uint8Array | null; message: string} | null {
+  if (data === null || typeof data !== 'object') return null;
+  const r = data as Record<string, unknown>;
+  if (typeof r.id !== 'number') return null;
+  if (r.type === 'built') {
+    const lut = r.lut;
+    if (lut instanceof Uint8Array && lut.byteLength === PALETTE_LUT_BYTES) {
+      return {id: r.id, lut, message: ''};
+    }
+    return null;
+  }
+  if (r.type === 'error') {
+    return {
+      id: r.id,
+      lut: null,
+      message:
+        typeof r.message === 'string'
+          ? r.message.slice(0, 200)
+          : 'palette LUT worker: error',
+    };
+  }
+  return null;
+}
+
+/**
+ * Wraps a host-created palette LUT worker (`palette-lut.worker.ts`, exported as
+ * `@csg/engine/palette-lut.worker`). Every reply is validated (invalid ones are ignored), every request has a timeout,
+ * and no promise stays unsettled: pending entries are rejected on timeout, `error`,
+ * `messageerror` and dispose.
  */
 export function createPaletteLutWorker(
-  options: PaletteLutWorkerOptions = {},
+  options: PaletteLutWorkerOptions,
 ): PaletteLutWorker {
-  const worker = (options.createWorker ?? defaultWorker)();
-  const pending = new Map<
-    number,
-    {resolve: (lut: Uint8Array) => void; reject: (e: Error) => void}
-  >();
+  const worker = options.createWorker();
+  const timeoutMs = options.timeoutMs ?? PALETTE_LUT_WORKER_TIMEOUT_MS;
+  const pending = new Map<number, PendingRequest>();
   let nextId = 1;
   let disposed = false;
 
+  const settle = (id: number): PendingRequest | undefined => {
+    const p = pending.get(id);
+    if (p === undefined) return undefined;
+    pending.delete(id);
+    clearTimeout(p.timer);
+    return p;
+  };
+
   const failAll = (error: Error) => {
-    const entries = [...pending.values()];
-    pending.clear();
-    for (const p of entries) p.reject(error);
+    for (const id of [...pending.keys()]) settle(id)?.reject(error);
   };
 
   worker.addEventListener('message', (event: MessageEvent<unknown>) => {
-    const data = event.data as PaletteLutResponse | null;
-    if (data === null || typeof data !== 'object') return;
-    const p = pending.get(data.id);
-    if (!p) return;
-    pending.delete(data.id);
-    if (data.type === 'built' && data.lut.length === PALETTE_LUT_BYTES) {
-      p.resolve(data.lut);
-    } else {
-      p.reject(
-        new Error(
-          data.type === 'error'
-            ? data.message
-            : 'palette LUT worker: bad response',
-        ),
-      );
+    const res = readPaletteLutResponse(event.data);
+    const p = res === null ? undefined : settle(res.id);
+    if (res === null || p === undefined) {
+      // REQ-GEN-016: ignore invalid or unexpected replies; the request stays pending.
+      console.debug('palette LUT worker: ignored an invalid reply');
+      return;
     }
+    if (res.lut !== null) p.resolve(res.lut);
+    else p.reject(new Error(res.message));
   });
   worker.addEventListener('error', () => {
     failAll(new Error('palette LUT worker failed'));
+  });
+  worker.addEventListener('messageerror', () => {
+    failAll(new Error('palette LUT worker: message could not be deserialized'));
   });
 
   return {
@@ -458,8 +513,17 @@ export function createPaletteLutWorker(
         metric,
       };
       return new Promise<Uint8Array>((resolve, reject) => {
-        pending.set(id, {resolve, reject});
-        worker.postMessage(request);
+        const timer = setTimeout(() => {
+          settle(id)?.reject(
+            new Error(`palette LUT worker timed out after ${timeoutMs} ms`),
+          );
+        }, timeoutMs);
+        pending.set(id, {resolve, reject, timer});
+        try {
+          worker.postMessage(request);
+        } catch (e) {
+          settle(id)?.reject(e instanceof Error ? e : new Error(String(e)));
+        }
       });
     },
     dispose() {

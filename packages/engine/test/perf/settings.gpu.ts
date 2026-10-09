@@ -169,7 +169,13 @@ describe('settings latency (M2-19)', () => {
     expect(Array.from(await r.readCell())).not.toEqual(Array.from(shown));
 
     // LUT build alone: worker vs main thread (AC-PIX-021.2).
-    const worker = createPaletteLutWorker();
+    const worker = createPaletteLutWorker({
+      createWorker: () =>
+        new Worker(
+          new URL('../../src/pipeline/palette-lut.worker.ts', import.meta.url),
+          {type: 'module'},
+        ),
+    });
     let workerMs: number;
     let mainMs: number;
     try {

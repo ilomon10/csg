@@ -39,6 +39,8 @@ export interface GoldenSettingsOptions {
   frames: number;
   /** pico-8 palette with bayer4 dither instead of the default look. */
   pico8?: boolean;
+  /** Extra top-level RenderSettings input fields (replace the defaults of that key as a whole). */
+  extra?: Record<string, unknown>;
 }
 
 /** RenderSettings of one golden case: 8 directions, one clip, resolution-relative pivot row. */
@@ -59,6 +61,7 @@ export function goldenSettings(o: GoldenSettingsOptions): RenderSettings {
     ...(o.pico8 === true
       ? {palette: {id: 'pico-8', dither: {mode: 'bayer4', strength: 0.5}}}
       : {}),
+    ...o.extra,
   });
   if (!result.ok)
     throw new Error(`bad golden settings: ${JSON.stringify(result.issues)}`);

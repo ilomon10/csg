@@ -37,7 +37,7 @@ import type {
 } from '../contracts/pipeline';
 import {stageYawRad} from '../pipeline/directions';
 import {cameraElevationDeg, computeFraming} from '../pipeline/framing';
-import {snapOffsetPx} from '../pipeline/snap';
+import {snapPx} from '../pipeline/snap';
 import {
   activeDirectionLabels,
   clipForDirection,
@@ -640,13 +640,25 @@ export function createPipelineFrameTarget(
     stored: false,
   };
   const v = new Vector3();
+  /** Per-pose camera-plane terms (preallocated; `pose` allocates nothing, review L5). */
+  const trig = {cy: 1, sy: 0, ce: 1, se: 0};
+  /** Camera-plane projection of a stage-space vector after the yaw (union-bounds convention). */
+  const screenX = (x: number, z: number): number => x * trig.cy + z * trig.sy;
+  const screenY = (x: number, y: number, z: number): number =>
+    y * trig.ce - (-x * trig.sy + z * trig.cy) * trig.se;
 
-  /** Stage-local position of the root joint (or the character root). */
+  /**
+   * Stage-local position of the root joint (or the character root). Updates
+   * only the world matrices of the joint and its ancestors (the stage among
+   * them), not the whole character: the renderer recomputes every world
+   * matrix before drawing anyway, with the same arithmetic, so the pixels do
+   * not change (review L5).
+   */
   const rootJointInStage = (out: Vector3): Vector3 => {
     const body = character.body;
     const joint = body?.bones.get(body.rig.rootBone) ?? character.root;
-    stage.updateMatrixWorld(true);
-    joint.getWorldPosition(out);
+    joint.updateWorldMatrix(true, false);
+    out.setFromMatrixPosition(joint.matrixWorld);
     return stage.worldToLocal(out);
   };
 
@@ -698,23 +710,19 @@ export function createPipelineFrameTarget(
       offset = undefined;
       if (!hasReference) return;
       rootJointInStage(v).sub(reference);
-      const cy = Math.cos(yaw);
-      const sy = Math.sin(yaw);
-      const ce = Math.cos(elevationRad);
-      const se = Math.sin(elevationRad);
-      // Camera-plane projection of a stage-space vector after the yaw (union-bounds convention).
-      const screenX = (x: number, z: number) => x * cy + z * sy;
-      const screenY = (x: number, y: number, z: number) =>
-        y * ce - (-x * sy + z * cy) * se;
+      trig.cy = Math.cos(yaw);
+      trig.sy = Math.sin(yaw);
+      const ce = (trig.ce = Math.cos(elevationRad));
+      const se = (trig.se = Math.sin(elevationRad));
       let rx = v.x;
       let rz = v.z;
       if (rootMotion === 'metadata') {
         if (worldPerPx !== undefined) {
-          const px = snapOffsetPx(
-            [screenX(v.x, v.z), screenY(v.x, v.y, v.z)],
-            worldPerPx,
-          );
-          offset = [px[0], -px[1] || 0];
+          // The reported offset outlives the pose (frames keep it): one array.
+          offset = [
+            snapPx(screenX(v.x, v.z) / worldPerPx),
+            -snapPx(screenY(v.x, v.y, v.z) / worldPerPx) || 0,
+          ];
         }
         // Render in place: drop the horizontal travel (stage space), keep Y.
         character.root.position.x -= v.x;
@@ -725,9 +733,8 @@ export function createPipelineFrameTarget(
       if (worldPerPx === undefined) return;
       const sx = screenX(rx, rz);
       const sY = screenY(rx, v.y, rz);
-      const snapped = snapOffsetPx([sx, sY], worldPerPx);
-      const dx = snapped[0] * worldPerPx - sx;
-      const dy = snapped[1] * worldPerPx - sY;
+      const dx = snapPx(sx / worldPerPx) * worldPerPx - sx;
+      const dy = snapPx(sY / worldPerPx) * worldPerPx - sY;
       // Camera right = (1, 0, 0), up = (0, cos e, −sin e) in world space.
       stage.position.set(
         saved.stagePosition.x + dx,

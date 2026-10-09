@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./palette-lut.worker": "./src/pipeline/palette-lut.worker.ts",
     "./rig": "./src/rig/index.ts",
     "./retarget": "./src/retarget/index.ts"
   },

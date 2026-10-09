@@ -50,7 +50,7 @@ import {applyCameraFraming, createPixelCamera} from './camera';
 import type {CameraPlacement, Vec3Tuple} from './camera';
 import {buildPaletteLut} from './palette-lut';
 import {normalizeReadback} from './readback';
-import {activePaletteColors} from './settings-binder';
+import {activePaletteColors, diffRenderSettings} from './settings-binder';
 import type {RenderSettingsDiff, SettingsBinder} from './settings-binder';
 import {createStageContext} from './stage-context';
 import type {StageContext} from './stage-context';
@@ -82,6 +82,7 @@ import {
 } from './toon-material';
 import type {SceneDepthUniforms, SceneMrtKey} from './toon-material';
 import {installFenceWait} from './webgl-fence-wait';
+import type {FenceWaitInstall} from './webgl-fence-wait';
 
 /** Builds the 512×512 RGBA8 palette LUT (sync in tests/export, a worker in preview). */
 export type PaletteLutBuilder = (
@@ -254,6 +255,13 @@ function checkBackend(
   return {ok: true, value: backend};
 }
 
+/** The parts of three's `NodeFrame` the pipeline drives (r186). */
+interface DrivenNodeFrame {
+  update(): void;
+  time: number;
+  deltaTime: number;
+}
+
 /**
  * three r186 advances `NodeFrame.frameId` only in its requestAnimationFrame
  * loop, and skinning updates bone matrices once per `frameId`. Frames rendered
@@ -264,7 +272,7 @@ function checkBackend(
  * @throws Error when the renderer is not initialized or the internals moved
  *   (three upgrade): fail loudly instead of rendering stale bones.
  */
-function nodeFrameOf(renderer: WebGPURenderer): {update(): void} {
+function nodeFrameOf(renderer: WebGPURenderer): DrivenNodeFrame {
   const nodes = (renderer as unknown as {_nodes?: {nodeFrame?: unknown}})
     ._nodes;
   const frame = nodes?.nodeFrame as {update?: unknown} | undefined;
@@ -273,7 +281,7 @@ function nodeFrameOf(renderer: WebGPURenderer): {update(): void} {
       'PixelPipeline: renderer node frame not found (renderer not initialized, or three internals changed)',
     );
   }
-  return frame as {update(): void};
+  return frame as DrivenNodeFrame;
 }
 
 /**
@@ -322,7 +330,8 @@ export class PixelPipeline {
   private frameCount = 0;
   private disposed = false;
   private readonly passFrame: NodeFrame;
-  private readonly nodeFrame: {update(): void};
+  private readonly nodeFrame: DrivenNodeFrame;
+  private readonly fenceWait: FenceWaitInstall | undefined;
   private readonly _size = new Vector2();
   private readonly _clearColor = new Color();
 
@@ -369,7 +378,10 @@ export class PixelPipeline {
     this.post.outputColorTransform = false;
     // WebGL2 readback waits on a fence polled once per rAF in three r186;
     // poll per task instead (M2-19, see webgl-fence-wait.ts). Same bytes.
-    if (backend === 'webgl2') installFenceWait(this.renderer.backend);
+    this.fenceWait =
+      backend === 'webgl2'
+        ? installFenceWait(this.renderer.backend)
+        : undefined;
   }
 
   /** Settings last applied with {@link setRenderSettings}. */
@@ -396,30 +408,45 @@ export class PixelPipeline {
    * Applies validated settings (REQ-PIX-034): writes the binder uniforms in
    * place, resizes on a resolution change, rebuilds the post node only on a
    * structural change, and uploads the palette LUT when the effective palette
-   * changed. A later call supersedes the LUT of an earlier one still building.
+   * changed.
+   *
+   * Atomic (review M2): when the effective palette changes, the LUT is built
+   * first and nothing is applied until it is ready; then the binder, the
+   * targets, the post node and the LUT change together in one synchronous
+   * step. If the build fails (the promise rejects) nothing changed: the
+   * previous settings, post node and palette stay fully active (REQ-GEN-016,
+   * AC-PIX-021.2). A synchronous builder (the default) applies within the
+   * call, before the returned promise settles. When a later call starts
+   * while this one waits for its LUT, the later call wins and this one
+   * resolves without applying anything; so does a call that finishes after
+   * {@link dispose}.
    *
    * @param settings - Validated settings (`parseRenderSettings`).
-   * @returns The change classification; resolves once the LUT is uploaded.
+   * @returns The change classification; resolves once the settings and the
+   *   LUT are applied.
+   * @throws (rejects) the LUT builder's error; nothing is applied then.
    */
   async setRenderSettings(
     settings: RenderSettings,
   ): Promise<RenderSettingsDiff> {
     this.assertLive();
+    const pending = diffRenderSettings(this.current, settings);
     const first = this.current === undefined;
-    const diff = this.binder.apply(settings);
-    this.current = settings;
-    if (first || diff.resize) this.resize();
-    if (first || diff.post) this.rebuildPost();
-    if (first || diff.palette) {
+    const generation = ++this.lutGeneration;
+    let lut: Uint8Array | undefined;
+    if (first || pending.palette) {
       const colors = activePaletteColors(settings.palette);
-      const generation = ++this.lutGeneration;
       if (colors !== null) {
-        const lut = await this.lutBuilder(colors, settings.palette.metric);
-        if (generation === this.lutGeneration && !this.disposed) {
-          this.binder.setPaletteLut(lut);
-        }
+        const built = this.lutBuilder(colors, settings.palette.metric);
+        lut = built instanceof Uint8Array ? built : await built;
       }
     }
+    if (generation !== this.lutGeneration || this.disposed) return pending;
+    const diff = this.binder.apply(settings);
+    this.current = settings;
+    if (lut !== undefined) this.binder.setPaletteLut(lut);
+    if (first || diff.resize) this.resize();
+    if (first || diff.post) this.rebuildPost();
     return diff;
   }
 
@@ -445,9 +472,19 @@ export class PixelPipeline {
    * followed by the post quad. Clears to transparent black and
    * restores the renderer's clear color and render target. Allocates nothing.
    *
+   * Node-frame time (review L1, P-04): three's `NodeFrame.update()` derives
+   * `time` and `deltaTime` from `performance.now()`. Right after advancing
+   * the frame the pipeline overwrites both, so no node (`time`, `deltaTime`
+   * of TSL, or M4 graph nodes reading them) ever sees the wall clock: the
+   * export renders with `frameTimeSec = 0` (the default; the sampler calls
+   * `render()`), the preview passes the clip time of the frame it draws, and
+   * `deltaTime` is that time minus the previous frame's (0 when it does not
+   * advance, never negative).
+   *
+   * @param frameTimeSec - Node-frame `time` in seconds (default 0, export).
    * @throws Error before settings/framing are set or while the palette LUT is pending.
    */
-  render(): void {
+  render(frameTimeSec = 0): void {
     this.assertLive();
     const settings = this.current;
     if (settings === undefined || this.placement === undefined) {
@@ -471,7 +508,11 @@ export class PixelPipeline {
       // One logical frame per render(): FRAME-keyed node updates (skeleton
       // bone matrices, OnObjectUpdate) must see this pose and stage yaw even
       // when no animation-loop tick happened since the last frame.
-      this.nodeFrame.update();
+      const frame = this.nodeFrame;
+      const previousTime = frame.time;
+      frame.update();
+      frame.time = frameTimeSec;
+      frame.deltaTime = Math.max(0, frameTimeSec - previousTime);
       this.scenePass.updateBefore(this.passFrame);
       r.setRenderTarget(this.cellTarget);
       this.post.render();
@@ -507,13 +548,15 @@ export class PixelPipeline {
   }
 
   /**
-   * Releases the post material, the scene pass target and the cell target.
-   * The binder, scene and renderer stay owned by the caller.
+   * Releases the post material, the scene pass target and the cell target,
+   * and undoes the WebGL2 fence-wait patch (closing its message channel). The
+   * binder, scene and renderer stay owned by the caller.
    */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.lutGeneration++;
+    this.fenceWait?.dispose();
     this.post.dispose();
     this.scenePass.dispose();
     this.cellTarget.dispose();

@@ -405,6 +405,41 @@ describe(`post stages (${currentBackend()})`, () => {
     expect(patterned).toBeGreaterThan(0);
   });
 
+  it('AC-PIX-022.5: the bayer4 threshold + 0.5 on R reads 8, 135, 199, 72 at (0,0), (1,0), (0,1), (1,1) (top-left origin, y down)', async () => {
+    const input = floatInput(() => [0, 0, 0, 1]);
+    const {binder, ctx} = setup(
+      h,
+      settingsWith({id: 'none', dither: {mode: 'bayer4', strength: 1}}),
+      null,
+    );
+    disposables.push(input, binder);
+    const {threshold} = bayerDither(
+      ctx,
+      {color: vec4(0, 0, 0, 1), ...defaultBayerDitherInputs(ctx)},
+      {matrix: 4},
+    );
+    const out = await renderOnce(
+      h,
+      vec4((threshold as Node<'float'>).add(0.5), 0, 0, 1),
+    );
+    const want: Array<[number, number, number]> = [
+      [0, 0, 8],
+      [1, 0, 135],
+      [0, 1, 199],
+      [1, 1, 72],
+    ];
+    for (const [x, y, r] of want)
+      expect(
+        Math.abs((at(out, x, y)[0] as number) - r),
+        `(${x},${y})`,
+      ).toBeLessThanOrEqual(1);
+    const r = (x: number, y: number) => at(out, x, y)[0] as number;
+    // A transposed index or a bottom-left origin breaks this ordering.
+    expect(r(0, 1)).toBeGreaterThan(r(1, 0));
+    expect(r(1, 0)).toBeGreaterThan(r(1, 1));
+    expect(r(1, 1)).toBeGreaterThan(r(0, 0));
+  });
+
   it('AC-PIX-002.2 / AC-PIX-023.1: final alpha is binary, transparent pixels are exactly (0,0,0,0), cutoff is a live uniform', async () => {
     const alpha = (x: number, y: number) => (y * W + x) / (W * H - 1);
     const input = floatInput((x, y) => [

@@ -7,6 +7,18 @@
  * The CPU twins ({@link toonBandIndex}, {@link toonBandLight},
  * {@link toonRimValue}, {@link toonColor}) evaluate the same formulas in
  * JavaScript; tests use them as the oracle for the GPU output.
+ *
+ * Legacy: the material rim (`toon.rim@1`: {@link toonRim},
+ * {@link toonCombine}, {@link toonRimValue}, {@link toonColor}) is the A5
+ * look that FX-J (user D2) replaced with the screen-space post stage
+ * `rimEdge` (`./rim`, `post.rimEdge@1`). It stays only for the spec 006
+ * catalog entry and is deprecated; the built-in pipeline never uses it.
+ *
+ * Builtins: the emitters read `normal`, `viewDir` and `light.dir` through
+ * `ctx.builtin`. In M2 the material stage context supplies them; in M4 the
+ * graph compiler must supply the same builtins for user graphs (as it must
+ * the post builtins `scene.*`, `screenPos` and `resolution` of the post
+ * stages).
  */
 import {clamp, dot, float, max, normalize, select, step, vec3} from 'three/tsl';
 import type {Node} from 'three/webgpu';
@@ -110,6 +122,10 @@ export const toonRamp: StageEmitter<ToonRampInput, ToonRampOutput> = (
 };
 
 /**
+ * @deprecated Legacy `toon.rim@1` (A5 material rim), replaced by the
+ * screen-space post stage {@link import('./rim').rimEdge | rimEdge}
+ * (REQ-PIX-012 as amended by FX-J). Kept for the spec 006 catalog only.
+ *
  * `toon.rim@1` (REQ-PIX-012, A5): `rim = step(1 - width, 1 - max(dot(N, V), 0))
  * · strength` where `dot(N, L) > 0`, and 0 elsewhere. With the orthographic
  * camera `V = (0, 0, 1)`, so `dot(N, V) = N.z`.
@@ -134,6 +150,9 @@ export const toonRim: StageEmitter<ToonRimInput, ToonRimOutput> = (
 };
 
 /**
+ * @deprecated Legacy A5 rim combine for `toon.rim@1`; the built-in look uses
+ * {@link import('./rim').rimEdge | rimEdge} (FX-J).
+ *
  * Combine of REQ-PIX-011 (A5): `clamp(color + rim, 0, 1)` per linear channel.
  * In M4 these are math nodes of `builtin:material-toon` (no catalog type).
  *
@@ -276,6 +295,9 @@ export function toonBandLight(
 }
 
 /**
+ * @deprecated CPU twin of the legacy `toon.rim@1`; the built-in rim is
+ * {@link import('./rim').rimEdge | rimEdge} (oracles `rimMask`, `rimCombine`).
+ *
  * Rim scalar of REQ-PIX-012 (A5) for unit view-space vectors.
  *
  * @param n - Unit normal.
@@ -296,6 +318,9 @@ export function toonRimValue(
 }
 
 /**
+ * @deprecated CPU twin of the legacy A5 combine (`toon.rim@1`); the built-in
+ * rim is {@link import('./rim').rimEdge | rimEdge} (oracle `rimCombine`).
+ *
  * One linear channel of the toon color: `clamp(base · light_k + rim, 0, 1)`.
  *
  * @param base - Linear base channel.

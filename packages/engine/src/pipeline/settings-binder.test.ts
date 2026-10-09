@@ -8,6 +8,7 @@ import type {Node} from 'three/webgpu';
 import {defaultRenderSettings, parseRenderSettings} from '@csg/parts-schema';
 import type {RenderSettings} from '@csg/parts-schema';
 import {PALETTE_LUT_BYTES} from './palette-lut';
+import {outlineFieldsFromSettings} from './stages/outline';
 import {srgb8ToLinear} from './srgb8';
 import {
   RESERVED_NON_UNIFORM_IDS,
@@ -194,6 +195,55 @@ describe('settings binder: uniform cache', () => {
     expect(material.version).toBe(version);
     expect(material.colorNode).toBe(colorNode);
     material.dispose();
+  });
+});
+
+describe('reserved settings binding (REQ-SGF-041, M2 built-in chain)', () => {
+  const dither = (strength: number, base: RenderSettings) => ({
+    ...base,
+    palette: {...base.palette, dither: {mode: 'bayer4' as const, strength}},
+  });
+
+  it('AC-SGF-041.2: dither.strength 0.5 -> 0.8 updates the keyed uniform in place, needs no recompile, and adds no params key', () => {
+    const base = dither(0.5, defaultRenderSettings());
+    const binder = new SettingsBinder(base);
+    const node = binder.uniform('dither.strength', 'float', undefined);
+    const valueOf = () => binder.uniformNode('dither.strength')?.value;
+    expect(valueOf()).toBe(0.5);
+    const next = dither(0.8, base);
+    const diff = binder.apply(next);
+    expect(diff.changed).toEqual(['palette.dither.strength']);
+    expect(isUniformOnly(diff)).toBe(true); // no post/material rebuild
+    expect(binder.uniform('dither.strength', 'float', undefined)).toBe(node);
+    expect(valueOf()).toBeCloseTo(0.8, 6);
+    expect(Object.keys(next.params)).not.toContain('dither.strength');
+  });
+
+  it('REQ-SGF-041 (engine half of the inner colour mode binding): outline fields are black/darken by default; inner.colorMode changes rebuild the post chain, not uniforms, and add no params key', () => {
+    const base = defaultRenderSettings();
+    expect(outlineFieldsFromSettings(base.outline)).toEqual({
+      mode: 'black',
+      innerMode: 'darken',
+    });
+    const next = {
+      ...base,
+      outline: {
+        ...base.outline,
+        inner: {...base.outline.inner, colorMode: 'black' as const},
+      },
+    };
+    expect(outlineFieldsFromSettings(next.outline)).toEqual({
+      mode: 'black',
+      innerMode: 'black',
+    });
+    const diff = diffRenderSettings(base, next);
+    expect(diff.post).toBe(true);
+    expect(isUniformOnly(diff)).toBe(false);
+    expect(Object.keys(next.params)).not.toContain('outline.inner.colorMode');
+  });
+
+  it('REQ-SGF-041: RESERVED_NON_UNIFORM_IDS lists outline.inner.colorMode (spec 007 reserved table, field binding)', () => {
+    expect(RESERVED_NON_UNIFORM_IDS).toContain('outline.inner.colorMode');
   });
 });
 

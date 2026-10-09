@@ -1,4 +1,8 @@
-import type {EngineAssetRegistry, EngineCharacterRenderer} from '@csg/engine';
+import type {
+  EngineAssetRegistry,
+  EngineCharacterRenderer,
+  EngineError,
+} from '@csg/engine';
 import {describe, expect, it} from 'vitest';
 import type {CharacterSpec, ClipRef, RenderSettings} from '@csg/parts-schema';
 import {startPreviewSession} from './preview-session';
@@ -56,6 +60,7 @@ function fakeEngine(options: {createThrows?: boolean} = {}) {
   const creations: Deferred[] = [];
   const renderers: Array<{disposed: boolean; label: number}> = [];
   let observers = 0;
+  let onErrorHook: ((e: EngineError) => void) | null = null;
   const deps: PreviewSessionDeps = {
     createRegistry: () =>
       ({clipEntry: () => ({durationSec: 2})}) as unknown as EngineAssetRegistry,
@@ -64,7 +69,8 @@ function fakeEngine(options: {createThrows?: boolean} = {}) {
       packs.push(gate);
       await gate.promise;
     },
-    createRenderer: async () => {
+    createRenderer: async (_canvas, rendererOptions) => {
+      onErrorHook = rendererOptions.onError;
       const gate = deferred();
       creations.push(gate);
       await gate.promise;
@@ -102,6 +108,7 @@ function fakeEngine(options: {createThrows?: boolean} = {}) {
     packs,
     creations,
     renderers,
+    reportError: (e: EngineError) => onErrorHook?.(e),
     live: () => renderers.filter(r => !r.disposed).length,
     observers: () => observers,
   };
@@ -120,7 +127,8 @@ function events() {
     events: {
       onRenderer: () => log.push('renderer'),
       onReady: () => log.push('ready'),
-      onError: (m: string) => log.push(`error:${m}`),
+      onError: (m: string, code?: string) =>
+        log.push(code === undefined ? `error:${m}` : `error:${code}:${m}`),
     },
   };
 }
@@ -209,5 +217,85 @@ describe('preview session (M1-31 M1: StrictMode and cancellation)', () => {
     engine.creations[0]?.resolve();
     await expect(session.done).resolves.toBeUndefined();
     expect(log).toEqual(['error:GPU device lost']);
+  });
+});
+
+describe('preview session (FX-W2 L9: registry disposal and DPR changes)', () => {
+  it('cancel disposes the registry once, and a DPR change re-runs the layout until cancel', async () => {
+    const engine = fakeEngine();
+    const disposed: unknown[] = [];
+    const dprListener: {fn: (() => void) | null} = {fn: null};
+    let dpr = 2;
+    const deps: PreviewSessionDeps = {
+      ...engine.deps,
+      devicePixelRatio: () => dpr,
+      observeDevicePixelRatio: onChange => {
+        dprListener.fn = onChange;
+        return () => {
+          dprListener.fn = null;
+        };
+      },
+      disposeRegistry: registry => disposed.push(registry),
+    };
+    const {canvas, writes} = recordingCanvas();
+    const s = startPreviewSession(
+      canvas,
+      VIEWPORT,
+      PLAN,
+      deps,
+      events().events,
+    );
+    for (const gate of engine.packs) gate.resolve();
+    await flush();
+    for (const gate of engine.creations) gate.resolve();
+    await s.done;
+    expect(writes.slice(0, 2)).toEqual([':width=128px', ':height=128px']);
+    dpr = 1;
+    dprListener.fn?.();
+    expect(writes.slice(-4, -2)).toEqual([':width=256px', ':height=256px']);
+    s.cancel();
+    s.cancel();
+    expect(disposed).toHaveLength(1);
+    expect(dprListener.fn).toBeNull();
+  });
+
+  it('a cancel before the renderer exists still disposes the registry', async () => {
+    const engine = fakeEngine();
+    const disposed: unknown[] = [];
+    const s = startPreviewSession(
+      recordingCanvas().canvas,
+      VIEWPORT,
+      PLAN,
+      {...engine.deps, disposeRegistry: r => disposed.push(r)},
+      events().events,
+    );
+    s.cancel();
+    expect(disposed).toHaveLength(1);
+  });
+});
+
+describe('preview session (FX-W3: error codes reach the host)', () => {
+  it('AC-PIX-021.6: a renderer onError report is forwarded with its code', async () => {
+    const engine = fakeEngine();
+    const {canvas} = recordingCanvas();
+    const {log, events: ev} = events();
+    const session = startPreviewSession(
+      canvas,
+      VIEWPORT,
+      PLAN,
+      engine.deps,
+      ev,
+    );
+    engine.packs[0]?.resolve();
+    await flush();
+    engine.creations[0]?.resolve();
+    await session.done;
+    engine.reportError({
+      code: 'PIX_PALETTE_LUT_FAILED',
+      message: 'worker rejected',
+    } as EngineError);
+    expect(log).toContain(
+      'error:PIX_PALETTE_LUT_FAILED:PIX_PALETTE_LUT_FAILED: worker rejected',
+    );
   });
 });

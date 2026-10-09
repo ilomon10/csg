@@ -1,6 +1,6 @@
 /** Vitest browser commands (run in Node) used by the GPU harness. Registered in `vitest.config.ts`. */
 import {existsSync, mkdirSync, writeFileSync} from 'node:fs';
-import {join, resolve} from 'node:path';
+import {isAbsolute, join, resolve} from 'node:path';
 import type {BrowserCommand} from 'vitest/node';
 import {encodePng} from './png.ts';
 import {compareGoldenNode} from './golden-node.ts';
@@ -24,6 +24,27 @@ export interface CompareGoldenPayload {
   goldenDir?: string;
 }
 
+const BACKENDS: readonly string[] = ['webgpu', 'webgl2'];
+
+/** A test-only golden root must be undefined or a plain relative path below `test-results/`. */
+export function assertGoldenDir(dir: string | undefined): void {
+  if (dir === undefined) return;
+  if (
+    typeof dir !== 'string' ||
+    !dir.startsWith('test-results/') ||
+    dir.split(/[\\/]/).includes('..') ||
+    dir.includes('\0') ||
+    isAbsolute(dir)
+  ) {
+    throw new Error(`goldenDir must be below test-results/ (got ${dir})`);
+  }
+}
+
+/** The backend selects a directory name, so only the two known ones are accepted. */
+export function assertBackend(backend: string): void {
+  if (!BACKENDS.includes(backend)) throw new Error(`bad backend ${backend}`);
+}
+
 /** Repo root (vitest runs with cwd = repo root). */
 const repoRoot = () => resolve(process.cwd());
 
@@ -31,6 +52,8 @@ const csgCompareGolden: BrowserCommand<[CompareGoldenPayload]> = (
   _ctx,
   p,
 ): CompareResult => {
+  assertBackend(p.backend);
+  assertGoldenDir(p.goldenDir);
   const root = repoRoot();
   const result = compareGoldenNode(
     {
@@ -73,9 +96,8 @@ const csgEnv: BrowserCommand<[]> = () => ({
 const csgSeedGolden: BrowserCommand<
   [string, GoldenBackend, string, string, number, number]
 > = (_ctx, goldenDir, backend, name, rgbaBase64, width, height) => {
-  if (!goldenDir.startsWith('test-results/') || goldenDir.includes('..')) {
-    throw new Error('csgSeedGolden writes only below test-results/');
-  }
+  assertGoldenDir(goldenDir);
+  assertBackend(backend);
   const dir = join(repoRoot(), goldenDir, backend);
   mkdirSync(dir, {recursive: true});
   writeFileSync(

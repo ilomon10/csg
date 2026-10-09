@@ -362,6 +362,46 @@ describe(`screen-space rim edge (${currentBackend()})`, () => {
     }
   });
 
+  it('AC-PIX-012.1: sphere with rim strength 1 gets a band of brighter pixels on the lit edge; strength 0 gives none', async () => {
+    const binder = new SettingsBinder();
+    const t = toonScene(
+      binder,
+      h.backend,
+      new THREE.SphereGeometry(1, 96, 48).translate(0, 1.2, 0),
+    );
+    const make = (enabled: boolean, strength: number) =>
+      cubeSettings(s => {
+        s.camera.framing = 0.05;
+        s.toon.rim = {enabled, strength};
+      });
+    const p = await pipelineFor(h, t.scene, binder, make(false, 0));
+    try {
+      const off = await renderWith(p, make(false, 0));
+      const strong = await renderWith(p, make(true, 1));
+      const zero = await renderWith(p, make(true, 0));
+      expect(zero).toEqual(off);
+      const rim = diff(strong, off);
+      expect(rim.length).toBeGreaterThan(10);
+      for (const i of rim) {
+        const sum = (a: Uint8ClampedArray) =>
+          a[i * 4]! + a[i * 4 + 1]! + a[i * 4 + 2]!;
+        expect(sum(strong)).toBeGreaterThan(sum(off));
+        expect(strong[i * 4 + 3]).toBe(255);
+      }
+      // Pixels outside the band are untouched.
+      for (let i = 0; i < W * W; i++) {
+        if (!rim.includes(i)) {
+          for (let c = 0; c < 4; c++)
+            expect(strong[i * 4 + c]).toBe(off[i * 4 + c]);
+        }
+      }
+    } finally {
+      p.dispose();
+      t.dispose();
+      binder.dispose();
+    }
+  });
+
   it('AC-PIX-012.5, AC-PIX-012.6: sphere rim = covered pixels with p + (-1, -1) uncovered, 1 px thick, on the lit half, colour clamp(base · (light_k + 0.3))', async () => {
     const binder = new SettingsBinder();
     const t = toonScene(

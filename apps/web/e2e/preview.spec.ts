@@ -247,7 +247,7 @@ test('AC-CMP-036.1: default character renders as crisp pixel art and animates be
 
   if (SHOT_DIR) {
     await page.screenshot({path: `${SHOT_DIR}/${info.project.name}-idle.png`});
-    await page.locator('select').selectOption({label: 'Walk'});
+    await page.getByTestId('clip-select').selectOption({label: 'Walk'});
     await scrub.fill('0.4');
     await page.waitForTimeout(400);
     await page.screenshot({path: `${SHOT_DIR}/${info.project.name}-walk.png`});
@@ -296,7 +296,7 @@ test('AC-GEN-010.2: loading and using the preview raises no CSP violation', asyn
 }) => {
   const violations = await openPreview(page);
   await page.getByRole('button', {name: 'Turn right'}).click();
-  await page.locator('select').selectOption({label: 'Walk'});
+  await page.getByTestId('clip-select').selectOption({label: 'Walk'});
   await page.waitForTimeout(500);
   const csp = await page.evaluate(
     () => (window as unknown as {__csp?: string[]}).__csp ?? [],

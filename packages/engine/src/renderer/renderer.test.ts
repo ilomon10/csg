@@ -1,4 +1,4 @@
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 import {RenderTarget, Vector3} from 'three';
 import {defaultRenderSettings} from '@csg/parts-schema';
 import type {RenderSettings} from '@csg/parts-schema';
@@ -21,6 +21,9 @@ import type {PreviewPresenter} from './canvas-presenter';
 import type {Framing} from '../contracts/pipeline';
 import {EXP_CANCELLED, FrameSamplerError} from '../sampler/frame-sampler';
 import {diffRenderSettings} from '../pipeline/settings-binder';
+import {createPaletteLutWorker} from '../pipeline/palette-lut';
+import type {PaletteLutWorker} from '../pipeline/palette-lut';
+import {PIX_PALETTE_LUT_FAILED, PIX_PREVIEW_FAILED} from './character-renderer';
 import {previewLayout} from './preview-layout';
 import {previewTimeAt, previewTimingFor} from './preview-clock';
 import {
@@ -191,12 +194,23 @@ class FakePipeline implements RendererPipeline {
   disposed = false;
   /** Resolves `read()`; tests may hold it to abort mid-readback. */
   readGate: Promise<void> = Promise.resolve();
+  /** Makes `setRenderSettings` reject (a failing LUT build) for matching settings; nothing is applied. */
+  failLut: ((settings: RenderSettings) => boolean) | null = null;
+  /** Makes `render()` throw. */
+  renderThrows = false;
+  /** Frame times passed to `render()`. */
+  readonly frameTimes: number[] = [];
   private current: RenderSettings | undefined;
   constructor(private readonly renderer: PreviewRenderer) {}
   get stats() {
     return {rebuilds: this.rebuilds, frames: this.frames};
   }
+  get settings() {
+    return this.current;
+  }
   async setRenderSettings(settings: RenderSettings) {
+    await Promise.resolve();
+    if (this.failLut?.(settings) === true) throw new Error('LUT build failed');
     const diff = diffRenderSettings(this.current, settings);
     if (this.current === undefined || diff.post) this.rebuilds++;
     if (this.current === undefined || diff.resize) {
@@ -218,8 +232,10 @@ class FakePipeline implements RendererPipeline {
   setFraming(framing: Framing): void {
     this.framings.push(framing);
   }
-  render(): void {
+  render(frameTimeSec = 0): void {
+    if (this.renderThrows) throw new Error('device lost');
     this.frames++;
+    this.frameTimes.push(frameTimeSec);
     this.calls.push('render');
   }
   async read(): Promise<Uint8ClampedArray> {
@@ -263,7 +279,11 @@ function selectedSettings(overrides: Partial<RenderSettings> = {}) {
 }
 
 async function createWithFakes(
-  options: {settings?: RenderSettings; onError?: (code: string) => void} = {},
+  options: {
+    settings?: RenderSettings;
+    onError?: (code: string) => void;
+    paletteLutWorker?: () => PaletteLutWorker;
+  } = {},
 ) {
   const registry = createTestRegistry();
   const {factory, made} = factoryOf(() => ({}));
@@ -285,6 +305,9 @@ async function createWithFakes(
     },
     settings: options.settings,
     onError: e => options.onError?.(e.code),
+    ...(options.paletteLutWorker === undefined
+      ? {}
+      : {paletteLutWorker: options.paletteLutWorker}),
   });
   if (!result.ok) throw new Error(result.error.message);
   return {
@@ -812,5 +835,267 @@ describe('character renderer', () => {
       error: {code: 'PIX_BACKEND_UNAVAILABLE'},
     });
     expect(made[0]?.disposed).toBe(true);
+  });
+
+  /** Prepared export of the fixture clip at 48×64 with the preview on pico-8 → endesga-32. */
+  async function exportSetup(onError?: (code: string) => void) {
+    const errors: string[] = [];
+    const made = await create({
+      settings: selectedSettings(),
+      onError: c => {
+        errors.push(c);
+        onError?.(c);
+      },
+    });
+    await made.renderer.setCharacter(fixtureSpec());
+    await made.renderer.playClip(FIXTURE_CLIP);
+    const prepared = await made.renderer.prepareFrames(
+      selectedSettings({resolution: {width: 48, height: 64}}),
+    );
+    if (!prepared.ok) throw new Error(prepared.error.message);
+    return {...made, prepared: prepared.value, errors};
+  }
+
+  it('AC-PIX-021.7 / review M1: a restore that fails (preview LUT build) is reported, the lock is released and the preview re-syncs', async () => {
+    const {renderer, pipeline, fake, prepared, errors} = await exportSetup();
+    const preview = renderer.renderSettings;
+    pipeline.failLut = s => s === preview;
+    const frames = [];
+    for await (const frame of renderer.renderFrames(prepared)) {
+      frames.push(frame);
+    }
+    expect(frames).toHaveLength(prepared.jobs.length);
+    expect(errors).toEqual([PIX_PALETTE_LUT_FAILED]);
+    expect(renderer.busy).toBe(false);
+    expect(fake.loop).not.toBeNull();
+    // The pipeline still has the export settings: preview draws are skipped.
+    expect(pipeline.settings).toBe(prepared.settings);
+    const drawn = pipeline.frames;
+    renderer.draw();
+    expect(pipeline.frames).toBe(drawn);
+    // The next exclusive operation takes the lock and re-applies the preview settings.
+    pipeline.failLut = null;
+    const result = await renderer.setRenderSettings({
+      ...preview,
+      alphaCutoff: 0.4,
+    });
+    expect(result.ok).toBe(true);
+    expect(pipeline.applied.some(s => s === preview)).toBe(true);
+    expect(pipeline.settings?.alphaCutoff).toBe(0.4);
+    renderer.pause();
+    renderer.draw();
+    expect(pipeline.frames).toBe(drawn + 1);
+  });
+
+  it('AC-PIX-021.7 / review M1: a consumer that stops early (break, or return() on a suspended iterator) releases the renderer', async () => {
+    const {renderer, prepared, fake} = await exportSetup();
+    for await (const _ of renderer.renderFrames(prepared)) break;
+    expect(renderer.busy).toBe(false);
+    expect(fake.loop).not.toBeNull();
+    const it = renderer.renderFrames(prepared)[Symbol.asyncIterator]();
+    await it.next();
+    expect(renderer.busy).toBe(true);
+    await it.return?.(undefined);
+    expect(renderer.busy).toBe(false);
+    const r = await renderer.setRenderSettings({
+      ...renderer.renderSettings,
+      alphaCutoff: 0.3,
+    });
+    expect(r.ok).toBe(true);
+    // An iterator never started holds nothing.
+    void renderer.renderFrames(prepared);
+    expect(renderer.busy).toBe(false);
+  });
+
+  it('AC-PIX-021.7 / review M1: a failing export LUT build throws from the iterator, keeps the preview settings and releases the lock', async () => {
+    const {renderer, pipeline, prepared} = await exportSetup();
+    pipeline.failLut = s => s === prepared.settings;
+    const preview = renderer.renderSettings;
+    const run = (async () => {
+      for await (const _ of renderer.renderFrames(prepared)) {
+        // no frames expected
+      }
+    })();
+    await expect(run).rejects.toSatisfy(
+      e => e instanceof FrameSamplerError && e.code === PIX_PALETTE_LUT_FAILED,
+    );
+    expect(renderer.busy).toBe(false);
+    expect(pipeline.settings).toBe(preview);
+  });
+
+  it('AC-PIX-021.2 / AC-PIX-021.6 / review M2: a failing settings change returns an error, reports it once and keeps the previous settings in renderer and pipeline', async () => {
+    const errors: string[] = [];
+    const {renderer, pipeline} = await create({onError: c => errors.push(c)});
+    await renderer.setCharacter(fixtureSpec());
+    const before = renderer.renderSettings;
+    const next = {
+      ...before,
+      resolution: {width: 32, height: 32},
+      palette: {...before.palette, id: 'pico-8' as const},
+    };
+    pipeline.failLut = s => s.palette.id === 'pico-8';
+    const result = await renderer.setRenderSettings(next);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe(PIX_PALETTE_LUT_FAILED);
+    expect(errors).toEqual([PIX_PALETTE_LUT_FAILED]);
+    expect(renderer.renderSettings).toBe(before);
+    expect(pipeline.settings).toBe(before);
+    expect(renderer.layout.cellW).toBe(before.resolution.width);
+    expect(renderer.busy).toBe(false);
+  });
+
+  it('REQ-GEN-016 / AC-PIX-021.2 / AC-PIX-021.6: a worker LUT build that rejects is reported once, keeps the previous settings and is counted', async () => {
+    const errors: string[] = [];
+    const {renderer, pipeline} = await create({
+      onError: c => errors.push(c),
+      paletteLutWorker: () => ({
+        build: () => Promise.reject(new Error('palette LUT worker failed')),
+        dispose: () => {},
+      }),
+    });
+    const before = renderer.renderSettings;
+    const applied = pipeline.applied.length;
+    const result = await renderer.setRenderSettings({
+      ...before,
+      resolution: {width: 32, height: 32},
+      palette: {...before.palette, id: 'pico-8'},
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe(PIX_PALETTE_LUT_FAILED);
+    expect(errors).toEqual([PIX_PALETTE_LUT_FAILED]);
+    expect(renderer.renderSettings).toBe(before);
+    expect(pipeline.settings).toBe(before);
+    expect(pipeline.cellTarget.width).toBe(before.resolution.width);
+    expect(pipeline.applied.length).toBe(applied);
+    expect(renderer.paletteLutStats).toEqual({
+      workerBuilds: 0,
+      mainThreadBuilds: 0,
+      failures: 1,
+    });
+    // Later calls still run in order.
+    const ok = await renderer.setRenderSettings({...before, alphaCutoff: 0.3});
+    expect(ok.ok).toBe(true);
+  });
+
+  it('AC-PIX-039.1 / review M3: a preview frame that throws stops the loop, pauses and reports PIX_PREVIEW_FAILED once', async () => {
+    const errors: string[] = [];
+    const {renderer, fake, pipeline} = await create({
+      onError: c => errors.push(c),
+    });
+    await renderer.setCharacter(fixtureSpec());
+    await renderer.playClip(FIXTURE_CLIP);
+    const loop = fake.loop;
+    expect(loop).not.toBeNull();
+    pipeline.renderThrows = true;
+    expect(() => loop?.(1000)).not.toThrow();
+    expect(fake.loop).toBeNull();
+    expect(renderer.playing).toBe(false);
+    expect(errors).toEqual([PIX_PREVIEW_FAILED]);
+    pipeline.renderThrows = false;
+    expect(renderer.resume()).toBe(true);
+    expect(fake.loop).not.toBeNull();
+  });
+
+  it('review L1: preview frames pass their clip time as node-frame time; export frames pass none (0)', async () => {
+    const {renderer, pipeline, prepared} = await exportSetup();
+    renderer.pause();
+    renderer.seek(0.25);
+    expect(pipeline.frameTimes.at(-1)).toBe(0.25);
+    const before = pipeline.frameTimes.length;
+    for await (const _ of renderer.renderFrames(prepared)) {
+      // drain
+    }
+    const exportTimes = pipeline.frameTimes.slice(
+      before,
+      before + prepared.jobs.length,
+    );
+    expect(exportTimes.every(t => t === 0)).toBe(true);
+  });
+
+  it('AC-PIX-021.6 / AC-GEN-016.2: a LUT worker that never replies fails the settings change after 5,000 ms, previous settings kept', async () => {
+    vi.useFakeTimers();
+    try {
+      const errors: string[] = [];
+      const silent = {
+        addEventListener: () => {},
+        postMessage: () => {},
+        terminate: () => {},
+      } as unknown as Worker;
+      const {renderer, pipeline} = await create({
+        onError: c => errors.push(c),
+        paletteLutWorker: () =>
+          createPaletteLutWorker({createWorker: () => silent}),
+      });
+      const before = renderer.renderSettings;
+      let settled: {ok: boolean; code?: string} | undefined;
+      void renderer
+        .setRenderSettings({
+          ...before,
+          resolution: {width: 32, height: 32},
+          palette: {...before.palette, id: 'pico-8'},
+        })
+        .then(r => {
+          settled = r.ok ? {ok: true} : {ok: false, code: r.error.code};
+        });
+      await vi.advanceTimersByTimeAsync(4999);
+      expect(settled).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toEqual({ok: false, code: PIX_PALETTE_LUT_FAILED});
+      expect(errors).toEqual([PIX_PALETTE_LUT_FAILED]);
+      expect(renderer.renderSettings).toBe(before);
+      expect(pipeline.settings).toBe(before);
+      expect(renderer.paletteLutStats).toEqual({
+        workerBuilds: 0,
+        mainThreadBuilds: 0,
+        failures: 1,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('AC-PIX-021.8: a failing LUT build for the initial settings fails creation; no renderer is returned', async () => {
+    const {factory, made} = factoryOf(() => ({}));
+    const pipelines: FakePipeline[] = [];
+    const result = await createCharacterRenderer(CANVAS, {
+      registry: createTestRegistry(),
+      factory,
+      pipelineFactory: args => {
+        const p = new FakePipeline(args.renderer);
+        p.failLut = () => true;
+        pipelines.push(p);
+        return {ok: true, value: p};
+      },
+      presenterFactory: () => new FakePresenter(),
+      settings: selectedSettings({
+        palette: {...defaultRenderSettings().palette, id: 'pico-8'},
+      }),
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe(PIX_PALETTE_LUT_FAILED);
+    expect('value' in result).toBe(false);
+    expect(made[0]?.disposed).toBe(true);
+    expect(pipelines[0]?.disposed).toBe(true);
+  });
+
+  it('AC-PIX-039.2: restoring the preview clip after an export throws: every frame is yielded, PIX_PREVIEW_FAILED once, not busy', async () => {
+    const {renderer, prepared, errors} = await exportSetup();
+    let yielded = 0;
+    const spy = vi.spyOn(renderer.assembly, 'setClip');
+    try {
+      for await (const _ of renderer.renderFrames(prepared)) {
+        yielded++;
+        if (yielded === prepared.jobs.length) {
+          spy.mockImplementation(() => {
+            throw new Error('setClip stub');
+          });
+        }
+      }
+    } finally {
+      spy.mockRestore();
+    }
+    expect(yielded).toBe(prepared.jobs.length);
+    expect(errors).toEqual([PIX_PREVIEW_FAILED]);
+    expect(renderer.busy).toBe(false);
   });
 });

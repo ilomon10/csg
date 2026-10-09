@@ -23,6 +23,8 @@ export interface SpecCheckResult {
   readonly reqs: Map<string, string>;
   /** AC id to the file that defines it. */
   readonly acs: Map<string, string>;
+  /** AC ids whose definition is marked `~~deprecated~~`; they need no test. */
+  readonly deprecatedAcs?: ReadonlySet<string>;
 }
 
 /**
@@ -75,6 +77,7 @@ export function checkSpecs(
   const errors: string[] = [];
   const reqs = new Map<string, string>();
   const acs = new Map<string, string>();
+  const deprecatedAcs = new Set<string>();
 
   for (const file of files) {
     const lines = file.content.split('\n');
@@ -118,6 +121,11 @@ export function checkSpecs(
         );
       } else {
         acs.set(def.id, where);
+        if (
+          /^\s*(?:[-*]\s+)?\*\*AC-[^*]+\*\*\s*~~deprecated~~/i.test(rawLine)
+        ) {
+          deprecatedAcs.add(def.id);
+        }
       }
     });
   }
@@ -135,13 +143,17 @@ export function checkSpecs(
     if (!reqsWithAc.has(req))
       errors.push(`${where}: ${req} has no acceptance criteria`);
   }
-  return {errors, reqs, acs};
+  return {errors, reqs, acs, deprecatedAcs};
 }
 
 /** One matrix row: a requirement, its ACs and the test files citing each AC. */
 export interface TraceRow {
   readonly req: string;
-  readonly acs: ReadonlyArray<{id: string; tests: string[]}>;
+  readonly acs: ReadonlyArray<{
+    id: string;
+    tests: string[];
+    deprecated?: boolean;
+  }>;
 }
 
 /**
@@ -164,11 +176,18 @@ export function buildTrace(
       citations.set(id, set);
     }
   }
-  const rows = new Map<string, {id: string; tests: string[]}[]>();
+  const rows = new Map<
+    string,
+    {id: string; tests: string[]; deprecated?: boolean}[]
+  >();
   for (const req of [...spec.reqs.keys()].sort()) rows.set(req, []);
   for (const ac of [...spec.acs.keys()].sort()) {
     const req = ac.replace(/^AC-/, 'REQ-').replace(/\.\d+$/, '');
-    rows.get(req)?.push({id: ac, tests: [...(citations.get(ac) ?? [])].sort()});
+    rows.get(req)?.push({
+      id: ac,
+      tests: [...(citations.get(ac) ?? [])].sort(),
+      ...(spec.deprecatedAcs?.has(ac) ? {deprecated: true} : {}),
+    });
   }
   return [...rows].map(([req, acs]) => ({req, acs}));
 }
@@ -180,7 +199,8 @@ export function buildTrace(
  * @returns Markdown for `specs/traceability.md`.
  */
 export function renderTrace(rows: readonly TraceRow[]): string {
-  const all = rows.flatMap(r => r.acs);
+  const all = rows.flatMap(r => r.acs).filter(a => !a.deprecated);
+  const deprecated = rows.flatMap(r => r.acs).length - all.length;
   const covered = all.filter(a => a.tests.length > 0).length;
   const pct = all.length ? ((covered / all.length) * 100).toFixed(1) : '0.0';
   const out = [
@@ -194,6 +214,7 @@ export function renderTrace(rows: readonly TraceRow[]): string {
     `- Acceptance criteria: ${all.length}`,
     `- ACs with at least one test: ${covered} (${pct}%)`,
     `- ACs without tests: ${all.length - covered}`,
+    `- Deprecated ACs (not counted): ${deprecated}`,
     '',
     '## Matrix',
     '',
@@ -204,7 +225,9 @@ export function renderTrace(rows: readonly TraceRow[]): string {
     for (const a of r.acs) {
       const tests = a.tests.length
         ? a.tests.map(t => `\`${t}\``).join(', ')
-        : '**none**';
+        : a.deprecated
+          ? 'deprecated'
+          : '**none**';
       out.push(`| ${r.req} | ${a.id} | ${tests} |`);
     }
   }

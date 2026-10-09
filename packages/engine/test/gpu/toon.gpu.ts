@@ -282,9 +282,10 @@ const TEXEL: readonly [number, number, number] = [255, 128, 64];
 /** A 4×4 sRGB texture of one colour (mipmaps added by ensureMipmapped). */
 function solidTexture(
   rgb: readonly [number, number, number],
+  alpha = 255,
 ): THREE.DataTexture {
   const data = new Uint8Array(4 * 4 * 4);
-  for (let i = 0; i < 16; i++) data.set([rgb[0], rgb[1], rgb[2], 255], i * 4);
+  for (let i = 0; i < 16; i++) data.set([rgb[0], rgb[1], rgb[2], alpha], i * 4);
   const t = new THREE.DataTexture(data, 4, 4);
   t.colorSpace = THREE.SRGBColorSpace;
   t.needsUpdate = true;
@@ -604,7 +605,7 @@ describe(`toon material + scene MRT (${currentBackend()})`, () => {
     }
   });
 
-  it('AC-PIX-023.2/023.3: a 0.4-alpha card is discarded in the material at cutoff 0.5 (torso and its part ID show through) and drawn at 0.3', async () => {
+  it('AC-PIX-023.2, AC-PIX-023.3: a 0.4-alpha card is discarded in the material at cutoff 0.5 (torso and its part ID show through) and drawn at 0.3', async () => {
     const binder = new SettingsBinder(settings({alphaCutoff: 0.5}));
     const uniforms = createTintUniforms({...WHITE_TINTS, hair: '#ff0000'});
     const opts: TintMaterialOptions = {
@@ -676,6 +677,291 @@ describe(`toon material + scene MRT (${currentBackend()})`, () => {
       restoreMaterials(card.part.scene);
       torsoGeo.dispose();
       cardGeo.dispose();
+      binder.dispose();
+    }
+  });
+
+  it('AC-CMP-014.3: multiply is linear per channel and keeps the texel alpha 0.4 (#ff8000 × #ffffff, #00ff00, #808080)', async () => {
+    const tex = solidTexture([255, 128, 0], 102);
+    try {
+      const cases: Array<[HexColor, number[]]> = [
+        ['#ffffff', [255, 128, 0]],
+        ['#00ff00', [0, 128, 0]],
+        // Linear product (0.216, 0.0466, 0): #803d00, not the sRGB-space #804000.
+        ['#808080', [128, 61, 0]],
+      ];
+      for (const [tint, rgb] of cases) {
+        const frame = await sphere(settings({alphaCutoff: 0.3}), {
+          lighting: 'unlit',
+          tint,
+          map: tex,
+        });
+        let covered = 0;
+        for (let i = 0; i < SIZE * SIZE; i++) {
+          if (frame.partId[i * 4] !== 1) continue;
+          covered++;
+          expectNear(Array.from(frame.srgb.subarray(i * 4, i * 4 + 3)), rgb);
+          // Covered pixels are opaque: the alpha 0.4 only feeds the cutoff.
+          expect(frame.srgb[i * 4 + 3]).toBe(255);
+        }
+        expect(covered).toBeGreaterThan(1000);
+      }
+      // The texel alpha 0.4 survives the tint: a cutoff of 0.5 discards it.
+      const cut = await sphere(settings({alphaCutoff: 0.5}), {
+        lighting: 'unlit',
+        tint: '#00ff00',
+        map: tex,
+      });
+      expect(opaque(cut)).toEqual([]);
+    } finally {
+      tex.dispose();
+    }
+  });
+
+  it('AC-PIX-023.4: a replace-tint card keeps the texel alpha: only the opaque half is covered and shows #ff0000', async () => {
+    // 4 × 4 texture: the left two columns alpha 0, the right two alpha 255.
+    const data = new Uint8Array(4 * 4 * 4);
+    for (let y = 0; y < 4; y++)
+      for (let x = 0; x < 4; x++)
+        data.set([40, 200, 40, x < 2 ? 0 : 255], (y * 4 + x) * 4);
+    const tex = new THREE.DataTexture(data, 4, 4);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+    const binder = new SettingsBinder(settings({alphaCutoff: 0.5}));
+    const uniforms = createTintUniforms({...WHITE_TINTS, hair: '#ff0000'});
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    const {part} = tintedMesh(
+      geometry,
+      Object.assign(new THREE.MeshStandardMaterial({map: tex}), {name: 'Hair'}),
+      1,
+    );
+    applyTintMaterial(
+      part as never,
+      [{material: 'Hair', slot: 'hair', mode: 'replace'}],
+      uniforms,
+      undefined,
+      {binder, backend: h.backend, mode: 'export', lighting: 'unlit'},
+    );
+    const scene = new THREE.Scene();
+    scene.add(part.scene);
+    const p = new MiniPipeline(h, scene, makeCamera(0));
+    try {
+      const f = await p.render();
+      // The card spans px 4..43; the texel boundary is at x = 24. Stay off the
+      // filtered seam (mipmapped sampler) by 4 px.
+      for (let y = 10; y < 38; y++) {
+        for (const x of [6, 12, 18, 20]) {
+          expect(
+            Array.from(f.srgb.subarray(idx(x, y) * 4, idx(x, y) * 4 + 4)),
+          ).toEqual([0, 0, 0, 0]);
+        }
+        for (const x of [28, 32, 38, 42]) {
+          expect(
+            Array.from(f.srgb.subarray(idx(x, y) * 4, idx(x, y) * 4 + 4)),
+          ).toEqual([255, 0, 0, 255]);
+        }
+      }
+    } finally {
+      p.dispose();
+      restoreMaterials(part.scene);
+      geometry.dispose();
+      tex.dispose();
+      binder.dispose();
+    }
+  });
+
+  it('AC-PIX-023.5: an opaque material with alphaCutoff 1 keeps alpha exactly 1 on every covered pixel, and every one is covered in the output', async () => {
+    const frame = await sphere(settings({alphaCutoff: 1}));
+    let covered = 0;
+    for (let i = 0; i < SIZE * SIZE; i++) {
+      if (frame.partId[i * 4] !== 1) continue;
+      covered++;
+      expect(frame.output[i * 4 + 3]).toBe(1);
+      expect(frame.srgb[i * 4 + 3]).toBe(255);
+    }
+    expect(covered).toBeGreaterThan(1000);
+  });
+
+  it('AC-PIX-023.6: texel alpha only drives the cutoff: multiply #00ff00 over #ff8000 at alpha 0.4 is opaque (scene alpha 1) with cutoff 0.3 and fully transparent with cutoff 0.5', async () => {
+    const tex = solidTexture([255, 128, 0], 102);
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    const card = async (alphaCutoff: number): Promise<Frame> => {
+      const s = settings({alphaCutoff});
+      const binder = new SettingsBinder(s);
+      const uniforms = createTintUniforms({...WHITE_TINTS, primary: '#00ff00'});
+      const {part} = tintedMesh(
+        geometry,
+        Object.assign(new THREE.MeshStandardMaterial({map: tex}), {
+          name: 'Skin',
+        }),
+        1,
+      );
+      applyTintMaterial(
+        part as never,
+        [{material: 'Skin', slot: 'primary', mode: 'multiply'}],
+        uniforms,
+        undefined,
+        {binder, backend: h.backend, mode: 'export'},
+      );
+      const scene = new THREE.Scene();
+      scene.add(part.scene);
+      const p = new MiniPipeline(h, scene, makeCamera(0));
+      try {
+        return await p.render();
+      } finally {
+        p.dispose();
+        restoreMaterials(part.scene);
+        binder.dispose();
+      }
+    };
+    try {
+      const s = settings({alphaCutoff: 0.3});
+      const l = lightDirection(s.lighting);
+      const frame = await card(0.3);
+      await evidence(h, 'card-multiply-alpha-0.4-cutoff-0.3', frame);
+      // AC-CMP-014.3 product in linear: (0, srgbToLinear(128), 0) = (0, 0.216, 0).
+      const g = srgbToLinear(128);
+      let covered = 0;
+      for (let i = 0; i < SIZE * SIZE; i++) {
+        if (frame.partId[i * 4] !== 1) continue;
+        covered++;
+        const n = [0, 1, 2].map(k => frame.normalDepth[i * 4 + k] as number);
+        const len = Math.hypot(n[0]!, n[1]!, n[2]!);
+        const lambda = Math.max(
+          (n[0]! * l[0] + n[1]! * l[1] + n[2]! * l[2]) / len,
+          0,
+        );
+        const lightK = toonBandLight(
+          toonBandIndex(lambda, [1 / 3, 2 / 3], 3),
+          3,
+          0.15,
+        );
+        // Scene alpha exactly 1.0 and output alpha 255: the 0.4 never leaks.
+        expect(frame.output[i * 4 + 3]).toBe(1);
+        expect(frame.srgb[i * 4 + 3]).toBe(255);
+        const rgb = [0, 1, 2].map(k => srgbToLinear(frame.srgb[i * 4 + k]!));
+        const expected = [0, g * lightK, 0];
+        for (let k = 0; k < 3; k++)
+          expect(Math.abs(rgb[k]! - expected[k]!)).toBeLessThanOrEqual(1 / 255);
+      }
+      // The card spans 40 x 40 px of the 48 px cell.
+      expect(covered).toBeGreaterThan(1000);
+
+      const cut = await card(0.5);
+      await evidence(h, 'card-multiply-alpha-0.4-cutoff-0.5', cut);
+      // Every pixel, the card's included, is RGBA (0, 0, 0, 0) and no part ID.
+      for (let i = 0; i < SIZE * SIZE; i++) {
+        expect(Array.from(cut.srgb.subarray(i * 4, i * 4 + 4))).toEqual([
+          0, 0, 0, 0,
+        ]);
+        expect(cut.partId[i * 4]).toBe(0);
+      }
+    } finally {
+      geometry.dispose();
+      tex.dispose();
+    }
+  });
+
+  it('AC-PIX-014.3: with s = 0.03125 quads 0.25 and -0.125 world units from the pivot plane read depth 8.0 and -4.0 px', async () => {
+    const binder = new SettingsBinder(settings({}));
+    const uniforms = createTintUniforms(WHITE_TINTS);
+    const opts: TintMaterialOptions = {
+      binder,
+      backend: h.backend,
+      mode: 'export',
+      lighting: 'unlit',
+    };
+    const geometry = new THREE.PlaneGeometry(1, 1);
+    const near = tintedMesh(
+      geometry,
+      Object.assign(new THREE.MeshStandardMaterial(), {name: 'Skin'}),
+      1,
+    );
+    near.mesh.position.set(-0.6, 0, 0.25);
+    const far = tintedMesh(
+      geometry,
+      Object.assign(new THREE.MeshStandardMaterial(), {name: 'Skin'}),
+      2,
+    );
+    far.mesh.position.set(0.6, 0, -0.125);
+    for (const q of [near, far])
+      applyTintMaterial(
+        q.part as never,
+        [{material: 'Skin', slot: 'primary', mode: 'multiply'}],
+        uniforms,
+        undefined,
+        opts,
+      );
+    const scene = new THREE.Scene();
+    scene.add(near.part.scene, far.part.scene);
+    const p = new MiniPipeline(h, scene, makeCamera(0));
+    setSceneDepth(p.depth, CAMERA_DISTANCE, 0.03125);
+    try {
+      const f = await p.render();
+      // Quads cover x 12..35 around the centre column pair at 0.05 world/px.
+      const a = f.normalDepth[idx(14, 24) * 4 + 3] as number;
+      const b = f.normalDepth[idx(34, 24) * 4 + 3] as number;
+      expect(f.partId[idx(14, 24) * 4]).toBe(1);
+      expect(f.partId[idx(34, 24) * 4]).toBe(2);
+      expect(Math.abs(a - 8)).toBeLessThanOrEqual(0.05);
+      expect(Math.abs(b + 4)).toBeLessThanOrEqual(0.05);
+    } finally {
+      p.dispose();
+      restoreMaterials(near.part.scene);
+      restoreMaterials(far.part.scene);
+      geometry.dispose();
+      binder.dispose();
+    }
+  });
+
+  it('AC-PIX-038.2: a 512 x 512 one-texel checkerboard on a quad covering 16 x 16 px shows interior grays within 8 of each other', async () => {
+    const n = 512;
+    const data = new Uint8Array(n * n * 4);
+    for (let y = 0; y < n; y++)
+      for (let x = 0; x < n; x++)
+        data.set(
+          (x + y) % 2 === 0 ? [255, 255, 255, 255] : [0, 0, 0, 255],
+          (y * n + x) * 4,
+        );
+    const tex = new THREE.DataTexture(data, n, n);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+    const binder = new SettingsBinder(settings({}));
+    const uniforms = createTintUniforms(WHITE_TINTS);
+    const geometry = new THREE.PlaneGeometry(
+      16 * WORLD_PER_PX,
+      16 * WORLD_PER_PX,
+    );
+    const {part} = tintedMesh(
+      geometry,
+      Object.assign(new THREE.MeshStandardMaterial({map: tex}), {name: 'Skin'}),
+      1,
+    );
+    applyTintMaterial(
+      part as never,
+      [{material: 'Skin', slot: 'primary', mode: 'multiply'}],
+      uniforms,
+      undefined,
+      {binder, backend: h.backend, mode: 'export', lighting: 'unlit'},
+    );
+    const scene = new THREE.Scene();
+    scene.add(part.scene);
+    const p = new MiniPipeline(h, scene, makeCamera(0));
+    try {
+      const f = await p.render();
+      // The quad covers px 16..31 (centred); skip the outermost ring.
+      const grays: number[] = [];
+      for (let y = 17; y <= 30; y++)
+        for (let x = 17; x <= 30; x++) {
+          expect(f.srgb[idx(x, y) * 4 + 3]).toBe(255);
+          grays.push(f.srgb[idx(x, y) * 4] as number);
+        }
+      expect(Math.max(...grays) - Math.min(...grays)).toBeLessThanOrEqual(8);
+    } finally {
+      p.dispose();
+      restoreMaterials(part.scene);
+      geometry.dispose();
+      tex.dispose();
       binder.dispose();
     }
   });

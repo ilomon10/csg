@@ -36,8 +36,11 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
 fi
 
 # Runs as the host user so written goldens and test-results keep their ownership. The repo (with its
-# host-installed node_modules, linux-x64) is mounted read-write. --ipc=host avoids Chromium /dev/shm limits.
-exec docker run --rm --ipc=host \
+# host-installed node_modules, linux-x64) is mounted read-write. Hardening (security review L5): no network
+# (vitest browser mode talks to its dev server over loopback only), no capabilities, no privilege gain.
+# --shm-size replaces --ipc=host, which shared the host IPC namespace to avoid Chromium /dev/shm limits.
+exec docker run --rm --shm-size=2g \
+  --network=none --cap-drop=ALL --security-opt=no-new-privileges \
   --user "$(id -u):$(id -g)" \
   -e HOME=/tmp \
   -e CI="${CI:-}" \

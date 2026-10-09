@@ -132,3 +132,16 @@ input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+.preview-error button {
+  font: inherit;
+  padding: 4px 10px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.preview-error button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}

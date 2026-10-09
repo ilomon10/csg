@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       reason:
-        description: Why the goldens change (recorded in the golden manifest)
+        description: Why the goldens change (logged in the job output; not stored in the repo, so put it in the commit message)
         required: true
         type: string
 

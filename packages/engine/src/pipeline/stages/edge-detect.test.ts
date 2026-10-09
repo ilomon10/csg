@@ -221,6 +221,32 @@ describe('edge-detect reference (REQ-PIX-015, REQ-PIX-016)', () => {
     expect(pixels(eq.inner, 12)).toEqual([]);
   });
 
+  it('AC-PIX-016.4: equal depth tie-breaks by part ID (higher ID draws) and by row-major order for normals', () => {
+    const ids = (left: number, right: number) => {
+      const cell = new CellBuilder(2, 1)
+        .rect(0, 0, 0, 0, {color: RED, id: left, depth: 1})
+        .rect(1, 0, 1, 0, {color: RED, id: right, depth: 1})
+        .build();
+      return pixels(
+        referenceEdgeDetect(cell, {...BASE, sources: ['id']}).inner,
+        2,
+      );
+    };
+    expect(ids(3, 5)).toEqual(['1,0']);
+    expect(ids(5, 3)).toEqual(['0,0']);
+    // Normal source: equal depth and ID, normals 90 degrees apart > 60.
+    const cell = new CellBuilder(1, 2)
+      .rect(0, 0, 0, 0, {color: RED, normal: [0, 0, 1], depth: 1})
+      .rect(0, 1, 0, 1, {color: RED, normal: [1, 0, 0], depth: 1})
+      .build();
+    const n = referenceEdgeDetect(cell, {
+      ...BASE,
+      sources: ['normal'],
+      normalThresholdDeg: 60,
+    });
+    expect(pixels(n.inner, 1)).toEqual(['0,1']);
+  });
+
   it('AC-PIX-016.2: normal source marks creases above the threshold only', () => {
     const cell = new CellBuilder(8, 2)
       .rect(0, 0, 3, 1, {color: RED, normal: [0, 0, 1], depth: 1})

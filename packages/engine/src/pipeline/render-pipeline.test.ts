@@ -1,8 +1,19 @@
-import {describe, expect, it} from 'vitest';
-import {DataTexture} from 'three';
+import {describe, expect, it, vi} from 'vitest';
+import type {Color, Vector2} from 'three';
+import {DataTexture, Scene} from 'three';
 import {float, texture} from 'three/tsl';
+import {NodeFrame} from 'three/webgpu';
+import type {WebGPURenderer} from 'three/webgpu';
 import {defaultRenderSettings} from '@csg/parts-schema';
-import {buildDefaultPostChain, cellReadbackLayout} from './render-pipeline';
+import type {RenderSettings} from '@csg/parts-schema';
+import type {Framing} from '../contracts/pipeline';
+import {buildPaletteLut} from './palette-lut';
+import {
+  buildDefaultPostChain,
+  cellReadbackLayout,
+  createPixelPipeline,
+} from './render-pipeline';
+import type {PaletteLutBuilder} from './render-pipeline';
 import {SettingsBinder} from './settings-binder';
 import {createStageContext} from './stage-context';
 import {DEFAULT_POST_STAGES} from './stages/index';
@@ -82,5 +93,192 @@ describe('render pipeline (pure parts)', () => {
     });
     expect(cellReadbackLayout('webgpu', 64).rowStrideBytes).toBe(256);
     expect(cellReadbackLayout('webgpu', 65).rowStrideBytes).toBe(512);
+  });
+});
+
+/** A Node stand-in for an initialized `WebGPURenderer` (only what the pipeline calls). */
+function fakeRenderer(backend: object = {isWebGPUBackend: true}) {
+  const size = {w: 1, h: 1};
+  const nodeFrame = new NodeFrame();
+  return {
+    backend,
+    _nodes: {nodeFrame},
+    nodeFrame,
+    getDrawingBufferSize(v: Vector2) {
+      return v.set(size.w, size.h);
+    },
+    getPixelRatio: () => 1,
+    setPixelRatio: () => {},
+    setSize(w: number, h: number) {
+      size.w = w;
+      size.h = h;
+    },
+    getRenderTarget: () => null,
+    setRenderTarget: () => {},
+    getClearColor: (c: Color) => c,
+    getClearAlpha: () => 1,
+    setClearColor: () => {},
+  };
+}
+
+/** A pipeline over {@link fakeRenderer}; the GPU passes record the node-frame time instead. */
+function fakePipeline(
+  options: {buildPaletteLut?: PaletteLutBuilder; backend?: object} = {},
+) {
+  const r = fakeRenderer(options.backend);
+  const binder = new SettingsBinder();
+  const made = createPixelPipeline({
+    renderer: r as unknown as WebGPURenderer,
+    scene: new Scene(),
+    binder,
+    ...(options.buildPaletteLut === undefined
+      ? {}
+      : {buildPaletteLut: options.buildPaletteLut}),
+  });
+  if (!made.ok) throw new Error(made.error.message);
+  const pipeline = made.value;
+  const seen: Array<{time: number; deltaTime: number}> = [];
+  pipeline.scenePass.updateBefore = () => {
+    seen.push({time: r.nodeFrame.time, deltaTime: r.nodeFrame.deltaTime});
+    return undefined;
+  };
+  (pipeline as unknown as {post: {render(): void}}).post.render = () => {};
+  return {pipeline, binder, renderer: r, seen};
+}
+
+/** `buildPaletteLut`, memoized (the OKLab LUT takes a while in Node). */
+const LUTS = new Map<string, Uint8Array>();
+const memoLut: PaletteLutBuilder = (colors, metric) => {
+  const key = `${metric}:${colors.join(',')}`;
+  let lut = LUTS.get(key);
+  if (lut === undefined) {
+    lut = buildPaletteLut(colors, metric);
+    LUTS.set(key, lut);
+  }
+  return lut;
+};
+
+const PICO = (): RenderSettings => {
+  const s = defaultRenderSettings();
+  return {...s, palette: {...s.palette, id: 'pico-8'}};
+};
+
+describe('pixel pipeline (fake renderer)', () => {
+  it('AC-PIX-027.1 / review L1: export frames see node-frame time 0 whatever the wall clock; the preview passes its frame time', async () => {
+    const {pipeline, seen} = fakePipeline();
+    await pipeline.setRenderSettings(defaultRenderSettings());
+    pipeline.setFraming({
+      worldPerPx: 0.05,
+      elevationDeg: 0,
+      frustum: {left: -32, right: 32, top: 60, bottom: -4},
+      pivotPx: [32, 60],
+      clipped: [],
+    } satisfies Framing);
+    const now = vi.spyOn(performance, 'now');
+    try {
+      for (const wall of [1000, 123_456, 9e9]) {
+        now.mockReturnValue(wall);
+        pipeline.render();
+      }
+      pipeline.render(0.25);
+      pipeline.render(0.5);
+      pipeline.render(0.5);
+      pipeline.render();
+    } finally {
+      now.mockRestore();
+    }
+    expect(seen).toEqual([
+      {time: 0, deltaTime: 0},
+      {time: 0, deltaTime: 0},
+      {time: 0, deltaTime: 0},
+      {time: 0.25, deltaTime: 0.25},
+      {time: 0.5, deltaTime: 0.25},
+      {time: 0.5, deltaTime: 0},
+      {time: 0, deltaTime: 0},
+    ]);
+    pipeline.dispose();
+  });
+
+  it(
+    'AC-PIX-021.2 / review M2: a failing LUT build applies nothing; the previous settings, post node and palette stay',
+    {timeout: 30_000},
+    async () => {
+      let fail = false;
+      const builder: PaletteLutBuilder = async (colors, metric) => {
+        await Promise.resolve();
+        if (fail) throw new Error('worker failed');
+        return memoLut(colors, metric);
+      };
+      const {pipeline, binder} = fakePipeline({buildPaletteLut: builder});
+      const before = PICO();
+      await pipeline.setRenderSettings(before);
+      const rebuilds = pipeline.stats.rebuilds;
+      const lut = (binder.paletteLutNode().value as DataTexture).image
+        .data as Uint8Array;
+      const lutBefore = lut.slice();
+      fail = true;
+      const next = {
+        ...before,
+        resolution: {width: 32, height: 48},
+        alphaCutoff: 0.3,
+        palette: {...before.palette, id: 'endesga-32' as const},
+      };
+      await expect(pipeline.setRenderSettings(next)).rejects.toThrow(
+        'worker failed',
+      );
+      expect(pipeline.settings).toBe(before);
+      expect(binder.settings).toBe(before);
+      expect(binder.paletteReady).toBe(true);
+      expect(pipeline.stats.rebuilds).toBe(rebuilds);
+      expect(pipeline.cellTarget.width).toBe(before.resolution.width);
+      expect(lut.every((v, i) => v === lutBefore[i])).toBe(true);
+      // Recovers once the builder works again.
+      fail = false;
+      await pipeline.setRenderSettings(next);
+      expect(pipeline.settings).toBe(next);
+      expect(pipeline.cellTarget.width).toBe(32);
+      pipeline.dispose();
+    },
+  );
+
+  it(
+    'review M2: a later call supersedes one still waiting for its LUT',
+    {timeout: 30_000},
+    async () => {
+      let release!: () => void;
+      const gate = new Promise<void>(r => {
+        release = r;
+      });
+      const builder: PaletteLutBuilder = async (colors, metric) => {
+        await gate;
+        return memoLut(colors, metric);
+      };
+      const {pipeline} = fakePipeline({buildPaletteLut: builder});
+      const base = defaultRenderSettings();
+      await pipeline.setRenderSettings(base);
+      const slow = pipeline.setRenderSettings(PICO());
+      const fast = {...base, alphaCutoff: 0.3};
+      await pipeline.setRenderSettings(fast);
+      release();
+      await slow;
+      expect(pipeline.settings).toBe(fast);
+      pipeline.dispose();
+    },
+  );
+
+  it('review L2: dispose closes the WebGL2 fence-wait channel', () => {
+    const original = () => Promise.resolve();
+    const utils = {_clientWaitAsync: original};
+    const gl = {getExtension: () => ({})};
+    const close = vi.spyOn(MessagePort.prototype, 'close');
+    try {
+      const {pipeline} = fakePipeline({backend: {gl, utils}});
+      expect(utils._clientWaitAsync).not.toBe(original);
+      expect(close).not.toHaveBeenCalled();
+      pipeline.dispose();
+      expect(close).toHaveBeenCalledTimes(2);
+    } finally {
+      close.mockRestore();
+    }
   });
 });

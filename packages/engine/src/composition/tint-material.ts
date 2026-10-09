@@ -71,13 +71,16 @@ const MIPMAP_FILTERS: ReadonlySet<TextureFilter> = new Set<TextureFilter>([
 ]);
 
 /**
- * Makes a part texture sample with mipmaps (REQ-PIX-038): keeps a mipmapped
+ * Makes a texture sample with mipmaps (REQ-PIX-038): keeps a mipmapped
  * `minFilter` (the glTF sampler's), replaces any other with
  * `LinearMipmapLinearFilter`, and turns on mipmap generation unless the
  * texture carries its own mip chain. Idempotent; never touches pipeline
  * render targets or the palette LUT (those stay nearest, REQ-PIX-002).
  *
- * @param map - Part texture (mutated in place).
+ * Mutates `map`: the tint materials call it only on their own clones
+ * ({@link mipmappedTexture}), never on registry-owned textures (review L7).
+ *
+ * @param map - Texture (mutated in place).
  * @returns `true` if something changed.
  */
 export function ensureMipmapped(map: Texture): boolean {
@@ -96,6 +99,79 @@ export function ensureMipmapped(map: Texture): boolean {
   return changed;
 }
 
+/** Whether {@link ensureMipmapped} would change `map`. */
+function needsMipmaps(map: Texture): boolean {
+  return (
+    !MIPMAP_FILTERS.has(map.minFilter) ||
+    (!map.generateMipmaps && map.mipmaps.length === 0)
+  );
+}
+
+/** Mipmapped clone of a registry texture and the materials using it. */
+interface MipmappedClone {
+  readonly texture: Texture;
+  users: number;
+}
+
+/** Registry texture → its mipmapped clone (shared by every material using it). */
+const MIPMAPPED = new WeakMap<Texture, MipmappedClone>();
+
+/**
+ * The texture a part material samples (REQ-PIX-038) without mutating the
+ * registry-owned `map` (review L7): `map` itself when it already samples
+ * with mipmaps, else a clone (sharing the image source) that
+ * {@link ensureMipmapped} prepared. Clones are shared per source texture and
+ * reference-counted; {@link releaseMipmappedTexture} disposes one with its
+ * last user. Sampling is the same as mutating `map` in place, so pixels do
+ * not change.
+ *
+ * @param map - Registry-owned part texture (not modified).
+ * @returns The texture to sample; pass it to {@link releaseMipmappedTexture}
+ *   when the material is disposed.
+ */
+export function mipmappedTexture(map: Texture): Texture {
+  if (!needsMipmaps(map)) return map;
+  let entry = MIPMAPPED.get(map);
+  if (entry === undefined) {
+    const texture = map.clone();
+    ensureMipmapped(texture);
+    entry = {texture, users: 0};
+    MIPMAPPED.set(map, entry);
+  }
+  entry.users++;
+  return entry.texture;
+}
+
+/**
+ * Releases a texture returned by {@link mipmappedTexture}: a clone is
+ * disposed with its last user; `map` itself is never disposed.
+ *
+ * @param map - The registry texture passed to {@link mipmappedTexture}.
+ * @param used - The texture it returned.
+ */
+export function releaseMipmappedTexture(map: Texture, used: Texture): void {
+  if (used === map) return;
+  const entry = MIPMAPPED.get(map);
+  if (entry === undefined || entry.texture !== used) return;
+  entry.users--;
+  if (entry.users <= 0) {
+    MIPMAPPED.delete(map);
+    used.dispose();
+  }
+}
+
+/** Registry texture and the texture a created material samples instead. */
+type TextureUse = readonly [source: Texture, used: Texture];
+
+/** Creates the sampled texture for `source`'s map and records the use. */
+function useMap(source: Material, uses: TextureUse[]): Texture | null {
+  const map = mapOf(source);
+  if (map === null) return null;
+  const used = mipmappedTexture(map);
+  uses.push([map, used]);
+  return used;
+}
+
 /** One mapping of `PartEntry.tintSlots`. */
 type TintMapping = PartEntry['tintSlots'][number];
 
@@ -103,6 +179,16 @@ type TintMapping = PartEntry['tintSlots'][number];
 interface MeshTintState {
   readonly original: Material | Material[];
   created: Material[];
+  /** Textures the created materials sample (released with them). */
+  textures: TextureUse[];
+}
+
+/** Disposes the materials created for a mesh and releases their textures. */
+function disposeCreated(state: MeshTintState): void {
+  for (const material of state.created) material.dispose();
+  for (const [map, used] of state.textures) releaseMipmappedTexture(map, used);
+  state.created = [];
+  state.textures = [];
 }
 
 const STATE = new WeakMap<Mesh, MeshTintState>();
@@ -204,6 +290,7 @@ function buildMaterial(
   mapping: TintMapping | undefined,
   uniforms: TintUniforms,
   mask: UniformNode<'float', number> | undefined,
+  uses: TextureUse[],
 ): MeshBasicNodeMaterial {
   const material = new MeshBasicNodeMaterial();
   material.name = source.name;
@@ -213,8 +300,7 @@ function buildMaterial(
   material.alphaTest = source.alphaTest;
   material.depthWrite = source.depthWrite;
   material.depthTest = source.depthTest;
-  const map = mapOf(source);
-  if (map !== null) ensureMipmapped(map);
+  const map = useMap(source, uses);
   if (mapping === undefined) {
     material.color.copy(colorOf(source));
     material.map = map;
@@ -259,9 +345,9 @@ function buildToonMaterial(
   uniforms: TintUniforms,
   mask: UniformNode<'float', number> | undefined,
   options: TintMaterialOptions,
+  uses: TextureUse[],
 ): MeshBasicNodeMaterial {
-  const map = mapOf(source);
-  if (map !== null) ensureMipmapped(map);
+  const map = useMap(source, uses);
   const albedo = (
     map === null ? vec4(1, 1, 1, 1) : texture(map)
   ) as Node<'vec4'>;
@@ -352,8 +438,9 @@ export function unlinkMaterial(source: Mesh, clone: Mesh): void {
  * With `options` the materials are pixel-pipeline toon materials instead
  * (spec 003 REQ-PIX-011..013, A8): lit by the view-space toon ramp of the
  * binder's uniforms, sub-cutoff fragments discarded, opaque, writing the
- * scene MRT outputs (`createSceneMrt`). Part textures always get mipmaps
- * (REQ-PIX-038).
+ * scene MRT outputs (`createSceneMrt`). Part textures always sample with
+ * mipmaps (REQ-PIX-038), through a mipmapped clone when the registry texture
+ * has none ({@link mipmappedTexture}; the registry texture is not modified).
  *
  * Calling it again rebuilds from the original materials and disposes the ones
  * it created before. Originals stay owned by the registry. Meshes linked with
@@ -383,20 +470,28 @@ export function applyTintMaterial(
   for (const mesh of meshes) {
     let state = STATE.get(mesh);
     if (state === undefined) {
-      state = {original: mesh.material, created: []};
+      state = {original: mesh.material, created: [], textures: []};
       STATE.set(mesh, state);
     }
-    for (const material of state.created) material.dispose();
+    disposeCreated(state);
     const meshMask = hasRegionId(mesh.geometry) ? maskNode : undefined;
+    const uses = state.textures;
     const build = (source: Material) =>
       options === undefined
-        ? buildMaterial(source, byName.get(source.name), uniforms, meshMask)
+        ? buildMaterial(
+            source,
+            byName.get(source.name),
+            uniforms,
+            meshMask,
+            uses,
+          )
         : buildToonMaterial(
             source,
             byName.get(source.name),
             uniforms,
             meshMask,
             options,
+            uses,
           );
     const next = Array.isArray(state.original)
       ? state.original.map(build)
@@ -419,7 +514,7 @@ export function restoreMaterials(scene: Object3D): void {
     if (!isMesh(object)) return;
     const state = STATE.get(object);
     if (state === undefined) return;
-    for (const material of state.created) material.dispose();
+    disposeCreated(state);
     STATE.delete(object);
     setMeshMaterial(object, state.original);
   });
