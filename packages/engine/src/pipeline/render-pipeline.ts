@@ -81,6 +81,7 @@ import {
   setSceneDepth,
 } from './toon-material';
 import type {SceneDepthUniforms, SceneMrtKey} from './toon-material';
+import {installFenceWait} from './webgl-fence-wait';
 
 /** Builds the 512×512 RGBA8 palette LUT (sync in tests/export, a worker in preview). */
 export type PaletteLutBuilder = (
@@ -366,6 +367,9 @@ export class PixelPipeline {
 
     this.post = new RenderPipeline(this.renderer);
     this.post.outputColorTransform = false;
+    // WebGL2 readback waits on a fence polled once per rAF in three r186;
+    // poll per task instead (M2-19, see webgl-fence-wait.ts). Same bytes.
+    if (backend === 'webgl2') installFenceWait(this.renderer.backend);
   }
 
   /** Settings last applied with {@link setRenderSettings}. */

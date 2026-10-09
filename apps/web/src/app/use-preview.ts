@@ -1,10 +1,9 @@
-import {
-  DIRECTION_ORDER,
-  createAssetRegistry,
-  createCharacterRenderer,
-  previewTimingFor,
+import type {
+  EngineAssetRegistry,
+  EngineCharacterRenderer,
+  RendererBackend,
 } from '@csg/engine';
-import type {EngineCharacterRenderer, RendererBackend} from '@csg/engine';
+import {DIRECTION_ORDER} from '@csg/parts-schema';
 import type {ClipRef, RenderSettings} from '@csg/parts-schema';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {RefObject} from 'react';
@@ -13,8 +12,12 @@ import {
   createPreviewCharacter,
   createPreviewSettings,
 } from './default-character';
-import {loadBundledPacks} from './load-packs';
 import {startPreviewSession} from './preview-session';
+import type {PreviewSession} from './preview-session';
+import type * as PreviewEngineModule from './preview-engine';
+
+/** The lazily loaded engine entry points (`./preview-engine`). */
+type PreviewEngine = typeof PreviewEngineModule;
 
 /** State of the preview viewport. */
 export interface PreviewState {
@@ -74,9 +77,8 @@ export function usePreview(
   const directionRef = useRef(0);
   const settingsRef = useRef<RenderSettings | null>(null);
   const showFramesRef = useRef(true);
-  const registryRef = useRef<ReturnType<typeof createAssetRegistry> | null>(
-    null,
-  );
+  const registryRef = useRef<EngineAssetRegistry | null>(null);
+  const engineRef = useRef<PreviewEngine | null>(null);
 
   const patch = useCallback((next: Partial<PreviewState>): void => {
     setState(prev => ({...prev, ...next}));
@@ -90,35 +92,59 @@ export function usePreview(
     // cancelled before it can create a renderer (see startPreviewSession).
     const settings = createPreviewSettings();
     settingsRef.current = settings;
-    const session = startPreviewSession(
-      canvas,
-      viewport,
-      {character: createPreviewCharacter(), clip: DEFAULT_CLIP, settings},
-      {
-        devicePixelRatio: () => window.devicePixelRatio,
-        createRegistry: () => createAssetRegistry(),
-        loadPacks: loadBundledPacks,
-        createRenderer: (target, options) =>
-          createCharacterRenderer(target as HTMLCanvasElement, options),
-        observeResize: (element, onResize) => {
-          const observer = new ResizeObserver(onResize);
-          observer.observe(element as HTMLElement);
-          return () => observer.disconnect();
+    let cancelled = false;
+    let session: PreviewSession | null = null;
+    const start = (engine: PreviewEngine): PreviewSession =>
+      startPreviewSession(
+        canvas,
+        viewport,
+        {character: createPreviewCharacter(), clip: DEFAULT_CLIP, settings},
+        {
+          devicePixelRatio: () => window.devicePixelRatio,
+          createRegistry: () => engine.createAssetRegistry(),
+          loadPacks: engine.loadBundledPacks,
+          createRenderer: (target, options) =>
+            engine.createCharacterRenderer(
+              target as HTMLCanvasElement,
+              options,
+            ),
+          observeResize: (element, onResize) => {
+            const observer = new ResizeObserver(onResize);
+            observer.observe(element as HTMLElement);
+            return () => observer.disconnect();
+          },
         },
+        {
+          onRenderer: (renderer, registry) => {
+            rendererRef.current = renderer;
+            registryRef.current = registry;
+            patch({backend: renderer.backend});
+          },
+          onReady: ({clipDurationSec}) =>
+            patch({status: 'ready', playing: true, clipDurationSec}),
+          onError: message => patch({status: 'error', error: message}),
+        },
+      );
+    // P-07: the engine (three.js) chunk loads after the shell's first paint.
+    void import('./preview-engine').then(
+      engine => {
+        if (cancelled) return;
+        engineRef.current = engine;
+        session = start(engine);
       },
-      {
-        onRenderer: (renderer, registry) => {
-          rendererRef.current = renderer;
-          registryRef.current = registry;
-          patch({backend: renderer.backend});
-        },
-        onReady: ({clipDurationSec}) =>
-          patch({status: 'ready', playing: true, clipDurationSec}),
-        onError: message => patch({status: 'error', error: message}),
+      (error: unknown) => {
+        if (cancelled) return;
+        patch({
+          status: 'error',
+          error: `The renderer failed to load: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        });
       },
     );
     return () => {
-      session.cancel();
+      cancelled = true;
+      session?.cancel();
       rendererRef.current = null;
       registryRef.current = null;
     };
@@ -142,7 +168,9 @@ export function usePreview(
     if (showFramesRef.current || sel === undefined) {
       r.setPreviewTiming(null); // engine default: export frames
     } else {
-      r.setPreviewTiming(previewTimingFor(sel, durationSec, false));
+      const engine = engineRef.current;
+      if (engine === null) return;
+      r.setPreviewTiming(engine.previewTimingFor(sel, durationSec, false));
     }
   }, []);
 

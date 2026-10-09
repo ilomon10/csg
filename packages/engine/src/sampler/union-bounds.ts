@@ -192,10 +192,119 @@ function dominantBone(
   return skinIndex.getComponent(i, best);
 }
 
+/** Per-bone `matrixWorld · boneInverse` of the current pose, 16 floats per bone. */
+let _boneMatrices = new Float64Array(0);
+
+/**
+ * Fills {@link _boneMatrices} for `mesh` exactly as `SkinnedMesh.applyBoneTransform`
+ * computes them per vertex (`Matrix4.multiplyMatrices(bone.matrixWorld, boneInverse)`),
+ * once per mesh instead of once per vertex influence.
+ *
+ * @returns The bone count, or -1 when a bone or inverse is missing.
+ */
+function fillBoneMatrices(mesh: SkinnedMesh): number {
+  const {bones, boneInverses} = mesh.skeleton;
+  const count = bones.length;
+  if (_boneMatrices.length < count * 16)
+    _boneMatrices = new Float64Array(count * 16);
+  for (let b = 0; b < count; b++) {
+    const bone = bones[b];
+    const inverse = boneInverses[b];
+    if (bone === undefined || inverse === undefined) return -1;
+    _boneMatrix.multiplyMatrices(bone.matrixWorld, inverse);
+    _boneMatrices.set(_boneMatrix.elements, b * 16);
+  }
+  return count;
+}
+
+const _boneMatrix = new Matrix4();
+
+/** The 16 column-major elements of a `Matrix4`. */
+type Mat4Tuple = Parameters<Matrix4['set']>;
+
+const _skinIndex4 = [0, 0, 0, 0];
+const _skinWeight4 = [0, 0, 0, 0];
+const _position3 = [0, 0, 0];
+
+/** The attribute calls the skinning loop makes (`BufferAttribute` fits). */
+interface VertexAttribute {
+  readonly itemSize: number;
+  readonly normalized: boolean;
+  readonly array: ArrayLike<number>;
+  readonly isInterleavedBufferAttribute?: boolean;
+  getX(i: number): number;
+  getY(i: number): number;
+  getZ(i: number): number;
+  getW(i: number): number;
+}
+
+/**
+ * How to read an attribute's components straight from its typed array with
+ * the same values as `BufferAttribute.getX` (three `MathUtils.denormalize`):
+ * 0 raw, 1 `v / d`, 2 `max(v / d, -1)`; -1 = use the getters (interleaved or
+ * an unknown component type).
+ */
+function readMode(attr: VertexAttribute): {mode: number; divisor: number} {
+  if (attr.isInterleavedBufferAttribute === true) return {mode: -1, divisor: 1};
+  if (!attr.normalized) return {mode: 0, divisor: 1};
+  switch (attr.array.constructor) {
+    case Float32Array:
+      return {mode: 0, divisor: 1};
+    case Uint32Array:
+      return {mode: 1, divisor: 4294967295.0};
+    case Uint16Array:
+      return {mode: 1, divisor: 65535.0};
+    case Uint8Array:
+    case Uint8ClampedArray:
+      return {mode: 1, divisor: 255.0};
+    case Int32Array:
+      return {mode: 2, divisor: 2147483647.0};
+    case Int16Array:
+      return {mode: 2, divisor: 32767.0};
+    case Int8Array:
+      return {mode: 2, divisor: 127.0};
+    default:
+      return {mode: -1, divisor: 1};
+  }
+}
+
+/** Reads `count` components of vertex `i` into `out`, exactly like the getters. */
+function readComponents(
+  attr: VertexAttribute,
+  how: {mode: number; divisor: number},
+  i: number,
+  count: number,
+  out: number[],
+): void {
+  if (how.mode < 0) {
+    out[0] = attr.getX(i);
+    out[1] = attr.getY(i);
+    if (count > 2) out[2] = attr.getZ(i);
+    if (count > 3) out[3] = attr.getW(i);
+    return;
+  }
+  const array = attr.array;
+  const base = i * attr.itemSize;
+  const d = how.divisor;
+  for (let k = 0; k < count; k++) {
+    const v = array[base + k] as number;
+    out[k] = how.mode === 0 ? v : how.mode === 1 ? v / d : Math.max(v / d, -1);
+  }
+}
+
 /**
  * Appends the boxes of `mesh` in stage space: for a skinned mesh one box per
  * bone cluster (the CPU-skinned vertices whose largest skin weight is that
  * bone, ascending bone index), otherwise the transformed geometry box.
+ *
+ * Performance (M2-19, AC-PIX-007.2): skinned meshes without active morph
+ * targets are skinned inline with the per-bone matrices computed once per
+ * mesh. The arithmetic is the same float64 expressions in the same order as
+ * three r186 `SkinnedMesh.getVertexPosition` (bind matrix, weighted
+ * `Vector4.applyMatrix4` per influence, `Vector3.applyMatrix4` of the bind
+ * inverse), so the bounds and therefore the framing are bit-identical
+ * (unit test `union-bounds.test.ts`). Meshes with morph targets keep the
+ * three call.
  */
 function pushMeshBoxes(mesh: Mesh, out: number[]): void {
   const position = mesh.geometry.getAttribute('position');
@@ -209,23 +318,213 @@ function pushMeshBoxes(mesh: Mesh, out: number[]): void {
         ? 1
         : Math.max(mesh.skeleton.bones.length, 1);
     const bounds = resetClusters(clusters);
+    const morphed =
+      mesh.geometry.morphAttributes.position !== undefined &&
+      mesh.morphTargetInfluences !== undefined;
+    const bones =
+      morphed || skinIndex === undefined || skinWeight === undefined
+        ? -1
+        : fillBoneMatrices(mesh);
+    const [
+      b0,
+      b1,
+      b2,
+      b3,
+      b4,
+      b5,
+      b6,
+      b7,
+      b8,
+      b9,
+      b10,
+      b11,
+      b12,
+      b13,
+      b14,
+      b15,
+    ] = mesh.bindMatrix.elements as unknown as Mat4Tuple;
+    const [
+      i0,
+      i1,
+      i2,
+      i3,
+      i4,
+      i5,
+      i6,
+      i7,
+      i8,
+      i9,
+      i10,
+      i11,
+      i12,
+      i13,
+      i14,
+      i15,
+    ] = mesh.bindMatrixInverse.elements as unknown as Mat4Tuple;
+    const M = _boneMatrices;
+    const m = (k: number): number => M[k] as number;
+    const positionRead = readMode(position as VertexAttribute);
+    const indexRead =
+      skinIndex === undefined
+        ? undefined
+        : readMode(skinIndex as VertexAttribute);
+    const weightRead =
+      skinWeight === undefined
+        ? undefined
+        : readMode(skinWeight as VertexAttribute);
+    const direct =
+      positionRead.mode === 0 &&
+      indexRead?.mode === 0 &&
+      weightRead?.mode === 0;
+    const P = position.array as ArrayLike<number>;
+    const I = (skinIndex?.array ?? P) as ArrayLike<number>;
+    const W = (skinWeight?.array ?? P) as ArrayLike<number>;
+    const positionSize = position.itemSize;
+    const indexSize = skinIndex?.itemSize ?? 4;
+    const weightSize = skinWeight?.itemSize ?? 4;
+    // `_toStage` applied like `Vector3.applyMatrix4` (with the divide).
+    const [
+      s0,
+      s1,
+      s2,
+      s3,
+      s4,
+      s5,
+      s6,
+      s7,
+      s8,
+      s9,
+      s10,
+      s11,
+      s12,
+      s13,
+      s14,
+      s15,
+    ] = _toStage.elements as unknown as Mat4Tuple;
     for (let i = 0; i < position.count; i++) {
-      // getVertexPosition applies morph targets and linear blend skinning.
-      mesh.getVertexPosition(i, _v);
-      const c =
-        clusters === 1
-          ? 0
-          : Math.min(
-              Math.max(
-                dominantBone(
-                  skinIndex as NonNullable<typeof skinIndex>,
-                  skinWeight as NonNullable<typeof skinWeight>,
-                  i,
-                ),
-                0,
-              ),
-              clusters - 1,
+      let c = 0;
+      if (
+        bones >= 0 &&
+        skinIndex !== undefined &&
+        skinWeight !== undefined &&
+        indexRead !== undefined &&
+        weightRead !== undefined
+      ) {
+        if (direct) {
+          // Monomorphic typed-array reads (the common glTF layout).
+          const ib = i * indexSize;
+          const wb = i * weightSize;
+          _skinIndex4[0] = I[ib] as number;
+          _skinIndex4[1] = I[ib + 1] as number;
+          _skinIndex4[2] = I[ib + 2] as number;
+          _skinIndex4[3] = I[ib + 3] as number;
+          _skinWeight4[0] = W[wb] as number;
+          _skinWeight4[1] = W[wb + 1] as number;
+          _skinWeight4[2] = W[wb + 2] as number;
+          _skinWeight4[3] = W[wb + 3] as number;
+          const pb = i * positionSize;
+          _position3[0] = P[pb] as number;
+          _position3[1] = P[pb + 1] as number;
+          _position3[2] = P[pb + 2] as number;
+        } else {
+          readComponents(
+            skinIndex as VertexAttribute,
+            indexRead,
+            i,
+            4,
+            _skinIndex4,
+          );
+          readComponents(
+            skinWeight as VertexAttribute,
+            weightRead,
+            i,
+            4,
+            _skinWeight4,
+          );
+          readComponents(
+            position as VertexAttribute,
+            positionRead,
+            i,
+            3,
+            _position3,
+          );
+        }
+        const x = _position3[0] as number;
+        const y = _position3[1] as number;
+        const z = _position3[2] as number;
+        const w = 1;
+        // _baseVector.set(x, y, z, 1).applyMatrix4(bindMatrix)
+        const bx = b0 * x + b4 * y + b8 * z + b12 * w;
+        const by = b1 * x + b5 * y + b9 * z + b13 * w;
+        const bz = b2 * x + b6 * y + b10 * z + b14 * w;
+        const bw = b3 * x + b7 * y + b11 * z + b15 * w;
+        let tx = 0;
+        let ty = 0;
+        let tz = 0;
+        let best = 0;
+        let bestWeight = -Infinity;
+        for (let k = 0; k < 4; k++) {
+          const weight = _skinWeight4[k] as number;
+          if (weight > bestWeight) {
+            bestWeight = weight;
+            best = k;
+          }
+          if (weight === 0) continue;
+          const bone = _skinIndex4[k] as number;
+          if (!(bone >= 0 && bone < bones)) {
+            throw new Error(
+              `collectStageCorners: ${mesh.name} vertex ${i} references bone ${bone} of ${bones}`,
             );
+          }
+          const o = bone * 16;
+          // target.addScaledVector(_vector4.copy(base).applyMatrix4(M), weight)
+          tx +=
+            (m(o) * bx + m(o + 4) * by + m(o + 8) * bz + m(o + 12) * bw) *
+            weight;
+          ty +=
+            (m(o + 1) * bx + m(o + 5) * by + m(o + 9) * bz + m(o + 13) * bw) *
+            weight;
+          tz +=
+            (m(o + 2) * bx + m(o + 6) * by + m(o + 10) * bz + m(o + 14) * bw) *
+            weight;
+        }
+        // target.applyMatrix4(bindMatrixInverse) (Vector3: perspective divide)
+        const iw = 1 / (i3 * tx + i7 * ty + i11 * tz + i15);
+        const vx = (i0 * tx + i4 * ty + i8 * tz + i12) * iw;
+        const vy = (i1 * tx + i5 * ty + i9 * tz + i13) * iw;
+        const vz = (i2 * tx + i6 * ty + i10 * tz + i14) * iw;
+        c = Math.min(Math.max(_skinIndex4[best] as number, 0), clusters - 1);
+        // expandCluster(bounds, c) with `_v.applyMatrix4(_toStage)` inlined.
+        const sw = 1 / (s3 * vx + s7 * vy + s11 * vz + s15);
+        const px = (s0 * vx + s4 * vy + s8 * vz + s12) * sw;
+        const py = (s1 * vx + s5 * vy + s9 * vz + s13) * sw;
+        const pz = (s2 * vx + s6 * vy + s10 * vz + s14) * sw;
+        const o = c * 6;
+        if (px < (bounds[o] as number)) bounds[o] = px;
+        if (py < (bounds[o + 1] as number)) bounds[o + 1] = py;
+        if (pz < (bounds[o + 2] as number)) bounds[o + 2] = pz;
+        if (px > (bounds[o + 3] as number)) bounds[o + 3] = px;
+        if (py > (bounds[o + 4] as number)) bounds[o + 4] = py;
+        if (pz > (bounds[o + 5] as number)) bounds[o + 5] = pz;
+        continue;
+      } else {
+        // getVertexPosition applies morph targets and linear blend skinning.
+        mesh.getVertexPosition(i, _v);
+        c =
+          clusters === 1
+            ? 0
+            : Math.min(
+                Math.max(
+                  dominantBone(
+                    skinIndex as NonNullable<typeof skinIndex>,
+                    skinWeight as NonNullable<typeof skinWeight>,
+                    i,
+                  ),
+                  0,
+                ),
+                clusters - 1,
+              );
+      }
       expandCluster(bounds, c);
     }
     for (let c = 0; c < clusters; c++) {

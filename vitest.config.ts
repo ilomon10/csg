@@ -30,10 +30,22 @@ const CHROMIUM_ARGS = [
   ...(canonical
     ? ['--use-webgpu-adapter=swiftshader', '--use-angle=swiftshader']
     : []),
+  // `CSG_HOST_GPU=1` (set by `pnpm test:perf`): use the host's hardware GPU. Headless Chromium
+  // otherwise picks SwiftShader on Linux, so perf numbers would describe the software rasterizer.
+  // Never in the canonical golden environment.
+  ...(!canonical && process.env.CSG_HOST_GPU === '1'
+    ? ['--use-angle=vulkan', '--ignore-gpu-blocklist']
+    : []),
 ];
 
 const playwright =
   process.env.CSG_GPU === '1' ? await loadPlaywrightProvider() : null;
+
+/**
+ * `CSG_PERF=1` (`pnpm test:perf`): the GPU projects run only the M2-19 performance suite
+ * (`test/perf/**`), which is slow and report-only unless `CSG_PERF_GATE=1`.
+ */
+const perfOnly = process.env.CSG_PERF === '1';
 
 const goldenCommands =
   playwright !== null
@@ -47,8 +59,12 @@ const gpuProjects =
         test: {
           name: `gpu-${backend}`,
           root: 'packages/engine',
-          include: ['test/gpu/**/*.gpu.ts', 'test/golden/**/*.gpu.ts'],
+          include: perfOnly
+            ? ['test/perf/**/*.gpu.ts']
+            : ['test/gpu/**/*.gpu.ts', 'test/golden/**/*.gpu.ts'],
           provide: {csgBackend: backend},
+          // Perf: one file at a time, so measurements do not share the GPU or CPU.
+          fileParallelism: !perfOnly,
           testTimeout: 60_000,
           hookTimeout: 60_000,
           browser: {

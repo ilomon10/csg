@@ -1,4 +1,4 @@
-import {DIRECTION_ORDER} from '@csg/engine';
+import {DIRECTION_ORDER} from '@csg/parts-schema';
 import type {ClipRef} from '@csg/parts-schema';
 import {useRef} from 'react';
 import {PREVIEW_CLIPS} from './default-character';

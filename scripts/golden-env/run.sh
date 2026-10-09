@@ -13,12 +13,18 @@ IMAGE_TAG="mcr.microsoft.com/playwright:v1.64.0-noble"
 IMAGE_DIGEST="sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f"
 IMAGE="${IMAGE_TAG}@${IMAGE_DIGEST}"
 
-script="${1:?usage: run.sh <test:gpu|goldens:update>}"
+script="${1:?usage: run.sh <test:gpu|goldens:update|test:perf>}"
 # pnpm is not in the image (and corepack cannot install it as a non-root user offline), so the root
 # package.json scripts are mirrored here with the same variables. Keep in sync.
+vitest="node node_modules/vitest/vitest.mjs run"
 case "$script" in
-  test:gpu) extra="" ;;
-  goldens:update) extra="CSG_GOLDEN_UPDATE=1" ;;
+  test:gpu) cmd="CSG_GPU=1 $vitest --project 'gpu-*'" ;;
+  goldens:update) cmd="CSG_GPU=1 CSG_GOLDEN_UPDATE=1 $vitest --project 'gpu-*'" ;;
+  # M2-19 perf suite (report only in the container): one backend at a time, so the two
+  # software-rendered browsers do not compete for the CPU.
+  test:perf)
+    cmd="CSG_GPU=1 CSG_PERF=1 $vitest --project gpu-webgpu && CSG_GPU=1 CSG_PERF=1 $vitest --project gpu-webgl2"
+    ;;
   *) echo "unsupported script: $script" >&2; exit 2 ;;
 esac
 
@@ -42,4 +48,4 @@ exec docker run --rm --ipc=host \
   -e CSG_PERF_GATE="${CSG_PERF_GATE:-}" \
   -v "$repo:/work" -w /work \
   "$IMAGE" \
-  bash -c "CSG_GPU=1 $extra node node_modules/vitest/vitest.mjs run --project 'gpu-*'"
+  bash -c "$cmd"

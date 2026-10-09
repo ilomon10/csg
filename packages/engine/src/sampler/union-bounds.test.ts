@@ -1,6 +1,18 @@
 import {describe, expect, it} from 'vitest';
-import {BoxGeometry, Group, Mesh, MeshBasicMaterial, Vector3} from 'three';
-import type {Object3D, SkinnedMesh} from 'three';
+import {
+  Bone,
+  BoxGeometry,
+  Group,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  Skeleton,
+  SkinnedMesh,
+  Uint8BufferAttribute,
+  Uint16BufferAttribute,
+  Vector3,
+} from 'three';
+import type {Object3D} from 'three';
 import {parseRenderSettings} from '@csg/parts-schema';
 import type {ClipRef, RenderSettings} from '@csg/parts-schema';
 import {createCharacterAssembly} from '../composition/character-assembly';
@@ -130,6 +142,142 @@ describe('collectStageCorners', () => {
     expect(collectStageCorners(stage, stage)).toHaveLength(0);
     geometry.dispose();
     material.dispose();
+  });
+});
+
+/**
+ * Oracle of the per-cluster corners: the pre-M2-19 implementation, skinning
+ * every vertex with three's `SkinnedMesh.getVertexPosition`.
+ */
+function referenceCorners(root: Object3D, stage: Object3D): number[] {
+  stage.updateMatrixWorld(true);
+  const inv = stage.matrixWorld.clone().invert();
+  const out: number[] = [];
+  const v = new Vector3();
+  const f32 = (x: number, up: boolean): number => {
+    const f = Math.fround(x);
+    if (up ? f >= x : f <= x) return f;
+    const a = new Float32Array([f]);
+    const u = new Uint32Array(a.buffer);
+    if (f === 0) u[0] = up ? 1 : 0x80000001;
+    else if (up === f > 0) u[0] = u[0]! + 1;
+    else u[0] = u[0]! - 1;
+    return a[0]!;
+  };
+  root.traverseVisible(o => {
+    const mesh = o as SkinnedMesh;
+    if (mesh.isSkinnedMesh !== true) return;
+    const toStage = new Matrix4().multiplyMatrices(inv, mesh.matrixWorld);
+    const pos = mesh.geometry.getAttribute('position');
+    const si = mesh.geometry.getAttribute('skinIndex');
+    const sw = mesh.geometry.getAttribute('skinWeight');
+    const n = mesh.skeleton.bones.length;
+    const b = Array.from({length: n}, () => [
+      Infinity,
+      Infinity,
+      Infinity,
+      -Infinity,
+      -Infinity,
+      -Infinity,
+    ]);
+    for (let i = 0; i < pos.count; i++) {
+      mesh.getVertexPosition(i, v);
+      v.applyMatrix4(toStage);
+      let best = 0;
+      let bw = -Infinity;
+      for (let c = 0; c < 4; c++) {
+        if (sw.getComponent(i, c) > bw) {
+          bw = sw.getComponent(i, c);
+          best = c;
+        }
+      }
+      const box = b[Math.min(Math.max(si.getComponent(i, best), 0), n - 1)]!;
+      box[0] = Math.min(box[0]!, v.x);
+      box[1] = Math.min(box[1]!, v.y);
+      box[2] = Math.min(box[2]!, v.z);
+      box[3] = Math.max(box[3]!, v.x);
+      box[4] = Math.max(box[4]!, v.y);
+      box[5] = Math.max(box[5]!, v.z);
+    }
+    for (const box of b) {
+      if (!(box[0]! <= box[3]!)) continue;
+      const [x0, y0, z0] = [0, 1, 2].map(k => f32(box[k]!, false));
+      const [x1, y1, z1] = [3, 4, 5].map(k => f32(box[k]!, true));
+      for (let c = 0; c < 8; c++)
+        out.push(c & 1 ? x1! : x0!, c & 2 ? y1! : y0!, c & 4 ? z1! : z0!);
+    }
+  });
+  return out;
+}
+
+describe('collectStageCorners inline skinning (M2-19)', () => {
+  it('AC-PIX-007.2: inline skinning gives bit-identical corners to SkinnedMesh.getVertexPosition (normalized weights, scaled bind matrix)', () => {
+    const geometry = new BoxGeometry(0.4, 1.2, 0.3, 3, 6, 2);
+    const count = geometry.getAttribute('position').count;
+    const index: number[] = [];
+    const weight: number[] = [];
+    for (let i = 0; i < count; i++) {
+      // Deterministic, uneven influences; some zero weights and ties.
+      index.push(i % 3, (i + 1) % 3, 2, 0);
+      const a = (i * 37) % 200;
+      const b = (i * 11) % (255 - a);
+      weight.push(a, b, 255 - a - b, 0);
+    }
+    geometry.setAttribute('skinIndex', new Uint16BufferAttribute(index, 4));
+    geometry.setAttribute(
+      'skinWeight',
+      new Uint8BufferAttribute(weight, 4, true),
+    );
+    const bones = [new Bone(), new Bone(), new Bone()];
+    bones[0]!.add(bones[1]!);
+    bones[1]!.add(bones[2]!);
+    bones[1]!.position.set(0, 0.4, 0.02);
+    bones[2]!.position.set(0.01, 0.4, 0);
+    const mesh = new SkinnedMesh(geometry, new MeshBasicMaterial());
+    mesh.add(bones[0]!);
+    mesh.scale.set(0.013, 0.013, 0.013);
+    mesh.rotation.x = -Math.PI / 2;
+    const root = new Group();
+    root.add(mesh);
+    const stage = new Group();
+    stage.add(root);
+    stage.rotation.y = 0.7;
+    mesh.updateMatrixWorld(true);
+    mesh.bind(new Skeleton(bones));
+    for (const t of [0, 0.3, 1.1]) {
+      bones[0]!.rotation.set(t * 0.2, t, -t * 0.4);
+      bones[1]!.rotation.set(-t, t * 0.5, t * 0.3);
+      bones[2]!.rotation.set(t * 0.9, -t * 0.2, t);
+      bones[2]!.scale.setScalar(1 + t * 0.1);
+      root.position.set(t, 0.01 * t, -t);
+      const fast = Array.from(collectStageCorners(root, stage));
+      expect(fast).toEqual(
+        Array.from(Float32Array.from(referenceCorners(root, stage))),
+      );
+    }
+    geometry.dispose();
+  });
+
+  it('AC-PIX-007.2: fixture character corners are bit-identical to the getVertexPosition oracle', async () => {
+    const {assembly, stage} = await stagedCharacter();
+    for (const t of [0, 0.25, 0.6]) {
+      assembly.evaluate(t);
+      const all = Array.from(collectStageCorners(assembly.root, stage));
+      const skinned = Array.from(
+        Float32Array.from(referenceCorners(assembly.root, stage)),
+      );
+      // The oracle covers skinned meshes only (the sword is static): every oracle box must be present.
+      const boxes = (a: number[]) => {
+        const out: string[] = [];
+        for (let i = 0; i < a.length; i += CORNER_FLOATS_PER_BOX)
+          out.push(a.slice(i, i + CORNER_FLOATS_PER_BOX).join(','));
+        return out;
+      };
+      const fastBoxes = new Set(boxes(all));
+      for (const box of boxes(skinned)) expect(fastBoxes.has(box)).toBe(true);
+      expect(skinned.length).toBeGreaterThan(0);
+    }
+    assembly.dispose();
   });
 });
 

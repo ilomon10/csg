@@ -68,9 +68,14 @@ import type {
 } from '../contracts/renderer';
 import {computeFraming, cameraElevationDeg} from '../pipeline/framing';
 import {stageYawRad} from '../pipeline/directions';
+import type {PaletteLutWorker} from '../pipeline/palette-lut';
+import {createPaletteLutSource} from '../pipeline/palette-lut-source';
 import {createPixelPipeline} from '../pipeline/render-pipeline';
-import type {PixelPipelineStats} from '../pipeline/render-pipeline';
-import {SettingsBinder} from '../pipeline/settings-binder';
+import type {
+  PaletteLutBuilder,
+  PixelPipelineStats,
+} from '../pipeline/render-pipeline';
+import {SettingsBinder, activePaletteColors} from '../pipeline/settings-binder';
 import type {RenderSettingsDiff} from '../pipeline/settings-binder';
 import {
   activeDirectionLabels,
@@ -129,6 +134,11 @@ export interface PipelineFactoryArgs<R extends PreviewRenderer> {
   readonly camera: OrthographicCamera;
   /** The renderer's one settings binder (shared with the part materials). */
   readonly binder: SettingsBinder;
+  /**
+   * The renderer's palette LUT builder (worker + cache, M2-19); pass it to
+   * `createPixelPipeline({buildPaletteLut})`.
+   */
+  readonly buildPaletteLut: PaletteLutBuilder;
 }
 
 /** Creates the pipeline (tests inject fakes; default {@link createPixelPipeline}). */
@@ -159,6 +169,13 @@ export interface CharacterRendererOptions<
   readonly pipelineFactory?: PipelineFactory<R>;
   /** Presenter factory (tests); default `createCanvasPresenter`. */
   readonly presenterFactory?: PresenterFactory<R>;
+  /**
+   * Starts the palette LUT worker (AC-PIX-021.2). Default: the bundled
+   * module worker when `Worker` exists; `null` builds LUTs on the main
+   * thread. A failing worker falls back to the main thread. Under Trusted
+   * Types the host needs a policy that allows the same-origin worker URL.
+   */
+  readonly paletteLutWorker?: (() => PaletteLutWorker) | null;
   /**
    * Called with the error when `play()` / `playClip()` cannot load or retarget
    * its clip, or when the preview framing cannot be computed after a
@@ -329,6 +346,11 @@ export async function createCharacterRenderer<
     settings.resolution.height,
   );
   const binder = new SettingsBinder();
+  const lut = createPaletteLutSource(
+    options.paletteLutWorker === undefined
+      ? {}
+      : {createWorker: options.paletteLutWorker},
+  );
   const pipelineFactory: PipelineFactory<R> =
     options.pipelineFactory ??
     (args =>
@@ -339,6 +361,7 @@ export async function createCharacterRenderer<
         binder: args.binder,
         // One compile mode for preview and export: same bytes (REQ-PIX-030).
         mode: 'export',
+        buildPaletteLut: args.buildPaletteLut,
       }));
   const madePipeline = pipelineFactory({
     renderer,
@@ -346,8 +369,10 @@ export async function createCharacterRenderer<
     scene: preview.scene,
     camera: preview.camera,
     binder,
+    buildPaletteLut: lut.build,
   });
   if (!madePipeline.ok) {
+    lut.dispose();
     binder.dispose();
     renderer.dispose();
     return madePipeline;
@@ -397,6 +422,11 @@ export async function createCharacterRenderer<
     1,
     1,
   );
+
+  /** Settings changes wait here for their LUT, in call order (AC-PIX-021.2). */
+  let settingsTurn: Promise<void> = Promise.resolve();
+  /** Settings calls queued on {@link settingsTurn}. */
+  let pendingSettings = 0;
 
   // ---- exclusive lock (D5) ----
   let chain: Promise<void> = Promise.resolve();
@@ -755,7 +785,7 @@ export async function createCharacterRenderer<
           error: validationError(parsed.issues),
         });
       }
-      return exclusive(async () => {
+      const apply = async (): Promise<Result<void, EngineError>> => {
         if (disposed) return {ok: false, error: DISPOSED_ERROR};
         const diff = await pipeline.setRenderSettings(parsed.value);
         settings = parsed.value;
@@ -784,6 +814,29 @@ export async function createCharacterRenderer<
         const framed = await reframeIfDirty();
         if (!disposed) bindPreview();
         return framed;
+      };
+      // AC-PIX-021.2: a palette whose LUT is not cached yet is built (in the
+      // worker) before the lock is taken, so the preview keeps playing with
+      // the previous palette until it is ready; the locked apply is then a
+      // cache hit. Settings calls still take the lock in call order: while a
+      // build is pending, later calls queue behind it.
+      const colors = activePaletteColors(parsed.value.palette);
+      const metric = parsed.value.palette.metric;
+      const needsBuild =
+        colors !== null && !disposed && !lut.has(colors, metric);
+      if (!needsBuild && pendingSettings === 0) return exclusive(apply);
+      pendingSettings++;
+      const turn = settingsTurn.then(() =>
+        colors === null || !needsBuild
+          ? undefined
+          : lut.warm(colors, metric).catch(() => {
+              // The pipeline's own build reports the error.
+            }),
+      );
+      settingsTurn = turn;
+      return turn.then(() => {
+        pendingSettings--;
+        return exclusive(apply);
       });
     },
 
@@ -872,6 +925,7 @@ export async function createCharacterRenderer<
       preview.stage.clear();
       presenter.dispose();
       pipeline.dispose();
+      lut.dispose();
       binder.dispose();
       renderer.dispose();
     },
