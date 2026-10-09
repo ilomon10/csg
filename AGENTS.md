@@ -10,7 +10,7 @@ When sources disagree, the order is: `specs/constitution.md`, then `specs/*.md` 
 
 ## Repo map
 
-- `specs/`: feature specs `000` to `011`, `constitution.md`, `_template.md`. Start at `specs/000-overview.md` (feature map, area-prefix registry, glossary).
+- `specs/`: feature specs `000` to `014`, `constitution.md`, `_template.md`. Start at `specs/000-overview.md` (feature map, area-prefix registry, glossary).
 - `docs/architecture.md`: package boundaries, data flow, contracts, milestones.
 - `docs/adr/`: decision records 0001 to 0007.
 - `docs/guide/`: user guide in Markdown (website source).
@@ -68,7 +68,7 @@ Spec first
 - A behavior change updates its spec first, in the same PR or an earlier one (P-01).
 - IDs are permanent. Never renumber, reuse or delete one. Deprecate with strikethrough and a reason: `~~REQ-PIX-004~~ (deprecated YYYY-MM-DD: replaced by REQ-PIX-012)`. New requirements take the next free number at the end of the list.
 - Edit specs with normal file edits; CI and pre-commit reject removed IDs regardless of tool (`pnpm spec:immutability`).
-- Area prefixes are GEN, CMP, ANA, PIX, ANM, EXP, EDT, SGF, UPL, UX, WEB, AST, LIT. Add one only by editing the registry in `specs/000-overview.md`.
+- Area prefixes are GEN, CMP, ANA, PIX, ANM, EXP, EDT, SGF, UPL, UX, WEB, AST, LIT, STY. Add one only by editing the registry in `specs/000-overview.md`.
 - Tests cite ACs in their names: `it('AC-PIX-003.1: snaps translation to the texel grid', ...)`. Every P1 AC needs at least one test (P-09).
 
 Code style (Google TypeScript Style via gts, ADR-0002)

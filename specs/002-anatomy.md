@@ -29,7 +29,7 @@ Realistic 3D proportions read badly at 32–64 px. Heads become 4 px blobs, fore
 ## Non-goals
 
 - NG1: Free per-bone editing or a pose editor.
-- NG2: Sculpting, mesh deformation brushes or generating new morph targets.
+- NG2: Sculpting, mesh deformation brushes or generating new morph targets. *(Amended 2026-10-09 (STY), PM decision: spec 013 body composition (milestone M3.5, REQ-STY-011..017) adds one procedural mesh deformation, a CPU-baked bind-space normal inflation driven by `weight` and `muscle`. Brushes, sculpting and new morph targets stay out of scope; no other mesh deformation is added by this spec.)*
 - NG3: Physically correct muscle or volume preservation.
 - NG4: IK foot locking during animation. Grounding (REQ-ANA-008) is a vertical offset only.
 
@@ -150,14 +150,18 @@ Bone names in the "Affects" column are descriptive, written in UE5 style. The en
 | Preset | height | head | torsoWidth | shoulders | armLength | legLength | hands | feet | limbThickness |
 |--------|--------|------|------------|-----------|-----------|-----------|-------|------|---------------|
 | `default` | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
-| `chibi` | 0.90 | 1.80 | 1.10 | 0.90 | 0.85 | 0.75 | 1.40 | 1.40 | 1.40 |
+| ~~`chibi`~~ | ~~0.90~~ | ~~1.80~~ | ~~1.10~~ | ~~0.90~~ | ~~0.85~~ | ~~0.75~~ | ~~1.40~~ | ~~1.40~~ | ~~1.40~~ |
+| `chibi` | 0.85 | 1.80 | 1.10 | 0.90 | 0.75 | 0.70 | 1.40 | 1.40 | 1.40 |
 | `heroic` | 1.05 | 0.90 | 1.10 | 1.25 | 1.00 | 1.10 | 1.10 | 1.05 | 1.15 |
 | `realistic` | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
 
 `realistic` equals `default` on purpose: it means "authored proportions" and is meant for 96–128 px. Values are initial tuning targets, adjustable in data without a spec change once golden images are reviewed.
 
+*(Amended 2026-10-09 (STY), PM decision.)* The `chibi` preset ships in M3 as data and is the anatomy preset of style `chibi` (spec 001 REQ-CMP-042, REQ-ANA-024). Its row is now fixed: `height` 0.90 → 0.85, `armLength` 0.85 → 0.75, `legLength` 0.75 → 0.70; the other six values are unchanged (`head` stays 1.80, inside the requested 1.6–1.8). Every value is inside its REQ-ANA-001 range, so no range widens. `armLength` 0.75 and `legLength` 0.70 sit exactly on their range minimums, so a body-shape preset (REQ-ANA-023) cannot shorten chibi arms or legs further; widening `armLength` below 0.75 or `legLength` below 0.70 would need an amendment of REQ-ANA-001. Unlike the other rows, the `chibi` row changes only with a spec amendment, because the chibi golden images and the clip exclusion list (REQ-ANA-025) depend on it.
+
 - **AC-ANA-013.1** Given the `chibi` preset, When applied, Then the nine values equal the table row and one undo restores the previous values.
 - **AC-ANA-013.2** Given a new preset JSON file added to the presets data (no code change), When the app builds, Then it appears in the preset menu.
+- **AC-ANA-013.3** Given the shipped `presets/anatomy/chibi.json`, When it is validated, Then its values are exactly `height 0.85, head 1.80, torsoWidth 1.10, shoulders 0.90, armLength 0.75, legLength 0.70, hands 1.40, feet 1.40, limbThickness 1.40`, and each value passes the REQ-ANA-001 range check. *(Added 2026-10-09 (STY).)*
 
 **REQ-ANA-014 [P2]** WHEN the user edits any value after applying a preset THE SYSTEM SHALL show the preset as "modified" and offer a reset to that preset.
 
@@ -209,6 +213,54 @@ Bone names in the "Affects" column are descriptive, written in UE5 style. The en
 - **AC-ANA-021.7** Given the fixture rig with `g-b.restPose` lacking `lowerarm_l`, or with two groups both named `g-a`, When validated, Then validation fails with a path naming `skeletonGroups`, the group index and `lowerarm_l` (first case) or the duplicate ID (second case).
 - **AC-ANA-021.8** Given a fixture rig with no `hipBone` field and `socketBones.pelvis = 'pelvis'`, When the spec 004 REQ-ANM-023 retarget plan is built, Then the hip joint it uses for `k = L_t / L_s` is `pelvis`; and given the same rig with `socketBones.pelvis = 'spine_01'`, Then the hip joint is `spine_01`.
 
+### Body shapes, styles and clip exclusions (added 2026-10-09 (STY), PM decision)
+
+Body-shape presets serve the "Body shape" step of the Easy workspace and the new-avatar wizard (spec 014). They are **relative**: each gives a factor per parameter that multiplies the anatomy preset of the current style, so the same "Stocky" works on Realistic and on Chibi.
+
+**REQ-ANA-022 [P1]** THE SYSTEM SHALL ship body-shape presets as data files (`presets/body-shapes/<id>.json`, `BodyShapePreset` in Data & contracts), at least the six below in this menu order, where each factor is in 0.50–1.50, quantized to 0.01, and an absent factor means 1.00.
+
+| Preset | height | head | torsoWidth | shoulders | armLength | legLength | hands | feet | limbThickness |
+|--------|--------|------|------------|-----------|-----------|-----------|-------|------|---------------|
+| `average` | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| `slim` | 1.00 | 1.00 | 0.90 | 0.95 | 1.00 | 1.00 | 0.95 | 0.95 | 0.85 |
+| `athletic` | 1.02 | 1.00 | 1.05 | 1.15 | 1.00 | 1.03 | 1.00 | 1.00 | 1.10 |
+| `stocky` | 0.95 | 1.00 | 1.20 | 1.10 | 1.00 | 0.95 | 1.05 | 1.05 | 1.25 |
+| `tall` | 1.10 | 1.00 | 0.97 | 1.00 | 1.04 | 1.08 | 1.00 | 1.00 | 1.00 |
+| `petite` | 0.90 | 1.00 | 0.94 | 0.92 | 1.00 | 1.00 | 0.92 | 0.92 | 0.92 |
+
+The factors are initial tuning targets: they can change in data without a spec amendment once the M3 golden images are reviewed. Labels: Average, Slim, Athletic, Stocky, Tall, Petite.
+
+- **AC-ANA-022.1** Given the shipped body-shape files, When they are validated, Then there are at least 6, the first six IDs are the table's in order, and every factor equals the table.
+- **AC-ANA-022.2** Given a body-shape file with factor `limbThickness: 1.51`, or with an unknown key `neck`, When validated, Then validation fails naming the file ID and the field.
+- **AC-ANA-022.3** Given a new body-shape JSON file added to the presets data (no code change), When the app builds, Then it appears after the six shipped presets in the Body shape choices.
+
+**REQ-ANA-023 [P1]** WHEN the user applies a body-shape preset THE SYSTEM SHALL set each of the nine anatomy values `p` to `clamp(q(base[p] × factor[p]), min[p], max[p])` as one undoable command, where `base` is the anatomy preset named by the current style's data file (REQ-ANA-024; the `default` preset if it names none), `min`/`max` are the REQ-ANA-001 range, and `q` rounds to 0.01 in integer hundredths: `q = floor((B × F + 50) / 100) / 100` with `B = round(100 · base[p])` and `F = round(100 · factor[p])`.
+
+- **AC-ANA-023.1** Given style `realistic` and any current anatomy values, When the user applies `stocky`, Then the nine values equal the `stocky` factors exactly (base all 1.00), and one undo restores the previous values.
+- **AC-ANA-023.2** Given style `chibi`, When the user applies `stocky`, Then `torsoWidth` is 1.32 (110 × 120 → 1.32), `limbThickness` 1.75, `legLength` 0.70 (0.665 rounds to 0.67, clamped to the 0.70 minimum) and `head` 1.80.
+- **AC-ANA-023.3** Given style `chibi`, When the user applies `petite`, Then `height` is 0.80 (0.765 → 0.77, clamped to 0.80).
+- **AC-ANA-023.4** Given the same style and preset applied twice on two platforms (Node and Chromium), When the values are compared, Then they are identical (integer arithmetic, P-04).
+
+**REQ-ANA-024 [P1]** THE SYSTEM SHALL read, for each `CharacterStyle`, one style data file (`presets/styles/<style>.json`, `StyleDefinition` in Data & contracts) that names the style's anatomy preset (optional) and lists the clips excluded for that style (`excludedClips`, each a `ClipRef` with a reason), and SHALL fail validation for a file whose `anatomyPreset` is not a shipped anatomy preset ID, that lists a default clip of spec 004 (`builtin:quaternius-ual/idle` or `builtin:quaternius-ual/walk`), or that duplicates another file's `style`.
+
+- **AC-ANA-024.1** Given the shipped style files, When validated, Then `realistic.json` names `realistic`, `chibi.json` names `chibi`, and every file passes.
+- **AC-ANA-024.2** Given a fixture `chibi.json` naming `anatomyPreset: 'chubby'` (no such preset), or listing `builtin:quaternius-ual/walk`, When validated, Then validation fails naming the file and the field (`anatomyPreset` or `excludedClips.<index>`).
+- **AC-ANA-024.3** Given a style file that lists a clip ref not registered in any loaded pack, When the app starts, Then the entry is ignored without an error (packs can be absent offline), and the other entries apply.
+
+**REQ-ANA-025 [P1]** WHILE the character's `style` is S THE SYSTEM SHALL hide every clip in S's `excludedClips` from the clip picker and clip search (spec 004 REQ-ANM-001/003), and show every other compatible clip.
+
+- **AC-ANA-025.1** Given a fixture `chibi.json` with `excludedClips` = [`builtin:fixture/hands-to-face`] and style `chibi`, When the clip picker opens or the user searches "face", Then `hands-to-face` is not listed; When the style changes to `realistic`, Then it is listed again.
+- **AC-ANA-025.2** Given the shipped `chibi.json`, When the M3 visual review of all bundled clips at the `chibi` preset is done, Then every clip it lists has a written reason and every clip it does not list renders without an arm or hand intersecting the head volume by more than 1 output pixel at 64 px in the side and three-quarter cameras. [NEEDS CLARIFICATION: the initial chibi exclusion list comes from that review. Candidates to check first among the 43 UAL clips: `hit-head`, `idle-talking`, `pistol-aim-up`, `pistol-aim-neutral`, `pistol-reload`, `spell-simple-idle`, `swim-fwd`, `swim-idle`. Owner: graphics-engineer with the PM, during M3. Does not block the mechanism (AC-ANA-025.1).]
+
+**REQ-ANA-026 [P3]** WHERE spec 001 randomize runs with anatomy unlocked THE SYSTEM SHALL draw each factor uniformly from the parameter's REQ-ANA-001 randomize range (as REQ-ANA-018) and set the value to `clamp(q(base[p] × factor))` with `base` and `q` as in REQ-ANA-023, so randomized characters keep their style's proportions. For style `realistic` (base all 1.00) the result equals REQ-ANA-018.
+
+- **AC-ANA-026.1** Given style `chibi`, anatomy unlocked and seeds 0–999, When randomize runs, Then every `head` value is within `q(1.80 × 0.95) = 1.71` … `q(1.80 × 1.15) = 2.00` (2.07 clamped), every value is inside its REQ-ANA-001 range, and results are reproducible per seed.
+- **AC-ANA-026.2** Given style `realistic` and seed `42`, When randomize runs, Then the anatomy values equal the REQ-ANA-018 result for seed 42.
+
+**REQ-ANA-027 [P2]** WHEN the character's style changes to a style whose `excludedClips` contains clips already selected in `RenderSettings.animations` THE SYSTEM SHALL keep those selections and show a non-blocking warning naming them ("<clip> may look broken in Chibi style"), and SHALL NOT block export.
+
+- **AC-ANA-027.1** Given `hands-to-face` selected and style `realistic`, When the style changes to `chibi` (fixture exclusion list), Then `RenderSettings.animations` is unchanged, the warning names "hands-to-face", and export proceeds.
+
 ## Edge cases
 
 - All parameters at extremes simultaneously → no NaN, no inverted geometry; AC-ANA-003.2 shear check runs at all-min and all-max (REQ-ANA-003).
@@ -224,6 +276,9 @@ Bone names in the "Affects" column are descriptive, written in UE5 style. The en
 - Body and outfits from different skeleton groups (bind poses differ, spec 011 REQ-AST-026) → anatomy works on the character skeleton (spec 001 REQ-CMP-037); bind-pose scaling (REQ-ANA-003/008) uses that skeleton's rest pose.
 - Body that declares no skeleton group (e.g. its rest pose matched none, spec 011 AC-AST-026.4) → the character skeleton uses `RigDefinition.defaultSkeletonGroup` (REQ-ANA-021, spec 001 REQ-CMP-037). *(Added 2026-10-08 (M1-01c).)*
 - Rig JSON with a stale `hipBone` or top-level `joints` field (pre-M1-01c drafts) → not part of the contract and never read; the hip is `socketBones.pelvis` and rest poses come from `skeletonGroups[].restPose` (REQ-ANA-021). *(Added 2026-10-08 (M1-01c).)*
+- Body-shape preset on Chibi pushes a value past its range (e.g. `legLength` 0.67) → clamped to the REQ-ANA-001 range (REQ-ANA-023, AC-ANA-023.2). *(Added 2026-10-09 (STY).)*
+- Style change while an excluded clip is selected → kept with a warning (REQ-ANA-027); the picker hides it (REQ-ANA-025). *(Added 2026-10-09 (STY).)*
+- Style file references a clip from a pack that is not loaded → ignored (AC-ANA-024.3). *(Added 2026-10-09 (STY).)*
 - Auto camera framing (spec 003) normalizes overall size, so `height` is visible only with fixed framing or when comparing characters. The slider shows a hint about this when framing is `auto`.
 
 ## Data & contracts
@@ -310,7 +365,35 @@ export interface AnatomyPreset {
   recommendedPx?: [number, number];
   values: AnatomyParams;
 }
+
+/** Added 2026-10-09 (STY), REQ-ANA-022. Data file: presets/body-shapes/<id>.json. Strict object. */
+export interface BodyShapePreset {
+  format: 'sprite-body-shape-preset';
+  version: 1;
+  id: string;                      // [a-z0-9-]{1,32}
+  label: string;                   // i18n message key
+  /** Menu position; shipped presets use 10, 20, ... 60. */
+  order: number;
+  /** Relative factors, each 0.50..1.50, quantized to 0.01; absent key = 1.00. */
+  factors: Partial<AnatomyParams>;
+}
+
+/**
+ * Added 2026-10-09 (STY), REQ-ANA-024. Data file: presets/styles/<style>.json, one per style.
+ * Spec 013 adds style-specific fields for stickman and voxel in M3.5 (optional, same version).
+ */
+export interface StyleDefinition {
+  format: 'sprite-style';
+  version: 1;
+  style: CharacterStyle;           // spec 001 REQ-CMP-038
+  /** AnatomyPreset id applied when the user picks this style (spec 001 REQ-CMP-042). */
+  anatomyPreset?: string;
+  /** Clips hidden while this style is active (REQ-ANA-025). */
+  excludedClips: Array<{ clip: ClipRef; reason: string }>;
+}
 ```
+
+*(Added 2026-10-09 (STY).)* Spec 013 REQ-STY-019 adds the socket ID `tail` in M3.5. From then on `SocketId` is `'hand_r' | 'hand_l' | 'head' | 'spine_03' | 'pelvis' | 'tail'`, and the committed rig gains `socketBones.tail = 'pelvis'`. REQ-ANA-019 then requires the `tail` entry like every other socket ID (a missing `tail` fails validation), and REQ-ANA-007 applies to `tail` with `inheritScale` default false.
 
 Application order per frame (contract for engine and tests): 1) sample clip (spec 004), including the rest-pose correction of spec 004 REQ-ANM-023 onto the character's skeleton group *(added 2026-10-08, M1 PM rig update b)*; 2) apply root-motion policy (spec 004); 3) apply anatomy (`height` → length/width/thickness with compensation → propagating `head`/`hands`/`feet`); 4) apply grounding offset (computed once per anatomy change in bind pose); 5) update socket props; 6) skinning.
 
@@ -327,9 +410,12 @@ Application order per frame (contract for engine and tests): 1) sample clip (spe
 - ~~[NEEDS CLARIFICATION: Final bone lists per parameter and `lengthAxis` for the Quaternius rig. Blocks REQ-ANA-002/005 data, not the engine code. Answered by M1 `verify-rig`. Partly answered 2026-10-08: names, hierarchy and `lengthAxis` are identical across all 36 checked files (outcome `mapped` only for bind poses); the overlay lists remain to be committed (M1-14) and confirmed in the M1-33 pass.]~~ Resolved 2026-10-09 (M1-33): `lengthAxis: 'y'`; the `anatomyBones`, `regionBones` and `socketBones` lists are committed in `tools/rigs/quaternius-ue5-65.overlay.json` and copied into `packages/parts-schema/rigs/quaternius-ue5-65.json` (e.g. `height` → `root`, `head` → `Head`, `feet` → `foot_l`, `foot_r`). Changes to these lists are data edits checked by REQ-ANA-021 and spec 011 `assets:check`.
 - The morph-target question above was not checked by the M1 spike (verify-rig does not inspect morph targets); it stays open. *(Note 2026-10-09 (M1-33).)*
 - [NEEDS CLARIFICATION: Does spec 003 own drawing the face decal layer (snapping, palette interaction)? This spec assumes yes and owns only selection and offset.]
+- [NEEDS CLARIFICATION: (added 2026-10-09 (STY)) Initial content of the chibi clip exclusion list (AC-ANA-025.2), from the M3 visual review. Owner: graphics-engineer with the PM. Blocks the shipped `chibi.json` content, not the mechanism.]
+- (Added 2026-10-09 (STY).) Body-shape presets are relative factors over the style's anatomy preset (REQ-ANA-023) rather than absolute values, so one preset list serves Realistic and Chibi. The PM decision asked for "named presets over the existing 9 multipliers"; for style `realistic` the two readings give identical values (AC-ANA-023.1).
 
 ## References
 
+- PM decision 2026-10-09 (STY): chibi in M3, body-shape presets, per-style clip exclusions, NG2 amendment; spec 013
 - ADR-0001 (readability risk), ADR-0008 (M1 rig outcome, `docs/adr/0008-shared-rig-skeleton-groups-runtime-retarget.md`); `docs/architecture.md` §2.1 (assembly order), §3.2–3.3
 - M1 implementation read for the 2026-10-09 (M1-33) clarifications: `packages/engine/src/anatomy/apply.ts` (compensation, ground offset, root/pelvis scaling, prop scale), `packages/engine/src/anatomy/anatomy.test.ts`, `packages/engine/src/composition/evaluate-pose.ts`
 - `.tagconn/work/research.md` (anatomy and readability notes, 2026-10-08)
