@@ -251,6 +251,8 @@ export interface ExportSettings {
   enginePreset: 'none' | 'godot4' | 'phaser3' | 'unity' | 'tiled';
   /** NEW [P2]. Default both false, scale 2. */
   previews: { gif: boolean; apng: boolean; scale: 1 | 2 | 4 | 8 };
+  /** NEW (added 2026-10-09 (LIT)). Auxiliary 2D lighting maps, defined in spec 012 (`LightingMapSettings`). Absent = no maps. */
+  maps?: LightingMapSettings;
   includeCredits: true;
 }
 
@@ -339,6 +341,8 @@ export interface SpriteExportManifest {
 | Credits | `CREDITS.txt` |
 | Download | `<base>.zip` |
 
+*(Note added 2026-10-09 (LIT).)* **Auxiliary lighting maps** (normal `_n`, albedo `_albedo`, mask `_m`, specular `_s`, UV `_uv`, depth `_d`, emission `_e`) are defined in spec 012 (LIT). They share this spec's layout, scales, naming base, PNG/ZIP determinism (REQ-EXP-018), size limits (REQ-EXP-025), progress and cancel rules. The map suffix goes before the scale suffix (`<base>_n@2x.png`). Spec 012 overrides two rules for maps only: normal maps fill transparent pixels with the flat normal (128, 128, 255, 0) instead of (0, 0, 0, 0) (REQ-EXP-002), and data maps are never indexed PNGs (REQ-EXP-019). With maps enabled, the manifest gains an optional `maps` object and the Aseprite JSON a `meta.maps` key (REQ-LIT-014, REQ-LIT-015). Colour sheets and `CREDITS.txt` are unchanged by maps (REQ-LIT-002).
+
 **Aseprite JSON example** (one frame shown)
 
 ```json
@@ -404,7 +408,7 @@ The `WARNINGS` section appears only when warnings exist. No dates or times appea
 
 ## Open questions
 
-- [NEEDS CLARIFICATION: Should the Aseprite JSON carry a `meta.csg` block (manifest hash, pivot) so a single file is enough, or stay strictly vanilla? Current choice: vanilla + separate manifest. Owner: maintainers.]
+- [NEEDS CLARIFICATION: Should the Aseprite JSON carry a `meta.csg` block (manifest hash, pivot) so a single file is enough, or stay strictly vanilla? Current choice: vanilla + separate manifest. Owner: maintainers.] *(Note added 2026-10-09 (LIT): spec 012 REQ-LIT-015 adds a `meta.maps` key only when lighting maps are exported; decide both together, see the spec 012 open questions.)*
 - [NEEDS CLARIFICATION: Unity target format for REQ-EXP-030. Owner: community/maintainers. Not blocking (P3).]
 - [NEEDS CLARIFICATION: Should GIF previews also be used by the website (spec 010, W2)? If so, the site needs a fixed export preset. Owner: web track.]
 - [NEEDS CLARIFICATION: Should `CREDITS.txt` list the app itself and its code license? Proposal: one footer line with the repo URL and license. Owner: maintainers.]

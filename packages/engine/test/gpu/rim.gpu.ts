@@ -176,7 +176,6 @@ describe(`screen-space rim edge (${currentBackend()})`, () => {
   /** Renders the AC-PIX-012.4 cube under each settings value in turn. */
   async function cube(
     settings: readonly RenderSettings[],
-    onPipeline?: (p: PixelPipeline) => Promise<void>,
   ): Promise<Uint8ClampedArray[]> {
     const binder = new SettingsBinder();
     const t = toonScene(
@@ -190,7 +189,6 @@ describe(`screen-space rim edge (${currentBackend()})`, () => {
     try {
       const out: Uint8ClampedArray[] = [];
       for (const s of settings) out.push(await renderWith(p, s));
-      if (onPipeline !== undefined) await onPipeline(p);
       return out;
     } finally {
       p.dispose();
@@ -280,43 +278,88 @@ describe(`screen-space rim edge (${currentBackend()})`, () => {
   });
 
   it('AC-PIX-012.9: toggling rim.enabled, 100 strength changes and azimuth 135° → 45° never rebuild; the rim moves to the new side', async () => {
+    // Every change goes through setRenderSettings + render(); only the frames
+    // the asserts inspect are read back. A readback on WebGL2 polls the fence
+    // once per requestAnimationFrame, which is heavily throttled when the
+    // suite runs many browser test files at once (112 readbacks timed out at
+    // 60 s under full-suite load while the renders themselves take < 1 s).
+    const binder = new SettingsBinder();
+    const t = toonScene(
+      binder,
+      h.backend,
+      new THREE.BoxGeometry(2, 2, 2).translate(0, 1, 0),
+    );
     const off = cubeSettings(s => {
       s.toon.rim.enabled = false;
     });
-    const settings: RenderSettings[] = [off];
-    for (let i = 0; i < 10; i++) {
-      settings.push(
-        cubeSettings(s => {
-          s.toon.rim.enabled = i % 2 === 0;
-        }),
-      );
+    const p = await pipelineFor(h, t.scene, binder, off);
+    try {
+      const rebuildsBefore = p.stats.rebuilds;
+      const framesBefore = p.stats.frames;
+      const offFrame = await renderWith(p, off);
+      let toggledOn: Uint8ClampedArray | undefined;
+      let toggledOff: Uint8ClampedArray | undefined;
+      for (let i = 0; i < 10; i++) {
+        const on = i % 2 === 0;
+        const s = cubeSettings(x => {
+          x.toon.rim.enabled = on;
+        });
+        if (i === 8) toggledOn = await renderWith(p, s);
+        else if (i === 9) toggledOff = await renderWith(p, s);
+        else {
+          await p.setRenderSettings(s);
+          p.render();
+        }
+      }
+      const strengthFrames = new Map<number, Uint8ClampedArray>();
+      for (let i = 0; i < 100; i++) {
+        const strength = (i % 10) / 10;
+        const s = cubeSettings(x => {
+          x.toon.rim.strength = strength;
+        });
+        // Read the last occurrence of strength 0.1 and 0.9 only.
+        if (i === 91 || i === 99) {
+          strengthFrames.set(strength, await renderWith(p, s));
+        } else {
+          await p.setRenderSettings(s);
+          p.render();
+        }
+      }
+      const rotated = cubeSettings(s => {
+        s.lighting.azimuthDeg = 45;
+      });
+      const rotatedOff = cubeSettings(s => {
+        s.lighting.azimuthDeg = 45;
+        s.toon.rim.enabled = false;
+      });
+      const a = await renderWith(p, rotatedOff);
+      const b = await renderWith(p, rotated);
+
+      // Zero rebuilds after the first build, and every change was rendered.
+      expect(rebuildsBefore).toBe(1);
+      expect(p.stats.rebuilds).toBe(1);
+      expect(p.stats.frames - framesBefore).toBe(1 + 10 + 100 + 2);
+
+      // The uniform-only changes are visible without a rebuild.
+      if (toggledOn === undefined || toggledOff === undefined) {
+        throw new Error('render');
+      }
+      const box = coverageBox(offFrame);
+      expect(diff(toggledOn, offFrame)).toEqual(faceRim(box, [-1, -1]));
+      expect(toggledOff).toEqual(offFrame);
+      const weak = strengthFrames.get(0.1);
+      const strong = strengthFrames.get(0.9);
+      if (weak === undefined || strong === undefined) throw new Error('render');
+      expect(diff(strong, weak)).toEqual(faceRim(box, [-1, -1]));
+
+      // The rim moves to the new side after the azimuth change.
+      expect(rimOffset(lightDirection(rotated.lighting))).toEqual([1, -1]);
+      expect(diff(b, a)).toEqual(faceRim(coverageBox(a), [1, -1]));
+    } finally {
+      p.dispose();
+      t.dispose();
+      binder.dispose();
     }
-    for (let i = 0; i < 100; i++) {
-      settings.push(
-        cubeSettings(s => {
-          s.toon.rim.strength = (i % 10) / 10;
-        }),
-      );
-    }
-    const rotated = cubeSettings(s => {
-      s.lighting.azimuthDeg = 45;
-    });
-    const rotatedOff = cubeSettings(s => {
-      s.lighting.azimuthDeg = 45;
-      s.toon.rim.enabled = false;
-    });
-    settings.push(rotatedOff, rotated);
-    let rebuilds = -1;
-    let frames: Uint8ClampedArray[] = [];
-    frames = await cube(settings, async p => {
-      rebuilds = p.stats.rebuilds;
-    });
-    expect(rebuilds).toBe(1);
-    const a = frames[frames.length - 2];
-    const b = frames[frames.length - 1];
-    if (a === undefined || b === undefined) throw new Error('render');
-    expect(rimOffset(lightDirection(rotated.lighting))).toEqual([1, -1]);
-    expect(diff(b, a)).toEqual(faceRim(coverageBox(a), [1, -1]));
   });
 
   it('AC-PIX-012.5, AC-PIX-012.6: sphere rim = covered pixels with p + (-1, -1) uncovered, 1 px thick, on the lit half, colour clamp(base · (light_k + 0.3))', async () => {

@@ -2,12 +2,17 @@ import {
   DIRECTION_ORDER,
   createAssetRegistry,
   createCharacterRenderer,
+  previewTimingFor,
 } from '@csg/engine';
 import type {EngineCharacterRenderer, RendererBackend} from '@csg/engine';
-import type {ClipRef} from '@csg/parts-schema';
+import type {ClipRef, RenderSettings} from '@csg/parts-schema';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {RefObject} from 'react';
-import {DEFAULT_CLIP, createPreviewCharacter} from './default-character';
+import {
+  DEFAULT_CLIP,
+  createPreviewCharacter,
+  createPreviewSettings,
+} from './default-character';
 import {loadBundledPacks} from './load-packs';
 import {startPreviewSession} from './preview-session';
 
@@ -23,6 +28,8 @@ export interface PreviewState {
   /** Index into `DIRECTION_ORDER`. */
   readonly direction: number;
   readonly clipDurationSec: number;
+  /** "Show export frames" (REQ-ANM-018): stepped export frames, default on. */
+  readonly showExportFrames: boolean;
   /** Clip time shown by the scrubber. */
   readonly timeSec: number;
 }
@@ -34,6 +41,7 @@ export interface PreviewControls {
   selectClip(ref: ClipRef): void;
   turn(step: 1 | -1): void;
   seek(timeSec: number): void;
+  setShowExportFrames(on: boolean): void;
   dismissError(): void;
 }
 
@@ -45,6 +53,7 @@ const INITIAL: PreviewState = {
   playing: false,
   direction: 0,
   clipDurationSec: 0,
+  showExportFrames: true,
   timeSec: 0,
 };
 
@@ -63,6 +72,8 @@ export function usePreview(
   const [state, setState] = useState<PreviewState>(INITIAL);
   const rendererRef = useRef<EngineCharacterRenderer | null>(null);
   const directionRef = useRef(0);
+  const settingsRef = useRef<RenderSettings | null>(null);
+  const showFramesRef = useRef(true);
   const registryRef = useRef<ReturnType<typeof createAssetRegistry> | null>(
     null,
   );
@@ -77,11 +88,14 @@ export function usePreview(
     if (canvas === null || viewport === null) return;
     // StrictMode mounts, cleans up and mounts again: the first session is
     // cancelled before it can create a renderer (see startPreviewSession).
+    const settings = createPreviewSettings();
+    settingsRef.current = settings;
     const session = startPreviewSession(
       canvas,
       viewport,
-      {character: createPreviewCharacter(), clip: DEFAULT_CLIP},
+      {character: createPreviewCharacter(), clip: DEFAULT_CLIP, settings},
       {
+        devicePixelRatio: () => window.devicePixelRatio,
         createRegistry: () => createAssetRegistry(),
         loadPacks: loadBundledPacks,
         createRenderer: (target, options) =>
@@ -120,6 +134,27 @@ export function usePreview(
     return () => clearInterval(id);
   }, [state.playing, patch]);
 
+  /** Applies the "Show export frames" choice to the renderer for `ref`. */
+  const applyTiming = useCallback((ref: ClipRef, durationSec: number): void => {
+    const r = rendererRef.current;
+    if (r === null) return;
+    const sel = settingsRef.current?.animations.find(a => a.clipId === ref);
+    if (showFramesRef.current || sel === undefined) {
+      r.setPreviewTiming(null); // engine default: export frames
+    } else {
+      r.setPreviewTiming(previewTimingFor(sel, durationSec, false));
+    }
+  }, []);
+
+  const setShowExportFrames = useCallback(
+    (on: boolean): void => {
+      showFramesRef.current = on;
+      applyTiming(state.clip, state.clipDurationSec);
+      patch({showExportFrames: on});
+    },
+    [state.clip, state.clipDurationSec, applyTiming, patch],
+  );
+
   const togglePlay = useCallback((): void => {
     const r = rendererRef.current;
     if (r === null) return;
@@ -142,17 +177,19 @@ export function usePreview(
       if (r === null) return;
       void r.playClip(ref).then(result => {
         if (!result.ok) return;
+        const clipDurationSec =
+          registryRef.current?.clipEntry(ref)?.durationSec ?? 0;
+        applyTiming(ref, clipDurationSec);
         patch({
           clip: ref,
           playing: true,
           timeSec: 0,
           error: null,
-          clipDurationSec:
-            registryRef.current?.clipEntry(ref)?.durationSec ?? 0,
+          clipDurationSec,
         });
       });
     },
-    [patch],
+    [patch, applyTiming],
   );
 
   const turn = useCallback(
@@ -183,5 +220,13 @@ export function usePreview(
     setState(prev => (prev.status === 'error' ? prev : {...prev, error: null}));
   }, []);
 
-  return {state, togglePlay, selectClip, turn, seek, dismissError};
+  return {
+    state,
+    togglePlay,
+    selectClip,
+    turn,
+    seek,
+    setShowExportFrames,
+    dismissError,
+  };
 }

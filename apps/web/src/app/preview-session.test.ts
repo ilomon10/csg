@@ -1,6 +1,6 @@
 import type {EngineAssetRegistry, EngineCharacterRenderer} from '@csg/engine';
 import {describe, expect, it} from 'vitest';
-import type {CharacterSpec, ClipRef} from '@csg/parts-schema';
+import type {CharacterSpec, ClipRef, RenderSettings} from '@csg/parts-schema';
 import {startPreviewSession} from './preview-session';
 import type {PreviewSessionDeps, SessionCanvas} from './preview-session';
 
@@ -20,29 +20,29 @@ function deferred(): Deferred {
 const PLAN = {
   character: {} as CharacterSpec,
   clip: 'builtin:test/idle' as ClipRef,
+  settings: {} as RenderSettings,
 };
 
-/** A canvas that records every size write and who made it. */
+/** A canvas that records every CSS size write and who made it. */
 function recordingCanvas() {
   const writes: string[] = [];
-  let width = 300;
-  let height = 150;
   let writer = '';
+  const style = {
+    set width(v: string) {
+      writes.push(`${writer}:width=${v}`);
+    },
+    set height(v: string) {
+      writes.push(`${writer}:height=${v}`);
+    },
+    set marginLeft(v: string) {
+      writes.push(`${writer}:ml=${v}`);
+    },
+    set marginTop(v: string) {
+      writes.push(`${writer}:mt=${v}`);
+    },
+  } as SessionCanvas['style'];
   const canvas: SessionCanvas & {as(name: string): void} = {
-    get width() {
-      return width;
-    },
-    set width(v: number) {
-      writes.push(`${writer}:width`);
-      width = v;
-    },
-    get height() {
-      return height;
-    },
-    set height(v: number) {
-      writes.push(`${writer}:height`);
-      height = v;
-    },
+    style,
     as(name: string) {
       writer = name;
     },
@@ -75,13 +75,21 @@ function fakeEngine(options: {createThrows?: boolean} = {}) {
         backend: 'webgl2',
         setCharacter: async () => ({ok: true, value: undefined}),
         playClip: async () => ({ok: true, value: undefined}),
-        resize: () => {},
+        resize: (w: number, h: number, dpr: number) => ({
+          cellW: 64,
+          cellH: 64,
+          scale: 4,
+          cssW: 256 / dpr,
+          cssH: 256 / dpr,
+          viewport: [w, h],
+        }),
         dispose: () => {
           state.disposed = true;
         },
       } as unknown as EngineCharacterRenderer;
       return {ok: true, value: renderer};
     },
+    devicePixelRatio: () => 2,
     observeResize: () => {
       observers++;
       return () => {
@@ -152,6 +160,11 @@ describe('preview session (M1-31 M1: StrictMode and cancellation)', () => {
     expect(engine.live()).toBe(1);
     expect(engine.observers()).toBe(1);
     expect(writes.filter(w => w.startsWith('first'))).toEqual([]);
+    // AC-PIX-031.1: the session sets the integer-scaled CSS size (cell x scale / dpr).
+    expect(writes.slice(0, 2)).toEqual([
+      'second:width=128px',
+      'second:height=128px',
+    ]);
     expect(first.log).toEqual([]);
     expect(second.log).toEqual(['renderer', 'ready']);
     b.cancel();

@@ -4,12 +4,20 @@ import type {
   EngineError,
   Result,
 } from '@csg/engine';
-import type {CharacterSpec, ClipRef} from '@csg/parts-schema';
+import type {CharacterSpec, ClipRef, RenderSettings} from '@csg/parts-schema';
 
-/** The canvas size fields the session writes (an `HTMLCanvasElement` fits). */
+/**
+ * The canvas fields the session writes (an `HTMLCanvasElement` fits). The
+ * drawing buffer (`width`/`height`) belongs to the engine (cell size, REQ-PIX-031);
+ * the session only sets the CSS size.
+ */
 export interface SessionCanvas {
-  width: number;
-  height: number;
+  readonly style: {
+    width: string;
+    height: string;
+    marginLeft: string;
+    marginTop: string;
+  };
 }
 
 /** The element whose size drives the drawing buffer. */
@@ -20,7 +28,8 @@ export interface SessionViewport {
 /** Renderer options the session passes (a subset of `createCharacterRenderer`'s). */
 export interface SessionRendererOptions {
   readonly registry: EngineAssetRegistry;
-  readonly previewScale: number;
+  /** Initial render settings (default preset, resolution and animations). */
+  readonly settings: RenderSettings;
   readonly onError: (error: EngineError) => void;
 }
 
@@ -33,6 +42,8 @@ export interface PreviewSessionDeps {
     options: SessionRendererOptions,
   ): Promise<Result<EngineCharacterRenderer, EngineError>>;
   /** Calls `onResize` when the viewport resizes; returns a disconnect function. */
+  /** Current `devicePixelRatio`. */
+  devicePixelRatio(): number;
   observeResize(viewport: SessionViewport, onResize: () => void): () => void;
 }
 
@@ -40,6 +51,8 @@ export interface PreviewSessionDeps {
 export interface PreviewSessionPlan {
   readonly character: CharacterSpec;
   readonly clip: ClipRef;
+  /** Initial render settings; must include the character's animations. */
+  readonly settings: RenderSettings;
 }
 
 /** Session callbacks; none is called after `cancel()`. */
@@ -64,6 +77,38 @@ export interface PreviewSession {
   cancel(): void;
   /** Settles when the start sequence ends (never rejects). */
   readonly done: Promise<void>;
+}
+
+/**
+ * Lays the preview out in the viewport: the engine returns the integer-scaled
+ * CSS size and the canvas shows its cell-sized buffer at that size
+ * (`image-rendering: pixelated` in CSS, AC-PIX-031.1). Call again after a
+ * settings change that alters the resolution.
+ *
+ * @param canvas Target canvas.
+ * @param viewport Element that bounds the canvas.
+ * @param renderer Renderer to lay out.
+ * @param dpr Device pixel ratio.
+ */
+export function layoutPreview(
+  canvas: SessionCanvas,
+  viewport: SessionViewport,
+  renderer: Pick<EngineCharacterRenderer, 'resize'>,
+  devicePixelRatio: number,
+): void {
+  const dpr = devicePixelRatio > 0 ? devicePixelRatio : 1;
+  const rect = viewport.getBoundingClientRect();
+  const l = renderer.resize(
+    Math.max(1, rect.width),
+    Math.max(1, rect.height),
+    dpr,
+  );
+  canvas.style.width = `${l.cssW}px`;
+  canvas.style.height = `${l.cssH}px`;
+  // Centre on a whole device pixel: a half-pixel offset would blur the upscale.
+  const snap = (v: number): number => Math.floor(v * dpr) / dpr;
+  canvas.style.marginLeft = `${snap(Math.max(0, (rect.width - l.cssW) / 2))}px`;
+  canvas.style.marginTop = `${snap(Math.max(0, (rect.height - l.cssH) / 2))}px`;
 }
 
 function messageOf(error: unknown): string {
@@ -104,12 +149,9 @@ export function startPreviewSession(
     const registry = deps.createRegistry();
     await deps.loadPacks(registry);
     if (cancelled) return;
-    const rect = viewport.getBoundingClientRect();
-    canvas.width = Math.max(1, Math.floor(rect.width));
-    canvas.height = Math.max(1, Math.floor(rect.height));
     const created = await deps.createRenderer(canvas, {
       registry,
-      previewScale: 1,
+      settings: plan.settings,
       onError: error => fail(`${error.code}: ${error.message}`),
     });
     if (!created.ok) {
@@ -120,6 +162,7 @@ export function startPreviewSession(
       return;
     }
     renderer = created.value;
+    layoutPreview(canvas, viewport, renderer, deps.devicePixelRatio());
     events.onRenderer(renderer, registry);
     const spec = await renderer.setCharacter(plan.character);
     if (cancelled) return;
@@ -130,10 +173,9 @@ export function startPreviewSession(
       clipDurationSec: registry.clipEntry(plan.clip)?.durationSec ?? 0,
     });
     const live = renderer;
-    disconnect = deps.observeResize(viewport, () => {
-      const r = viewport.getBoundingClientRect();
-      live.resize(Math.max(1, r.width), Math.max(1, r.height));
-    });
+    disconnect = deps.observeResize(viewport, () =>
+      layoutPreview(canvas, viewport, live, deps.devicePixelRatio()),
+    );
   };
 
   const done = run().catch((error: unknown) => {

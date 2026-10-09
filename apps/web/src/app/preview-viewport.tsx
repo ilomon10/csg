@@ -11,10 +11,15 @@ import {usePreview} from './use-preview';
 export function PreviewViewport() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
-  const {state, togglePlay, selectClip, turn, seek, dismissError} = usePreview(
-    canvasRef,
-    viewportRef,
-  );
+  const {
+    state,
+    togglePlay,
+    selectClip,
+    turn,
+    seek,
+    setShowExportFrames,
+    dismissError,
+  } = usePreview(canvasRef, viewportRef);
   const ready = state.status === 'ready';
   const direction = DIRECTION_ORDER[state.direction] ?? 'e';
 
@@ -115,6 +120,16 @@ export function PreviewViewport() {
         >
           &rsaquo;
         </button>
+        <label>
+          <input
+            type="checkbox"
+            data-testid="show-export-frames"
+            checked={state.showExportFrames}
+            disabled={!ready}
+            onChange={e => setShowExportFrames(e.target.checked)}
+          />{' '}
+          Show export frames
+        </label>
         <label className="scrub">
           Time
           <input

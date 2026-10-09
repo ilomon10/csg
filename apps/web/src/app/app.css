@@ -70,8 +70,9 @@ body {
 }
 .preview-canvas {
   display: block;
-  width: 100%;
-  height: 100%;
+  /* Engine drawing buffer = cell size; the session sets the integer-scaled CSS size. */
+  image-rendering: pixelated;
+  flex: none;
 }
 .backend-badge {
   position: absolute;
