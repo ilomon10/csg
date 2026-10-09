@@ -427,7 +427,13 @@ test('AC-UX-003.1: Pixel mode keeps the 64x64 backing store at an integer zoom; 
   const l3 = await canvasLayout(page, STAGE);
   expect(Math.abs(l3.cssW - (box?.width ?? 0))).toBeLessThan(2);
   expect(l3.pixelated).toBe(false);
-  expect(l3.cellW).toBeGreaterThan(64);
+  // The renderer applies the device-pixel resize on its next frame, after the CSS size; on a
+  // slow software-GPU runner that can land after the first read, so wait for it.
+  await expect
+    .poll(async () => (await canvasLayout(page, STAGE)).cellW, {
+      timeout: 20_000,
+    })
+    .toBeGreaterThan(64);
   await page
     .getByRole('group', {name: 'View mode'})
     .getByRole('button', {name: 'Pixel'})
