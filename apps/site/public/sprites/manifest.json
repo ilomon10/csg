@@ -1398,6 +1398,22 @@
       }
     },
     {
+      "file": "og/docs/contribute/adr/0009-golden-images-and-gpu-determinism.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: 0009. Golden images and GPU determinism",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
       "file": "og/docs/contribute/adr.png",
       "width": 1200,
       "height": 630,

@@ -4,7 +4,7 @@ title: Export (sprite sheets, metadata, credits)
 status: draft
 owner: spec-writer (review: graphics-engineer)
 depends_on: [constitution, 000-overview, 003-pixel-render-pipeline, 004-animation, 008-custom-model-upload]
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 ---
 
 # 005 – Export
@@ -218,6 +218,8 @@ Everything is rendered once at 1× (the cell resolution). Larger scales are made
 - Browser blocks downloads or storage is full → `EXP_DOWNLOAD_FAILED` with retry, and nothing is lost (REQ-EXP-017).
 - Cancel during packaging → same as REQ-EXP-024.
 - Export of 1 direction with label `s` → tags `<label>_s` (REQ-EXP-012).
+- Feet or a lying pose below the ground row → with auto framing spec 003 fits them into the cell and no `PIX_FRAMING_CLIPPED` warning is passed through; the warning appears only with fixed framing or when `pivotRowPx` leaves no room below the outline margin (spec 003 REQ-PIX-007 note, AC-PIX-009.3). The pivot in the manifest is unchanged (REQ-PIX-008). *(Added 2026-10-09 (M2-01b).)*
+- WebGL2 without `EXT_color_buffer_float` → the pixel pipeline cannot be created and the export fails with `PIX_BACKEND_UNAVAILABLE` before any frame is rendered; no files are offered (spec 003 AC-PIX-026.2). *(Added 2026-10-09 (M2-01b).)*
 
 ## Data & contracts
 
@@ -249,6 +251,8 @@ export interface ExportSettings {
   enginePreset: 'none' | 'godot4' | 'phaser3' | 'unity' | 'tiled';
   /** NEW [P2]. Default both false, scale 2. */
   previews: { gif: boolean; apng: boolean; scale: 1 | 2 | 4 | 8 };
+  /** NEW (added 2026-10-09 (LIT)). Auxiliary 2D lighting maps, defined in spec 012 (`LightingMapSettings`). Absent = no maps. */
+  maps?: LightingMapSettings;
   includeCredits: true;
 }
 
@@ -337,6 +341,8 @@ export interface SpriteExportManifest {
 | Credits | `CREDITS.txt` |
 | Download | `<base>.zip` |
 
+*(Note added 2026-10-09 (LIT).)* **Auxiliary lighting maps** (normal `_n`, albedo `_albedo`, mask `_m`, specular `_s`, UV `_uv`, depth `_d`, emission `_e`) are defined in spec 012 (LIT). They share this spec's layout, scales, naming base, PNG/ZIP determinism (REQ-EXP-018), size limits (REQ-EXP-025), progress and cancel rules. The map suffix goes before the scale suffix (`<base>_n@2x.png`). Spec 012 overrides two rules for maps only: normal maps fill transparent pixels with the flat normal (128, 128, 255, 0) instead of (0, 0, 0, 0) (REQ-EXP-002), and data maps are never indexed PNGs (REQ-EXP-019). With maps enabled, the manifest gains an optional `maps` object and the Aseprite JSON a `meta.maps` key (REQ-LIT-014, REQ-LIT-015). Colour sheets and `CREDITS.txt` are unchanged by maps (REQ-LIT-002).
+
 **Aseprite JSON example** (one frame shown)
 
 ```json
@@ -402,7 +408,7 @@ The `WARNINGS` section appears only when warnings exist. No dates or times appea
 
 ## Open questions
 
-- [NEEDS CLARIFICATION: Should the Aseprite JSON carry a `meta.csg` block (manifest hash, pivot) so a single file is enough, or stay strictly vanilla? Current choice: vanilla + separate manifest. Owner: maintainers.]
+- [NEEDS CLARIFICATION: Should the Aseprite JSON carry a `meta.csg` block (manifest hash, pivot) so a single file is enough, or stay strictly vanilla? Current choice: vanilla + separate manifest. Owner: maintainers.] *(Note added 2026-10-09 (LIT): spec 012 REQ-LIT-015 adds a `meta.maps` key only when lighting maps are exported; decide both together, see the spec 012 open questions.)*
 - [NEEDS CLARIFICATION: Unity target format for REQ-EXP-030. Owner: community/maintainers. Not blocking (P3).]
 - [NEEDS CLARIFICATION: Should GIF previews also be used by the website (spec 010, W2)? If so, the site needs a fixed export preset. Owner: web track.]
 - [NEEDS CLARIFICATION: Should `CREDITS.txt` list the app itself and its code license? Proposal: one footer line with the repo URL and license. Owner: maintainers.]
@@ -412,7 +418,7 @@ The `WARNINGS` section appears only when warnings exist. No dates or times appea
 
 - `docs/architecture.md` §2.1, §3.4, §3.6, §4.1, §4.3
 - `specs/constitution.md` P-02, P-03, P-04, P-07, P-10
-- Spec 003 (PIX): `RenderedFrame`, pivot, `DIRECTION_ORDER`, `PIX_FRAMING_CLIPPED`
+- Spec 003 (PIX): `RenderedFrame`, pivot, `DIRECTION_ORDER`, `PIX_FRAMING_CLIPPED`, `PIX_BACKEND_UNAVAILABLE` (amended 2026-10-09 (M2-01b))
 - ADR-0005 (licensing UX, local-first)
 - Aseprite CLI `--sheet` / `--data` JSON format: https://www.aseprite.org/docs/cli/ (accessed 2026-10-08)
 - Phaser 3 Aseprite loader: https://docs.phaser.io/api-documentation/class/loader-loaderplugin#aseprite (accessed 2026-10-08)

@@ -1,11 +1,14 @@
 ---
 title: Render settings overview
-description: Where the Render tab sets the camera, directions, size, lighting, toon bands, outlines, palette and alpha, and how those settings reach the exported sprites.
+description: Where the Render tab sets the camera, directions, size, lighting, toon bands, outlines, palette and alpha, and the default look each one starts from.
 ---
 
 # Render settings overview
 
-The **Render** tab controls how your character becomes pixels. Every setting here also applies to the export.
+The **Render** tab controls how your character becomes pixels. The settings here also apply to the export.
+
+> [!NOTE]
+> **Planned.** The Render tab is not in the editor yet. The defaults on these pages are the look the pixel pipeline renders today. The controls for changing them come in a later release.
 
 <!-- TODO(screenshot): Render tab with the camera, directions and resolution sections visible -->
 
@@ -18,21 +21,40 @@ The **Render** tab controls how your character becomes pixels. Every setting her
 | Resolution | Width and height of each frame, from 32 to 128 pixels | [Resolution](./resolution.md)                       |
 | Lighting   | The direction of the key light and ambient light      | [Toon shading and outlines](./toon-and-outlines.md) |
 | Toon       | Number of shading bands and rim light                 | [Toon shading and outlines](./toon-and-outlines.md) |
-| Outline    | Outer and inner outlines, and their color             | [Toon shading and outlines](./toon-and-outlines.md) |
+| Outline    | Outer and inner outlines, and their colors            | [Toon shading and outlines](./toon-and-outlines.md) |
 | Palette    | A fixed set of colors, and dithering                  | [Palettes and dithering](./palettes-and-dither.md)  |
 | Alpha      | How see-through a pixel must be to stay visible       | See below                                           |
 
+## Default look
+
+- **Resolution:** 64 by 64 pixels.
+- **Key light:** 135 degrees around the screen (upper left) and 45 degrees high.
+- **Ambient:** 0.1.
+- **Toon bands:** 3, evenly spaced.
+- **Rim light:** on, strength 0.5.
+- **Outer outline:** on, 1 pixel, black.
+- **Inner lines:** on, darkened by 0.6, drawn where parts meet.
+- **Palette:** none (exact colors).
+- **Dither:** none, strength 0.5.
+- **Alpha cutoff:** 0.5.
+
+Camera defaults (directions, pivot row) depend on the camera you choose. See [Camera styles](./camera-styles.md).
+
 ## Alpha cutoff
 
-Every pixel in the export is either fully visible or fully transparent. The **alpha cutoff** decides the boundary. A pixel whose opacity reaches the cutoff is kept, and anything below it is removed. The default is 0.5.
+Every pixel in the export is either fully visible or fully transparent. The **alpha cutoff** decides the boundary. A pixel whose opacity reaches the cutoff is kept, and anything below it is removed. The cutoff can be from 0.01 to 1. The default is 0.5.
 
 ## Pixel view matches the export
 
-The viewport shows the exact frame that the export will contain, at the same size and with the same colors. You do not need to export to check a change. Switch to **Pixel** view to see it.
+The preview is designed to show exactly the frame that the export will contain, at the same size and with the same colors. You do not need to export to check a change.
+
+> [!NOTE]
+> **Planned.** The Pixel view switch is planned with the Render tab.
 
 ## Look presets
 
-The four built-in looks change the lighting, outline, palette and dithering in one step. They are **Classic 16-bit** (the default), **GameBoy 4-color**, **NES-like** and **Hi-bit**. Choose one from the look picker in the Look panel. See [Shader graph](../shader-graph/index.md).
+> [!NOTE]
+> **Planned.** Built-in looks that change the lighting, outline, palette and dithering in one step are planned: Classic 16-bit (the default look), GameBoy 4-color, NES-like and Hi-bit. See [Shader graph](../shader-graph/index.md) for how looks are built.
 
 <!-- spec: REQ-PIX-003 -->
 <!-- spec: REQ-PIX-037 -->

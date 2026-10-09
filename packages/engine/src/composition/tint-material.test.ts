@@ -6,10 +6,13 @@ import {
   MeshStandardMaterial,
   BoxGeometry,
   BufferAttribute,
+  LinearMipmapLinearFilter,
+  LinearMipmapNearestFilter,
+  NearestFilter,
 } from 'three';
-import type {Material} from 'three';
+import type {Material, Texture} from 'three';
 import {MeshBasicNodeMaterial} from 'three/webgpu';
-import {TINT_SLOTS} from '@csg/parts-schema';
+import {TINT_SLOTS, defaultRenderSettings} from '@csg/parts-schema';
 import type {HexColor, PartEntry, TintSlot} from '@csg/parts-schema';
 import {describe, expect, it} from 'vitest';
 import type {LoadedPartInternal} from '../contracts/registry';
@@ -26,12 +29,18 @@ import {
   loadFixturePart,
   loadFixtureRig,
 } from './test-fixtures';
+import {SettingsBinder} from '../pipeline/settings-binder';
+import {TOON_MATERIAL_USER_DATA} from '../pipeline/toon-material';
 import {
   applyTintMaterial,
   createTintUniforms,
+  ensureMipmapped,
+  mipmappedTexture,
+  releaseMipmappedTexture,
   restoreMaterials,
   setTint,
 } from './tint-material';
+import type {TintMaterialOptions} from './tint-material';
 
 const rig = loadFixtureRig();
 const manifest = loadFixtureManifest();
@@ -51,6 +60,22 @@ function nodesOf(material: Material): unknown[] {
     root?.traverse(n => out.push(n));
   }
   return out;
+}
+
+/** Samples `map`: the texture itself or its mipmapped clone (same image source, review L7). */
+function samples(value: unknown, map: Texture): boolean {
+  return (
+    value === map ||
+    ((value as {isTexture?: boolean} | null)?.isTexture === true &&
+      (value as Texture).source === map.source)
+  );
+}
+
+function isTextureOf(node: unknown, map: Texture): boolean {
+  return (
+    (node as {isTextureNode?: boolean}).isTextureNode === true &&
+    samples((node as {value?: unknown}).value, map)
+  );
 }
 
 function syntheticPart(
@@ -150,10 +175,10 @@ describe('tint materials', () => {
     for (const slot of TINT_SLOTS) setTint(uniforms, slot, '#ff0000');
     expect(m.color.getHex()).toBe(before);
     expect(m.color.getHex()).toBe(0x336699);
-    expect(m.map).toBe(WHITE);
+    expect(samples(m.map, WHITE)).toBe(true);
   });
 
-  it('AC-CMP-014.1: multiply mode is luminance(texel) x tint (texture and tint in the graph); without a map the color is the tint', () => {
+  it('AC-CMP-014.1: multiply mode is texel.rgb x tint (texture and tint in the graph, no luminance); without a map the color is the tint', () => {
     const uniforms = createTintUniforms({...INITIAL, primary: '#808080'});
     const textured = syntheticPart(
       [Object.assign(new MeshStandardMaterial({map: WHITE}), {name: 'Cloth'})],
@@ -167,13 +192,7 @@ describe('tint materials', () => {
     );
     const nodes = nodesOf(material(textured));
     expect(nodes).toContain(uniforms.primary);
-    expect(
-      nodes.some(
-        n =>
-          (n as {isTextureNode?: boolean}).isTextureNode === true &&
-          (n as {value?: unknown}).value === WHITE,
-      ),
-    ).toBe(true);
+    expect(nodes.some(n => isTextureOf(n, WHITE))).toBe(true);
 
     const plain = syntheticPart(
       [
@@ -192,7 +211,7 @@ describe('tint materials', () => {
     expect(material(plain).colorNode).toBe(uniforms.primary);
   });
 
-  it('AC-CMP-014.2: replace mode colors the material with the flat tint', () => {
+  it('AC-CMP-014.2: replace mode colors the material with the flat tint and keeps the texel alpha (cut-out cards)', () => {
     const uniforms = createTintUniforms({...INITIAL, metal: '#ff0000'});
     const part = syntheticPart(
       [Object.assign(new MeshStandardMaterial({map: WHITE}), {name: 'Metal'})],
@@ -205,9 +224,26 @@ describe('tint materials', () => {
       undefined,
     );
     const m = material(part);
-    expect(m.colorNode).toBe(uniforms.metal);
+    // vec4(tint, texel.a): the color is the flat tint, the alpha the texture's.
+    expect(m.colorNode).not.toBe(uniforms.metal);
+    const nodes = nodesOf(m);
+    expect(nodes).toContain(uniforms.metal);
+    expect(nodes.some(n => isTextureOf(n, WHITE))).toBe(true);
     expect(m.userData['tintSlot']).toBe('metal');
     expect(uniforms.metal.value.getHexString()).toBe('ff0000');
+
+    // Without a map there is no alpha to keep: the flat tint itself.
+    const flat = syntheticPart(
+      [Object.assign(new MeshStandardMaterial(), {name: 'Metal'})],
+      false,
+    );
+    applyTintMaterial(
+      flat,
+      [{material: 'Metal', slot: 'metal', mode: 'replace'}],
+      uniforms,
+      undefined,
+    );
+    expect(material(flat).colorNode).toBe(uniforms.metal);
   });
 
   it('AC-CMP-011.1: only geometry with regionId gets the region discard, driven by the shared mask uniform', () => {
@@ -298,5 +334,227 @@ describe('tint materials', () => {
     restoreMaterials(part.scene);
     expect(clone.material).toBe(original);
     attached.value.dispose();
+  });
+
+  describe('toon path (spec 003 pixel pipeline)', () => {
+    function options(binder = new SettingsBinder(defaultRenderSettings())) {
+      return {
+        binder,
+        opts: {
+          binder,
+          backend: 'webgl2',
+          mode: 'export',
+        } as TintMaterialOptions,
+      };
+    }
+
+    it('AC-CMP-013.1/014.1: tinted toon materials keep the M1 tint (shared slot uniform, texture in multiply) and are lit by the binder', () => {
+      const {binder, opts} = options();
+      const uniforms = createTintUniforms(INITIAL);
+      const part = syntheticPart(
+        [
+          Object.assign(new MeshStandardMaterial({map: WHITE}), {
+            name: 'Cloth',
+          }),
+        ],
+        false,
+      );
+      applyTintMaterial(
+        part,
+        [{material: 'Cloth', slot: 'primary'}],
+        uniforms,
+        undefined,
+        opts,
+      );
+      const m = material(part);
+      expect(m.userData[TOON_MATERIAL_USER_DATA]).toBe('toon');
+      expect(m.userData['tintSlot']).toBe('primary');
+      const nodes = nodesOf(m);
+      expect(nodes).toContain(uniforms.primary);
+      expect(nodes).toContain(binder.lightDir);
+      expect(nodes).toContain(binder.uniformNode('alpha.cutoff'));
+      expect(nodes.some(n => isTextureOf(n, WHITE))).toBe(true);
+      const version = m.version;
+      setTint(uniforms, 'primary', '#3a5fcd');
+      expect(m.version).toBe(version);
+    });
+
+    it('AC-CMP-014.2: replace-mode toon materials use the flat tint with the texel alpha (cut-out cards)', () => {
+      const {opts} = options();
+      const uniforms = createTintUniforms(INITIAL);
+      const withMap = syntheticPart(
+        [Object.assign(new MeshStandardMaterial({map: WHITE}), {name: 'Hair'})],
+        false,
+      );
+      applyTintMaterial(
+        withMap,
+        [{material: 'Hair', slot: 'hair', mode: 'replace'}],
+        uniforms,
+        undefined,
+        opts,
+      );
+      const nodes = nodesOf(material(withMap));
+      expect(nodes).toContain(uniforms.hair);
+      // The albedo is read only for its alpha in replace mode.
+      expect(nodes.some(n => isTextureOf(n, WHITE))).toBe(true);
+    });
+
+    it('AC-CMP-013.2: an unmapped toon material references no tint uniform', () => {
+      const {opts} = options();
+      const uniforms = createTintUniforms(INITIAL);
+      const part = syntheticPart(
+        [
+          Object.assign(new MeshStandardMaterial({color: 0x336699}), {
+            name: 'X',
+          }),
+        ],
+        false,
+      );
+      applyTintMaterial(
+        part,
+        [{material: 'Cloth', slot: 'primary'}],
+        uniforms,
+        undefined,
+        opts,
+      );
+      for (const slot of TINT_SLOTS) {
+        expect(nodesOf(material(part))).not.toContain(uniforms[slot]);
+      }
+    });
+
+    it('AC-CMP-011.1 (unit): body toon materials combine the region mask with the alpha cutoff discard; non-body meshes get only the cutoff', () => {
+      const {binder, opts} = options();
+      const uniforms = createTintUniforms(INITIAL);
+      const mask = createRegionMask();
+      const body = syntheticPart(
+        [Object.assign(new MeshStandardMaterial(), {name: 'Body'})],
+        true,
+      );
+      const shirt = syntheticPart(
+        [Object.assign(new MeshStandardMaterial(), {name: 'Cloth'})],
+        false,
+      );
+      applyTintMaterial(
+        body,
+        [{material: 'Body', slot: 'skin'}],
+        uniforms,
+        mask,
+        opts,
+      );
+      applyTintMaterial(
+        shirt,
+        [{material: 'Cloth', slot: 'primary'}],
+        uniforms,
+        mask,
+        opts,
+      );
+      const bodyMask = nodesOf(material(body));
+      expect(bodyMask).toContain(mask);
+      expect(bodyMask).toContain(binder.uniformNode('alpha.cutoff'));
+      const shirtNodes = nodesOf(material(shirt));
+      expect(shirtNodes).not.toContain(mask);
+      expect(shirtNodes).toContain(binder.uniformNode('alpha.cutoff'));
+    });
+
+    it('AC-PIX-038.1 (unit): part textures get mipmaps; a NEAREST sampler becomes LINEAR_MIPMAP_LINEAR, a mipmapped one is kept', () => {
+      const nearest = new DataTexture(new Uint8Array(4), 1, 1);
+      nearest.minFilter = NearestFilter;
+      nearest.magFilter = NearestFilter;
+      nearest.generateMipmaps = false;
+      const {opts} = options();
+      const part = syntheticPart(
+        [
+          Object.assign(new MeshStandardMaterial({map: nearest}), {
+            name: 'Cloth',
+          }),
+        ],
+        false,
+      );
+      applyTintMaterial(
+        part,
+        [{material: 'Cloth', slot: 'primary'}],
+        createTintUniforms(INITIAL),
+        undefined,
+        opts,
+      );
+      // The material samples a mipmapped clone over the same image source.
+      const sampled = nodesOf(material(part))
+        .map(n => (n as {value?: Texture}).value)
+        .filter((v): v is Texture => v?.isTexture === true);
+      expect(sampled.length).toBeGreaterThan(0);
+      for (const t of sampled) {
+        expect(t).not.toBe(nearest);
+        expect(t.source).toBe(nearest.source);
+        expect(t.minFilter).toBe(LinearMipmapLinearFilter);
+        expect(t.generateMipmaps).toBe(true);
+      }
+      const kept = new DataTexture(new Uint8Array(4), 1, 1);
+      kept.minFilter = LinearMipmapNearestFilter;
+      kept.generateMipmaps = true;
+      expect(ensureMipmapped(kept)).toBe(false);
+      expect(kept.minFilter).toBe(LinearMipmapNearestFilter);
+    });
+
+    it('AC-PIX-038.1 / review L7: registry textures are never mutated; clones are shared and disposed with their last user', () => {
+      const shared = new DataTexture(new Uint8Array(4), 1, 1);
+      shared.minFilter = NearestFilter;
+      shared.generateMipmaps = false;
+      const versionBefore = shared.version;
+      const {opts} = options();
+      const parts = [0, 1].map(() =>
+        syntheticPart(
+          [
+            Object.assign(new MeshStandardMaterial({map: shared}), {
+              name: 'Cloth',
+            }),
+          ],
+          false,
+        ),
+      );
+      for (const part of parts) {
+        applyTintMaterial(
+          part,
+          [{material: 'Cloth', slot: 'primary'}],
+          createTintUniforms(INITIAL),
+          undefined,
+          opts,
+        );
+      }
+      expect(shared.minFilter).toBe(NearestFilter);
+      expect(shared.generateMipmaps).toBe(false);
+      expect(shared.version).toBe(versionBefore);
+      // One clone for both parts.
+      const clone = mipmappedTexture(shared);
+      releaseMipmappedTexture(shared, clone);
+      let disposed = 0;
+      clone.addEventListener('dispose', () => disposed++);
+      const [first, second] = parts as [LoadedPartInternal, LoadedPartInternal];
+      restoreMaterials(first.scene);
+      expect(disposed).toBe(0);
+      restoreMaterials(second.scene);
+      expect(disposed).toBe(1);
+      // Already mipmapped: used as is, never disposed by a release.
+      const ready = new DataTexture(new Uint8Array(4), 1, 1);
+      ready.minFilter = LinearMipmapLinearFilter;
+      ready.generateMipmaps = true;
+      expect(mipmappedTexture(ready)).toBe(ready);
+      releaseMipmappedTexture(ready, ready);
+    });
+
+    it('re-applying the toon path disposes the previous toon materials', () => {
+      const {opts} = options();
+      const uniforms = createTintUniforms(INITIAL);
+      const part = syntheticPart(
+        [Object.assign(new MeshStandardMaterial(), {name: 'Cloth'})],
+        false,
+      );
+      applyTintMaterial(part, [], uniforms, undefined, opts);
+      let disposed = 0;
+      material(part).addEventListener('dispose', () => disposed++);
+      applyTintMaterial(part, [], uniforms, undefined, opts);
+      expect(disposed).toBe(1);
+      restoreMaterials(part.scene);
+      expect(material(part)).toBeInstanceOf(MeshStandardMaterial);
+    });
   });
 });

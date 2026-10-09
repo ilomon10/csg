@@ -1,20 +1,27 @@
-import {DIRECTION_ORDER} from '@csg/engine';
+import {DIRECTION_ORDER} from '@csg/parts-schema';
 import type {ClipRef} from '@csg/parts-schema';
 import {useRef} from 'react';
 import {PREVIEW_CLIPS} from './default-character';
-import {usePreview} from './use-preview';
+import {PREVIEW_PALETTES, usePreview} from './use-preview';
+import type {PreviewPalette} from './use-preview';
 
 /**
  * Center preview viewport (spec 009): the engine canvas, the renderer backend badge
  * (REQ-GEN-002), M1 playback controls and an inline error alert.
  */
 export function PreviewViewport() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
-  const {state, togglePlay, selectClip, turn, seek, dismissError} = usePreview(
-    canvasRef,
-    viewportRef,
-  );
+  const {
+    state,
+    togglePlay,
+    selectClip,
+    turn,
+    seek,
+    setShowExportFrames,
+    selectPalette,
+    dismissError,
+    resumeAfterFailure,
+  } = usePreview(viewportRef);
   const ready = state.status === 'ready';
   const direction = DIRECTION_ORDER[state.direction] ?? 'e';
 
@@ -24,14 +31,11 @@ export function PreviewViewport() {
         className="preview-stage"
         ref={viewportRef}
         data-status={state.status}
+        data-lut-worker-builds={state.lutStats?.workerBuilds ?? 0}
+        data-lut-main-builds={state.lutStats?.mainThreadBuilds ?? 0}
+        data-lut-failures={state.lutStats?.failures ?? 0}
       >
-        <canvas
-          ref={canvasRef}
-          className="preview-canvas"
-          data-testid="preview-canvas"
-          aria-label="Character preview canvas"
-          role="img"
-        />
+        {/* The engine canvas is inserted here by usePreview (a fresh element per session). */}
         <span
           className="backend-badge"
           data-testid="renderer-badge"
@@ -56,6 +60,16 @@ export function PreviewViewport() {
             data-testid="preview-error"
           >
             <span>{state.error}</span>
+            {ready && state.errorCode === 'PIX_PREVIEW_FAILED' && (
+              <button
+                type="button"
+                onClick={resumeAfterFailure}
+                aria-label="Resume preview"
+                data-testid="preview-resume"
+              >
+                Resume
+              </button>
+            )}
             {ready && (
               <button
                 type="button"
@@ -85,6 +99,7 @@ export function PreviewViewport() {
         <label>
           Clip
           <select
+            data-testid="clip-select"
             value={state.clip}
             disabled={!ready}
             onChange={e => selectClip(e.target.value as ClipRef)}
@@ -92,6 +107,21 @@ export function PreviewViewport() {
             {PREVIEW_CLIPS.map(c => (
               <option key={c.ref} value={c.ref}>
                 {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Palette
+          <select
+            data-testid="palette-select"
+            value={state.palette}
+            disabled={!ready}
+            onChange={e => selectPalette(e.target.value as PreviewPalette)}
+          >
+            {PREVIEW_PALETTES.map(id => (
+              <option key={id} value={id}>
+                {id}
               </option>
             ))}
           </select>
@@ -115,6 +145,16 @@ export function PreviewViewport() {
         >
           &rsaquo;
         </button>
+        <label>
+          <input
+            type="checkbox"
+            data-testid="show-export-frames"
+            checked={state.showExportFrames}
+            disabled={!ready}
+            onChange={e => setShowExportFrames(e.target.checked)}
+          />{' '}
+          Show export frames
+        </label>
         <label className="scrub">
           Time
           <input

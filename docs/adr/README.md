@@ -16,6 +16,7 @@ its context, consequences and the alternatives we rejected. The architecture ove
 | [0006](0006-spec-driven-development.md) | Spec-driven development with EARS and stable IDs | Accepted | 2026-10-08 |
 | [0007](0007-nextjs-fumadocs-website.md) | Next.js + Fumadocs website with Markdown in docs/guide | Accepted | 2026-10-08 |
 | [0008](0008-shared-rig-skeleton-groups-runtime-retarget.md) | Shared rig with skeleton groups and runtime retargeting | Accepted | 2026-10-09 |
+| [0009](0009-golden-images-and-gpu-determinism.md) | Golden images and GPU determinism | Accepted | 2026-10-09 |
 
 ## Process
 

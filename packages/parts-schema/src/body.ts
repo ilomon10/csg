@@ -41,7 +41,7 @@ export const tintSlotSchema = z.enum(TINT_SLOTS);
 /** A tint slot ID such as `skin`. */
 export type TintSlot = z.infer<typeof tintSlotSchema>;
 
-/** How a tint combines with the texture: luminance times tint, or flat replacement. */
+/** How a tint combines with the texture: `texel.rgb × tint` (white keeps the authored colours), or flat replacement. */
 export const tintModeSchema = z.enum(['multiply', 'replace']);
 
 /** A tint mode. */

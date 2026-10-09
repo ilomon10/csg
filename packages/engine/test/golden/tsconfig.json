@@ -1,0 +1,4 @@
+{
+  "extends": "../gpu/tsconfig.json",
+  "include": [".", "../gpu"]
+}

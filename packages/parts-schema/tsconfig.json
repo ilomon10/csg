@@ -5,5 +5,5 @@
     "outDir": "dist",
     "resolveJsonModule": true
   },
-  "include": ["src", "data/default-character.json"]
+  "include": ["src", "data/default-character.json", "data/palettes/*.json"]
 }

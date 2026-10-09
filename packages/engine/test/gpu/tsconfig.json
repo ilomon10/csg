@@ -1,0 +1,12 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["."]
+}

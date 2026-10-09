@@ -18,6 +18,7 @@
 - [ ] Every P1 AC touched has a passing test
 - [ ] `pnpm test` passes
 - [ ] Golden images were regenerated per backend, with the reason (rendering changes only)
+- [ ] Golden images changed: the reason is recorded in the PR and they were regenerated in the canonical container (`pnpm goldens:docker` or the `Update goldens` workflow), not locally
 
 ## Assets
 

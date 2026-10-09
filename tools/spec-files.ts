@@ -29,7 +29,7 @@ export function isTraceExcluded(relPath: string): boolean {
   );
 }
 
-/** Recursively lists test files under packages/, apps/ and tools/ (minus {@link isTraceExcluded}). */
+/** Recursively lists test files (`*.test`, `*.spec`, `*.gpu`) under packages/, apps/ and tools/ (minus {@link isTraceExcluded}). */
 export function readTests(): SpecFile[] {
   const out: SpecFile[] = [];
   const skip = new Set([
@@ -47,7 +47,7 @@ export function readTests(): SpecFile[] {
       const path = join(dir, entry);
       if (statSync(path).isDirectory()) {
         walk(path);
-      } else if (/\.(test|spec)\.tsx?$/.test(entry)) {
+      } else if (/\.(test|spec|gpu)\.tsx?$/.test(entry)) {
         const name = relative(ROOT, path);
         if (isTraceExcluded(name)) continue;
         out.push({name, content: readFileSync(path, 'utf8')});

@@ -88,6 +88,21 @@ const FEATURES = readdirSync(
   .map(d => d.name);
 const featureDir = f => `./apps/web/src/features/${f}`;
 
+const XSS_SYNTAX = [
+  ...['innerHTML', 'outerHTML'].map(name => ({
+    selector: `AssignmentExpression[left.property.name='${name}']`,
+    message: `Assigning ${name} is banned (XSS); build DOM nodes or React elements.`,
+  })),
+  {
+    selector: "CallExpression[callee.property.name='insertAdjacentHTML']",
+    message: 'insertAdjacentHTML is banned (XSS).',
+  },
+  {
+    selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+    message: 'dangerouslySetInnerHTML is banned (XSS).',
+  },
+];
+
 export default defineConfig([
   {ignores},
   ...gts,
@@ -306,22 +321,54 @@ export default defineConfig([
   {
     // XSS sinks: no raw HTML injection in the app or packages.
     files: ['apps/web/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
+    rules: {'no-restricted-syntax': ['error', ...XSS_SYNTAX]},
+  },
+  {
+    // Workers parse untrusted data and must stay offline and static (security review M3/L1):
+    // no network, no dynamic code loading or evaluation. Repeats the XSS selectors because a
+    // later `no-restricted-syntax` entry replaces the one above.
+    files: ['**/*.worker.{ts,tsx}'],
     rules: {
+      'no-restricted-globals': [
+        'error',
+        ...[
+          'fetch',
+          'importScripts',
+          'WebSocket',
+          'EventSource',
+          'XMLHttpRequest',
+        ].map(name => ({
+          name,
+          message: `${name} is banned in workers (offline, static).`,
+        })),
+        ...['eval', 'Function'].map(name => ({
+          name,
+          message: `${name} is banned in workers (no dynamic code).`,
+        })),
+      ],
       'no-restricted-syntax': [
         'error',
-        ...['innerHTML', 'outerHTML'].map(name => ({
-          selector: `AssignmentExpression[left.property.name='${name}']`,
-          message: `Assigning ${name} is banned (XSS); build DOM nodes or React elements.`,
-        })),
+        ...XSS_SYNTAX,
         {
-          selector: "CallExpression[callee.property.name='insertAdjacentHTML']",
-          message: 'insertAdjacentHTML is banned (XSS).',
+          selector: 'ImportExpression',
+          message: 'Dynamic import() is banned in workers.',
         },
         {
-          selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
-          message: 'dangerouslySetInnerHTML is banned (XSS).',
+          selector: "NewExpression[callee.name='Function']",
+          message: 'new Function is banned in workers.',
+        },
+        {
+          selector: "CallExpression[callee.name='Function']",
+          message: 'Function() is banned in workers.',
+        },
+        {
+          selector: "CallExpression[callee.name='eval']",
+          message: 'eval is banned in workers.',
         },
       ],
+      'no-eval': 'error',
+      'no-new-func': 'error',
+      'no-implied-eval': 'off',
     },
   },
   {

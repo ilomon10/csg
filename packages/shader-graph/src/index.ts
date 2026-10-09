@@ -1,19 +1,5 @@
-import {z} from 'zod';
-
-/** Socket value types of the shader graph (pure model, no three.js). */
-export const socketTypeSchema = z.enum([
-  'float',
-  'int',
-  'bool',
-  'vec2',
-  'vec3',
-  'vec4',
-  'color',
-  'texture',
-]);
-
-/** Inferred type of {@link socketTypeSchema}. */
-export type SocketType = z.infer<typeof socketTypeSchema>;
+export {socketTypeSchema} from './sockets/types';
+export type {SocketType} from './sockets/types';
 
 /** Current version of the persisted `sprite-shadergraph` format. */
 export const SHADER_GRAPH_FORMAT_VERSION = 1;

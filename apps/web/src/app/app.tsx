@@ -1,4 +1,3 @@
-import './csp-setup';
 import './app.css';
 import {PreviewViewport} from './preview-viewport';
 

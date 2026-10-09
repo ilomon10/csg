@@ -1,4 +1,11 @@
-import {createReadStream, existsSync, readdirSync, statSync} from 'node:fs';
+import {
+  createReadStream,
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+} from 'node:fs';
 import type {ServerResponse} from 'node:http';
 import {pipeline} from 'node:stream/promises';
 import {readFile} from 'node:fs/promises';
@@ -14,6 +21,23 @@ const PACKS_DIR = resolve(HERE, '../../assets/packs');
 /** Stable URL prefix the packs are served under (dev, preview and build). */
 const PACKS_URL = '/packs/';
 
+/**
+ * The REQ-GEN-010 policy has a single source: the CSP meta in `index.html`. The preview server
+ * sends the same string as a header on worker scripts (REQ-GEN-015, AC-GEN-015.3).
+ */
+function readCsp(): string {
+  const html = readFileSync(resolve(HERE, 'index.html'), 'utf8');
+  const m =
+    /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]*)"/.exec(
+      html,
+    );
+  if (m?.[1] === undefined) throw new Error('index.html has no CSP meta');
+  return m[1].replace(/&#39;|&apos;/g, "'");
+}
+
+/** Built module-worker scripts (`assets/*.worker-<hash>.js`). */
+const WORKER_URL = /\/assets\/[^/]*\.worker-[^/]*\.js$/;
+
 const MIME: Readonly<Record<string, string>> = {
   '.json': 'application/json; charset=utf-8',
   '.glb': 'model/gltf-binary',
@@ -26,12 +50,16 @@ const MIME: Readonly<Record<string, string>> = {
   '.ktx2': 'image/ktx2',
 };
 
+/** Regular files under `dir`; symlinks (files or directories) are skipped, never followed. */
 function listFiles(dir: string): string[] {
-  return readdirSync(dir, {withFileTypes: true}).flatMap(entry =>
-    entry.isDirectory()
+  return readdirSync(dir, {withFileTypes: true}).flatMap(entry => {
+    if (entry.isSymbolicLink()) return [];
+    return entry.isDirectory()
       ? listFiles(join(dir, entry.name))
-      : [join(dir, entry.name)],
-  );
+      : entry.isFile()
+        ? [join(dir, entry.name)]
+        : [];
+  });
 }
 
 function sendStatus(res: ServerResponse, status: number): void {
@@ -64,8 +92,15 @@ const servePacks: Connect.NextHandleFunction = (req, res, next) => {
   const file = join(PACKS_DIR, rel);
   let size: number;
   try {
-    const stat = file.startsWith(PACKS_DIR + sep) ? statSync(file) : null;
-    if (stat === null || !stat.isFile()) return sendStatus(res, 404);
+    if (!file.startsWith(PACKS_DIR + sep)) return sendStatus(res, 404);
+    // Symlinks are never served: lstat the file and require its real path to stay under the
+    // real packs directory (this also rejects a symlinked parent directory).
+    const stat = lstatSync(file);
+    if (stat.isSymbolicLink() || !stat.isFile()) return sendStatus(res, 404);
+    const realRoot = realpathSync(PACKS_DIR);
+    if (!realpathSync(file).startsWith(realRoot + sep)) {
+      return sendStatus(res, 404);
+    }
     size = stat.size;
   } catch {
     return sendStatus(res, 404);
@@ -100,6 +135,13 @@ function packsAndCsp(): Plugin {
       server.middlewares.use(servePacks);
     },
     configurePreviewServer(server) {
+      const csp = readCsp();
+      server.middlewares.use((req, res, next) => {
+        const path = (req.url ?? '').split('?')[0] ?? '';
+        if (WORKER_URL.test(path))
+          res.setHeader('Content-Security-Policy', csp);
+        next();
+      });
       server.middlewares.use(servePacks);
     },
     transformIndexHtml: {
@@ -131,5 +173,18 @@ function packsAndCsp(): Plugin {
 export default defineConfig({
   plugins: [react(), packsAndCsp()],
   build: {chunkSizeWarningLimit: 2500},
-  server: {fs: {allow: [resolve(HERE, '../..')]}},
+  // Module worker bundles must be ES modules: the host starts them with `{type: 'module'}`.
+  worker: {format: 'es'},
+  server: {
+    // Only what dev needs: this app, the workspace packages it imports, the built packs
+    // and the hoisted node_modules; not the whole repo.
+    fs: {
+      allow: [
+        resolve(HERE),
+        resolve(HERE, '../../packages'),
+        PACKS_DIR,
+        resolve(HERE, '../../node_modules'),
+      ],
+    },
+  },
 });

@@ -4,7 +4,7 @@ title: Shader graph format and compiler
 status: draft
 owner: spec-writer
 depends_on: [constitution, 000-overview, 003-pixel-render-pipeline, 006-shader-graph-editor]
-last_updated: 2026-10-08
+last_updated: 2026-10-09
 ---
 
 # 007 – Shader graph format and compiler
@@ -216,7 +216,7 @@ Related: ADR-0003 (WebGPURenderer + TSL, r186 pinned), ADR-0004 (own graph model
 
 **REQ-SGF-033 [P1]** THE SYSTEM SHALL ship `builtin:material-toon` and `builtin:post-default` graph documents that, with default params, render with 0 differing pixels against the M2 golden images, for every M2 golden fixture on both backends.
 
-This is the same obligation as REQ-PIX-035. M2 stage functions keep the shape `(inputs, ctx) => node` defined there, and each built-in `NodeEmitter.compile` wraps the matching stage function.
+This is the same obligation as REQ-PIX-035. M2 stage functions keep the shape `(ctx, inputs, fields) => Record<outputId, node>` defined there (`StageEmitter`, the same argument order as `NodeEmitter.compile`), and each built-in `NodeEmitter.compile` wraps the matching stage function, passing the node's fields as typed `fields`. *(Amended 2026-10-09 (M2-01), A1; previously `(inputs, ctx) => node`.)*
 
 - **AC-SGF-033.1** Given each M2 golden fixture (side, three-quarter, isometric at 32/64/128 px; 18 cases, REQ-PIX-028), When rendered with the graph-compiled pipeline on WebGPU and on `forceWebGL`, Then the pixel diff against the M2 golden for that backend is 0.
 
@@ -265,7 +265,8 @@ This is the same obligation as REQ-PIX-035. M2 stage functions keep the shape `(
 
 - **AC-SGF-041.1** Given a post graph that declares param `dither.strength` with `type: "int"`, When validated, Then `SGF_RESERVED_PARAM` names `dither.strength` and the expected type `float`.
 - **AC-SGF-041.2** Given the built-in post graph, When `RenderSettings.palette.dither.strength` changes from 0.5 to 0.8, Then the uniform keyed `dither.strength` has value 0.8 on the next frame, the compiler is not invoked, and `RenderSettings.params` has no `dither.strength` key.
-- **AC-SGF-041.3** Given a user post graph that does not declare `outline.outer.widthPx`, When the Render tab is shown, Then the outline width control is labelled "controlled by graph" (spec 003, Binding to graphs).
+- **AC-SGF-041.3** Given a user post graph that does not declare `outline.outer.widthPx`, When the Render tab is shown, Then the outline width control is labelled "controlled by graph" (spec 003, Binding to graphs). *(Note 2026-10-09 (QA-E): not testable in M2; verification lands in M4, when user post graphs exist alongside the Render tab UI. Meaning unchanged.)*
+- **AC-SGF-041.4** Given the built-in post graph and default RenderSettings, When compiled, Then the `post.outline@1` node has field `mode` `black` and field `innerMode` `darken`; When `RenderSettings.outline.inner.colorMode` changes to `black`, Then the graph is recompiled (a `field` binding, spec 003 REQ-PIX-034 note) with `innerMode` `black`, `mode` stays `black`, and `RenderSettings.params` has no `outline.inner.colorMode` key; and Given a document that declares a `GraphParam` with ID `outline.inner.colorMode`, When validated, Then `SGF_RESERVED_PARAM` names it (its binding kind is `field`, not `uniform`). *(Added 2026-10-09 (FX-J-spec2).)* *(Note 2026-10-09 (QA-E): not testable in M2; verification lands in M4 with the graph compiler (graph recompile on a `field` binding) and document validation (`SGF_RESERVED_PARAM`). Meaning unchanged.)*
 
 ### Emitter input hardening
 
@@ -275,6 +276,17 @@ This is the same obligation as REQ-PIX-035. M2 stage functions keep the shape `(
 - **AC-SGF-042.2** Given a `post.outline@1` node whose enum field `mode` is `"black\"; }) evil("` (not in the registry `values`), When compiled, Then the field default is used and `SGF_VALUE_CLAMPED` is reported.
 - **AC-SGF-042.3** Given a document whose node IDs, labels, param names and group names contain `*/`, `"`, `;`, `}` and newline characters, When compiled on both backends, Then compilation succeeds, and none of those strings appears as a substring of the generated WGSL or GLSL source (checked by a test that dumps the generated shader source).
 - **AC-SGF-042.4** A registry test fails if any socket that a `NodeEmitter` uses as a loop or sample bound has no registry `min` and `max`, or if any enum socket has no `values`.
+
+### Built-in values contract
+
+**REQ-SGF-043 [P1]** THE SYSTEM SHALL implement in `CompileContext.builtin()` every name in the *Built-in values* table with the type, space and unit given there, and SHALL return the same TSL node for repeated calls with the same name within one compile. *(Added 2026-10-09 (M2-01), amendment A4: `render.paletteDarkest`, `render.paletteEnabled` and the `screenPos` definition. The M2 stage context implements the same table.)*
+
+- **AC-SGF-043.1** Given the engine's `CompileContext` with palette `endesga-32`, When `builtin('render.paletteDarkest')` is evaluated, Then it is the linear RGBA of #181425 with alpha 1; with palette `none` it is (0, 0, 0, 1); and `builtin('render.paletteEnabled')` is `true` and `false` respectively. Changing the palette from `endesga-32` to `pico-8` updates `render.paletteDarkest` to #000000 without recompiling (a `none` ↔ preset change may rebuild, spec 003 REQ-PIX-034).
+- **AC-SGF-043.2** Given a post pass at 48×40 whose output writes `builtin('screenPos')` into the red and green channels as integers, When read back (top-left origin, spec 003 REQ-PIX-029), Then pixel (x, y) holds (x, y) for every pixel, on both backends.
+- **AC-SGF-043.3** Given the node registry (M4), Then `post.edgeDetect@1` has output `source: color`, `post.outline@1` has inputs `source: color` and `black: color` with `defaultBuiltin: 'render.paletteDarkest'`, and `post.paletteQuantize@1` has input `enabled: bool` with `defaultBuiltin: 'render.paletteEnabled'` (spec 006 catalog).
+- **AC-SGF-043.4** Given `builtin('unknown.name')`, When called during emit, Then it throws, and the compiler reports `SGF_EMIT_FAILED` on the calling node.
+- **AC-SGF-043.5** Given the engine's post `CompileContext`, When `builtin('light.dir')` is evaluated, Then it equals the material-target value for the same settings (spec 003 AC-PIX-013.3: (-0.5, 0.5, 0.70711) ± 1e-5 for the default light); and Given a material that writes `light_k = 0.575` (3 bands, ambient 0.15, `k = 1`) and a material with `output.material.light` unconnected, When a post pass writes `builtin('scene.light')` to its red channel and it is read back, Then the pixels read 0.575 and 1.0 respectively (± 1/255). *(Added 2026-10-09 (FX-J, user D2).)*
+- **AC-SGF-043.6** Given the node registry (M4), Then `post.rimEdge@1` has inputs `color: color`, `coverage: float`, `cutoff: float` (`defaultBuiltin: 'render.alphaCutoff'`), `lightDir: vec3` (`defaultBuiltin: 'light.dir'`), `light: float` (`defaultBuiltin: 'scene.light'`), `strength: float` and `enabled: bool`, and outputs `color: color` and `rim: float`; and `output.material@1` has input `light: float` with default 1 (spec 006 catalog). *(Added 2026-10-09 (FX-J, user D2).)*
 
 ## Type system
 
@@ -307,6 +319,35 @@ This is the same obligation as REQ-PIX-035. M2 stage functions keep the shape `(
 
 Vector → scalar is always rejected. Users pick a component with `vector.split@1`. `util.reroute@1` is special-cased: its `in`/`out` sockets have pseudo-type `any` and take the concrete type of the source wired into `in` (an unconnected reroute is `float`). A reroute never inserts a cast; the cast happens at the reroute's targets. `genType` inputs accept anything whose resolved type casts to the resolved width.
 
+## Built-in values
+
+Names accepted by `CompileContext.builtin()` (REQ-SGF-043). Added 2026-10-09 (M2-01); before that the names were listed only in the `CompileContext` comment. View space: x screen-right, y screen-up, z toward the viewer. Cell pixel coordinates: origin top-left, x right, y down.
+
+| Name | Target | Type | Value |
+|------|--------|------|-------|
+| `uv` | M P | `vec2` | Mesh UV (M); `(screenPos + 0.5) / resolution` (P) |
+| `normal` | M | `vec3` | View-space unit normal |
+| `viewDir` | M | `vec3` | Surface → camera, view space; `(0, 0, 1)` for the orthographic camera |
+| `light.dir` | ~~M~~ M P | `vec3` | Surface → key light, view space, from `light.azimuthDeg`/`light.elevationDeg` (spec 003 REQ-PIX-013 note). *(Amended 2026-10-09 (FX-J, user D2): also available in post graphs, for `post.rimEdge@1.lightDir`; the light is directional, so the value is the same for every pixel.)* |
+| `partId` | M | `int` | Part ID of the drawn mesh (spec 003 REQ-PIX-014) |
+| `tint.<slot>` | M | `color` | Tint uniform of that slot (linear) |
+| `part.albedo` | M | `color` | Part base texture × vertex color (linear), sampled per spec 003 REQ-PIX-038. *(Note 2026-10-09 (M2-01b): in M2 vertex colors are not applied, so the value is the base texture alone (A = texel alpha); applying vertex colors is deferred to M3.)* |
+| `screenPos` | M P | `vec2` | Integer cell pixel index `(x, y)`, top-left origin, 0..W−1 / 0..H−1 (amendment A4; not the pixel center) |
+| `resolution` | M P | `vec2` | Cell size `(W, H)` in px |
+| `texelSize` | M P | `vec2` | `1 / resolution` |
+| `time` | M P | `float` | Seconds in preview; `0` in export (REQ-SGF-032) |
+| `scene.color` | P | `color` | Scene pass color, linear RGB, A = material alpha |
+| `scene.normal` | P | `vec3` | Scene pass view-space normal |
+| `scene.depth` | P | `float` | Signed distance from the pivot plane in output px, + toward the camera (spec 003 REQ-PIX-014 note) |
+| `scene.partId` | P | `int` | Scene pass part ID, 0 = background |
+| `scene.light` | P | `float` | Scene pass band brightness `light_k` (spec 003 REQ-PIX-011), 0..1, as written by `output.material.light` (1 when unconnected); 0 on background pixels. *(Added 2026-10-09 (FX-J, user D2), for `post.rimEdge@1`.)* |
+| `render.paletteLut` | P | `texture` | Palette LUT (spec 003 REQ-PIX-021 note) |
+| `render.paletteEnabled` | P | `bool` | `true` unless the palette is `none` (amendment A4) |
+| `render.paletteDarkest` | P | `color` | Linear RGBA (A = 1) of the palette entry with the lowest OKLab lightness, ties lowest index; #000000 when the palette is `none` (amendment A4, spec 003 REQ-PIX-017 note) |
+| `render.ditherMode` | P | field default | `palette.dither.mode` (`none`/`bayer2`/`bayer4`/`bayer8`), read at compile time as the default of `post.bayerDither@1` field `matrix`; not a shader value |
+| `render.ditherStrength` | P | `float` | The `dither.strength` uniform (rule 3 below) |
+| `render.alphaCutoff` | P | `float` | The `alpha.cutoff` uniform (rule 3 below) |
+
 ## Reserved built-in param IDs
 
 This is the single mapping between the typed `RenderSettings` fields (spec 003, Data & contracts) and graph params. Spec 003 and spec 006 reference this table and do not repeat it.
@@ -321,9 +362,9 @@ Binding kinds:
 |------|------|------|------|------|
 | `toon.bands` | `toon.bands` | uniform | `int` 2–4 | `toon.ramp@1.steps` |
 | `toon.thresholds` | `toon.thresholds` | uniform | `vec3` (t1, t2, t3; components ≥ `bands - 1` ignored) | `toon.ramp@1.t1..t3` via `vector.split@1` |
-| `toon.rim.enabled` | `rim.enabled` | uniform | `bool` | gates `toon.rim@1.rim` (`math.select@1`) |
-| `toon.rim.strength` | `rim.strength` | uniform | `float` 0–1 | `toon.rim@1.strength` |
-| `toon.rim.width` | `rim.width` | uniform | `float` 0–1 | `toon.rim@1.width` |
+| `toon.rim.enabled` | `rim.enabled` | uniform | `bool` | ~~gates `toon.rim@1.rim` (`math.select@1`)~~ `post.rimEdge@1.enabled` (amended 2026-10-09 (FX-J, user D2)) |
+| `toon.rim.strength` | `rim.strength` | uniform | `float` 0–1 | ~~`toon.rim@1.strength`~~ `post.rimEdge@1.strength` (amended 2026-10-09 (FX-J, user D2)) |
+| `toon.rim.width` | `rim.width` | ~~uniform~~ deprecated | `float` 0–1 | ~~`toon.rim@1.width`~~ **Deprecated 2026-10-09 (FX-J, user D2):** superseded by the screen-space rim of spec 003 REQ-PIX-012, which has no width. The built-in graphs do not bind it. The ID stays reserved, so no user param can take it. A saved `toon.rim.width` value is still accepted (0–1) and ignored. User graphs that use the legacy `toon.rim@1` set its `width` socket inline or through a user param. *(Clarified 2026-10-09 (FX-J-spec2).)* The engine's settings binder still supplies a `rim.width` uniform for legacy graphs that read it with `param.get@1`: the saved value, or 0.25 when absent. RenderSettings validation never fills in a default. |
 | `lighting.azimuthDeg` | `light.azimuthDeg` | uniform | `float` 0–360 | engine derives builtin `light.dir` |
 | `lighting.elevationDeg` | `light.elevationDeg` | uniform | `float` 0–90 | engine derives builtin `light.dir` |
 | `lighting.ambient` | `light.ambient` | uniform | `float` 0–1 | `toon.ramp@1.ambient` |
@@ -333,10 +374,11 @@ Binding kinds:
 | `outline.inner.partId` / `.depth` / `.normal` | `outline.inner.sources` | field | set of `id`, `depth`, `normal` | `post.edgeDetect@1` field `sources` |
 | `outline.inner.depthThresholdPx` | `outline.inner.depthThresholdPx` | uniform | `float` > 0 | `post.edgeDetect@1.depthThresholdPx` |
 | `outline.inner.normalThresholdDeg` | `outline.inner.normalThresholdDeg` | uniform | `float` 1–179 | `post.edgeDetect@1.normalThresholdDeg` |
-| `outline.colorMode` | `outline.colorMode` | field | `black` / `darken` / `custom` | `post.outline@1` field `mode` |
+| `outline.colorMode` | `outline.colorMode` | field | `black` / `darken` / `custom` | `post.outline@1` field `mode` (outer outline only since 2026-10-09 (FX-J-spec2), spec 003 REQ-PIX-017 note) |
+| `outline.inner.colorMode` | `outline.inner.colorMode` | field | `black` / `darken` / `custom` | `post.outline@1` field `innerMode` (added 2026-10-09 (FX-J-spec2); spec 003 default `darken`) |
 | `outline.darkenAmount` | `outline.darkenAmount` | uniform | `float` 0–1 | `post.outline@1.darkenAmount` |
 | `outline.color` | `outline.color` | uniform | `color` | `post.outline@1.customColor` |
-| `palette.id`, `palette.colors`, `palette.metric` | `palette.id`, `palette.colors`, `palette.metric` | builtin | LUT texture (REQ-PIX-021) | `render.paletteLut` → `post.paletteQuantize@1.lut` |
+| `palette.id`, `palette.colors`, `palette.metric` | `palette.id`, `palette.colors`, `palette.metric` | builtin | LUT texture (REQ-PIX-021); darkest color; enabled flag | `render.paletteLut` → `post.paletteQuantize@1.lut`; `render.paletteEnabled` → `post.paletteQuantize@1.enabled`; `render.paletteDarkest` → `post.outline@1.black` (last two added 2026-10-09 (M2-01), A4) |
 | `palette.dither.mode` | `dither.mode` | builtin | `none` / `bayer2` / `bayer4` / `bayer8` | `render.ditherMode` → `post.bayerDither@1` field `matrix` default |
 | `palette.dither.strength` | `dither.strength` | uniform | `float` 0–1 | `post.bayerDither@1.strength`; builtin `render.ditherStrength` returns this uniform |
 | `alphaCutoff` | `alpha.cutoff` | uniform | `float` 0.01–1 | `post.alphaCutoff@1.cutoff`, `post.edgeDetect@1.cutoff`; builtin `render.alphaCutoff` returns this uniform |
@@ -348,6 +390,8 @@ Rules:
 3. The builtins `render.ditherStrength` and `render.alphaCutoff` return the same uniform node as the matching reserved param, so a socket that defaults to the builtin and a `param.get@1` of the reserved param always read the same value.
 4. Inline input uniforms are keyed `node:<nodeId>.<socketId>`, so they never collide with param keys.
 5. Node socket defaults in the spec 006 catalog are the node's own standalone defaults. The built-in graphs wire these sockets to the reserved params, whose defaults are the spec 003 defaults.
+
+*(Note 2026-10-09 (M2-01b), informational.)* three r186 on WebGL2 fails to compile a TSL `select` whose branch contains a texture fetch. The M2 stages gate with an exact 0/1 blend (`pick`) instead (spec 003, Notes for implementers). The M4 emitter of `math.select@1`, which gates ~~`rim.enabled` and~~ the outline booleans above (`rim.enabled` is an input of `post.rimEdge@1` since 2026-10-09 (FX-J, user D2)), must give the same result on WebGL2, for example by emitting the same blend when a branch samples a texture.
 
 ## Error registry
 
@@ -519,10 +563,11 @@ export interface CompileContext {
   target: 'material' | 'post';
   mode: 'preview' | 'export' | 'node-preview';
   backend: 'webgpu' | 'webgl2';
-  /** 'uv','normal','viewDir','light.dir','partId','screenPos','texelSize','time',
-   *  'tint.<slot>','part.albedo','scene.color','scene.normal','scene.depth','scene.partId',
-   *  'resolution','render.paletteLut','render.ditherMode',
-   *  'render.ditherStrength','render.alphaCutoff'. Unknown name ⇒ throws (→ SGF_EMIT_FAILED). */
+  /** Names, types and units: section "Built-in values" (REQ-SGF-043). 'uv','normal','viewDir','light.dir',
+   *  'partId','screenPos','texelSize','time','tint.<slot>','part.albedo','scene.color','scene.normal',
+   *  'scene.depth','scene.partId','scene.light' (added 2026-10-09, FX-J),'resolution','render.paletteLut','render.paletteEnabled',
+   *  'render.paletteDarkest','render.ditherMode','render.ditherStrength','render.alphaCutoff'.
+   *  Unknown name ⇒ throws (→ SGF_EMIT_FAILED). */
   builtin(name: string): TslNode;
   /** Creates or reuses a uniform keyed by a stable id: a param id (user or reserved, see Reserved built-in param IDs) or `node:${nodeId}.${socketId}` for inline values. */
   uniform(key: string, type: SocketType, initial: unknown): TslNode;
@@ -603,6 +648,7 @@ Minimal example:
 - ADR-0003 WebGPURenderer, TSL and RenderPipeline on pinned three r186; ADR-0004 React Flow, own graph model.
 - docs/architecture.md §1.2 rule 3, §3.5, §4.1, §4.5.
 - `.tagconn/work/research.md` §Shader graph editor (2026-10-08).
+- `.tagconn/work/m2-plan.md` §2.4 and §5, amendments A1/A4 (2026-10-09).
 - three.js Shading Language wiki: https://github.com/mrdoob/three.js/wiki/Three.js-Shading-Language (accessed 2026-10-08).
 - Unity Shader Graph, Data types and implicit conversion: https://docs.unity3d.com/Packages/com.unity.shadergraph@17.0/manual/Data-Types.html (accessed 2026-10-08).
 - Blender Manual, Node groups: https://docs.blender.org/manual/en/latest/interface/controls/nodes/groups.html (accessed 2026-10-08).

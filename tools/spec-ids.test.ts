@@ -94,6 +94,22 @@ describe('trace', () => {
     expect(md).toContain('1 (50.0%)');
     expect(md).toContain('| REQ-PIX-001 | AC-PIX-001.2 | **none** |');
   });
+
+  it('GEN smoke: lists deprecated ACs without counting them as uncovered', () => {
+    const spec = check(
+      GOOD.replace(
+        '- **AC-PIX-001.2**',
+        '- **AC-PIX-001.2** ~~deprecated~~ (x)',
+      ),
+    );
+    const rows = buildTrace(spec, [
+      {name: 'a.test.ts', content: "it('AC-PIX-001.1: renders', () => {})"},
+    ]);
+    const md = renderTrace(rows);
+    expect(md).toContain('| REQ-PIX-001 | AC-PIX-001.2 | deprecated |');
+    expect(md).toContain('1 (100.0%)');
+    expect(md).toContain('- Deprecated ACs (not counted): 1');
+  });
 });
 
 describe('removedIds', () => {
