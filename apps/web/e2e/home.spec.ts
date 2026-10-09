@@ -2,6 +2,7 @@ import {mkdirSync, readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {expect, test} from '@playwright/test';
 import type {Page} from '@playwright/test';
+import {settleAnimations} from './fixtures/qa';
 
 const SHOT_DIR = process.env['CSG_SHOT_DIR'];
 
@@ -180,7 +181,10 @@ test('AC-UX-073.1 / AC-UX-074.1: the selected character is centred at an integer
   ).toBeLessThanOrEqual(300);
   await slot('3').click();
   await expect(options(page).nth(3)).toHaveAttribute('aria-selected', 'true');
-  await page.waitForTimeout(450);
+  // The 300 ms bound is the transition-duration asserted above. Measure once the transition has
+  // finished instead of after a fixed wall-clock wait: on a software-rendered runner the
+  // transition can start late, which is frame starvation, not a longer transition.
+  await settleAnimations(page);
   const moved = await slot('3').locator('.home-fig').boundingBox();
   expect(
     Math.abs(moved!.x + moved!.width / 2 - (box!.x + box!.width / 2)),
