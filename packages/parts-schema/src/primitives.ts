@@ -1,7 +1,30 @@
 import {z} from 'zod';
 
-/** Current version of the persisted `sprite-character` document format. */
-export const CHARACTER_FORMAT_VERSION = 1;
+/** Current version of the persisted `sprite-character` document format (REQ-CMP-038). */
+export const CHARACTER_FORMAT_VERSION = 2;
+
+/** Body styles, in picker order (REQ-CMP-038). A closed set: unknown values are rejected (REQ-CMP-040). */
+export const CHARACTER_STYLES = [
+  'realistic',
+  'chibi',
+  'stickman',
+  'voxel',
+] as const;
+
+/** A body style. */
+export type CharacterStyle = (typeof CHARACTER_STYLES)[number];
+
+/** Species, in picker order (REQ-CMP-038). A closed set: unknown values are rejected (REQ-CMP-040). */
+export const CHARACTER_SPECIES = ['human', 'animal', 'monster'] as const;
+
+/** A species. */
+export type CharacterSpecies = (typeof CHARACTER_SPECIES)[number];
+
+/** Strict enum of {@link CHARACTER_STYLES}: no coercion, no case folding (REQ-CMP-040). */
+export const characterStyleSchema = z.enum(CHARACTER_STYLES);
+
+/** Strict enum of {@link CHARACTER_SPECIES}: no coercion, no case folding (REQ-CMP-040). */
+export const characterSpeciesSchema = z.enum(CHARACTER_SPECIES);
 
 /** Hex sRGB color such as `#a0c4ff`. Parsing normalizes to lowercase (spec 001). */
 export const hexColorSchema = z

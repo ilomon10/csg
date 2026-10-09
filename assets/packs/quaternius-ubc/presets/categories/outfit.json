@@ -1,0 +1,19 @@
+{
+  "format": "sprite-easy-category",
+  "version": 1,
+  "id": "outfit",
+  "labelKey": "ux.easy.outfit",
+  "icon": "t-shirt",
+  "slots": [
+    "headwear",
+    "torso",
+    "arms",
+    "legs",
+    "feet"
+  ],
+  "tintChannels": [
+    "primary",
+    "secondary"
+  ],
+  "anatomyPresets": false
+}

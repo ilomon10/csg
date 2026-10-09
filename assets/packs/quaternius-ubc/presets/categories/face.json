@@ -1,0 +1,16 @@
+{
+  "format": "sprite-easy-category",
+  "version": 1,
+  "id": "face",
+  "labelKey": "ux.easy.face",
+  "icon": "smiley",
+  "slots": [
+    "face",
+    "eyebrows",
+    "beard"
+  ],
+  "tintChannels": [
+    "eyes"
+  ],
+  "anatomyPresets": false
+}

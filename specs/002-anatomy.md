@@ -15,7 +15,7 @@ last_updated: 2026-10-09
 
 ## Context
 
-Realistic 3D proportions read badly at 32–64 px. Heads become 4 px blobs, forearms vanish and faces disappear (ADR-0001 "Bad" consequence). Anatomy controls let users push proportions toward readable stylizations (chibi, heroic) and vary characters. Proportions are applied as **bone scales with child compensation** on the shared skeleton, plus morph targets where the body provides them. All parts skinned to the skeleton and all socketed props follow automatically.
+Realistic 3D proportions read badly at 32–64 px. Heads become 4 px blobs, forearms vanish and faces disappear (ADR-0001 "Bad" consequence). Anatomy controls let users push proportions toward readable stylizations (chibi, heroic) and vary characters. Proportions are applied as **bone scales with child compensation** on the shared skeleton, plus morph targets where the body provides them. All parts skinned to the skeleton and all socketed props follow automatically. *(Amended 2026-10-09 (FX-CHIBI): only the uniform factors are bone scales; the compensated factors scale each segment's skin through its inverse bind matrices, see REQ-ANA-003.)*
 
 **Dependency:** bone names, bone axes and `anatomyBones` mapping come from the `RigDefinition` produced and verified by the M1 asset spike (spec 011). Items marked *(M1-gated)* assume the shared Quaternius rig exists and that bone length runs along a single local axis. *(Amended 2026-10-08 (M1-01c): the committed rig `packages/parts-schema/rigs/quaternius-ue5-65.json` also carries the joint hierarchy (`parents`) and the fallback skeleton group (`defaultSkeletonGroup`), see REQ-ANA-021 and Data & contracts.)* *(Amended 2026-10-09 (M1-33): the spike confirmed one shared rig with `lengthAxis: 'y'` across all bundled files and committed the anatomy, region and socket lists (outcome `mapped`, ADR-0008); the *(M1-gated)* items REQ-ANA-002 and REQ-ANA-005 hold as written.)*
 
@@ -75,13 +75,20 @@ Bone names in the "Affects" column are descriptive, written in UE5 style. The en
 
 **REQ-ANA-003 [P1]** WHEN a compensated parameter scales a bone THE SYSTEM SHALL scale only the geometry skinned to that bone, and child bones SHALL keep their world scale and orientation while their joint positions follow the parent's changed length (segment-scale-compensate semantics).
 
-- **AC-ANA-003.1** Given `armLength = 1.2`, When the bind pose is evaluated, Then `lowerarm_l` is 1.2× farther from `upperarm_l` (± 1e-4 m), and the world scale of `lowerarm_l` and `hand_l` is unchanged (± 1e-4). *(Amended 2026-10-09 (M1-33): this text contradicted the parameter table, which lists `lowerarm_*` under `armLength`. Resolved to match the M1 implementation: each listed joint carries only its own factor, never its parent's on top. So `lowerarm_l`'s world scale is 1.2 along the length axis and 1 on the cross-section axes (not 1.44 and not 1), and `hand_l`, which is not listed, keeps world scale 1 on all axes. Tolerances: ± 1e-4 where the rest rotations of `upperarm_l`, `lowerarm_l` and `hand_l` relative to their parents are the identity; ± 1e-2 where they are not, see the residual-shear limitation under REQ-ANA-003.)*
+*(Amended 2026-10-09 (FX-CHIBI), mechanism, a contract for the engine, export and tests.)* Anatomy factors are split in two:
+
+- **Uniform factors** (`height`, `head`, `hands`, `feet`, REQ-ANA-004) multiply the joint's `Bone.scale`. A uniform scale is inherited without shear at any rotation, so the subtree grows with it.
+- **Compensated factors** (`torsoWidth`, `shoulders`, `armLength`, `legLength`, `limbThickness`) never enter the bone hierarchy. Per joint they form an own-frame factor `skin(j)` (the factor on the joint's length axis and/or cross-section axes, REQ-ANA-005; (1, 1, 1) elsewhere), returned by `anatomySkinScales`. It acts in two places only: (a) each child's local translation is multiplied by its parent's `skin`, so the child joint follows the segment's new length and cross-section; (b) the joint's own skin: for every skinned mesh of the character, each inverse bind matrix becomes `S(skin(j)) · B⁻¹(j)` (`applyAnatomyToSkins`). The engine writes these into per-skeleton copies, so the registry's shared source matrices are never modified, and at `skin = (1, 1, 1)` it restores the original matrix exactly (default anatomy is bit-identical to no anatomy, AC-ANA-001.3).
+
+This replaces the M1 diagonal child compensation (each joint's `Bone.scale` divided by its parent's per local axis), which sheared every child whose rest or animated rotation differs from its parent's. On the Quaternius rig the foot sits 70° from the calf, the upper arm 93° from the clavicle and the thigh 164° from the pelvis; at chibi values the old method produced feet stretched 1.9× ("plank" feet) and folded legs. The grounding offset (REQ-ANA-008) uses the same forward kinematics: translations scaled by the parent's `skin`, rest scales times the uniform factor.
+
+- **AC-ANA-003.1** Given `armLength = 1.2`, When the bind pose is evaluated, Then `lowerarm_l` is 1.2× farther from `upperarm_l` (± 1e-4 m), and the world scale of `lowerarm_l` and `hand_l` is unchanged (± 1e-4). *(Amended 2026-10-09 (FX-CHIBI): "world scale of a joint" means the world scale of the geometry skinned to it, that is the column lengths of the bone's world matrix times `S(skin(j))`; the bone's own `matrixWorld` no longer carries the compensated factor. With that reading, on both fixture groups `g-a` and `g-b` (arm rotated 10°), `lowerarm_l` is 1.2 along its length axis and 1 on the cross-section axes, and `hand_l` is 1 on all axes, each ± 1e-4. The ± 1e-2 tolerance for rotated rest poses in the M1-33 note below is withdrawn.)* *(Amended 2026-10-09 (M1-33): this text contradicted the parameter table, which lists `lowerarm_*` under `armLength`. Resolved to match the M1 implementation: each listed joint carries only its own factor, never its parent's on top. So `lowerarm_l`'s world scale is 1.2 along the length axis and 1 on the cross-section axes (not 1.44 and not 1), and `hand_l`, which is not listed, keeps world scale 1 on all axes. ~~Tolerances: ± 1e-4 where the rest rotations of `upperarm_l`, `lowerarm_l` and `hand_l` relative to their parents are the identity; ± 1e-2 where they are not, see the residual-shear limitation under REQ-ANA-003.~~ (struck 2026-10-09 (FX-CHIBI): no residual shear remains, ± 1e-4 applies everywhere.))*
 - **AC-ANA-003.2** Given `torsoWidth = 1.4`, When evaluated, Then `neck_01`, `Head` (the joint in `anatomyBones.head`), `clavicle_l` and `clavicle_r` keep world scale 1 (± 1e-4) and the head shows no shear (all three world axes stay orthogonal within 1e-4). *(Amended 2026-10-08 (M1 D1): joint `head` → `Head`, the source name.)*
 - **AC-ANA-003.3** Given `limbThickness = 1.5`, When evaluated, Then hand and foot world scales stay 1 and the limb vertices' distance from the bone axis grows 1.5× (± 1 %).
 
-*Known limitation (added 2026-10-09 (M1-33), accepted by the PM for M1 in M1-22):* compensation divides each joint's target world scale by its parent's per local axis, and a joint's scale is a diagonal (per-axis) scale. This is exact when a child's rest rotation relative to its parent is the identity. Where it is not (several Quaternius arm and leg joints, and fixture group `g-b`'s arms rotated 10°), a residual shear of about 0.5–0.7 % of the scaled length remains at the child. It is revisited if it becomes visible in the M2 golden images; a fix needs non-diagonal compensation (for example a scale applied in the parent's frame) and a spec amendment.
+~~*Known limitation (added 2026-10-09 (M1-33), accepted by the PM for M1 in M1-22):* compensation divides each joint's target world scale by its parent's per local axis, and a joint's scale is a diagonal (per-axis) scale. This is exact when a child's rest rotation relative to its parent is the identity. Where it is not (several Quaternius arm and leg joints, and fixture group `g-b`'s arms rotated 10°), a residual shear of about 0.5–0.7 % of the scaled length remains at the child. It is revisited if it becomes visible in the M2 golden images; a fix needs non-diagonal compensation (for example a scale applied in the parent's frame) and a spec amendment.~~ *(Struck 2026-10-09 (FX-CHIBI): the limitation is removed. The 0.5–0.7 % estimate held for small rest rotations only; at chibi values on the Quaternius rig it reached 1.9× feet. Compensation through the skin matrices (REQ-ANA-003 FX-CHIBI note) is exact at any rotation.)*
 
-- **AC-ANA-003.4** Given fixture group `g-b` (arm joints rotated 10° about local Z at rest) and `armLength = 1.25`, When the bind pose is evaluated, Then every world-scale component of `hand_l` is within 1 ± 1e-2, and the angle between any two of its world axes differs from 90° by ≤ 1°. *(Added 2026-10-09 (M1-33): bounds the accepted residual shear.)*
+- **AC-ANA-003.4** ~~Given fixture group `g-b` (arm joints rotated 10° about local Z at rest) and `armLength = 1.25`, When the bind pose is evaluated, Then every world-scale component of `hand_l` is within 1 ± 1e-2, and the angle between any two of its world axes differs from 90° by ≤ 1°.~~ Given fixture groups `g-a` and `g-b`, the `chibi` preset values (REQ-ANA-013), and a pose that rotates both calves 90° about local X (bent knees), both feet a further 70° about local X and both upper arms 60° about local Z on top of the rest pose, When anatomy is applied, Then for every joint the three world axes of its skinned geometry (bone world matrix × `S(skin(j))`, AC-ANA-003.1) are orthogonal (each pairwise |cos| ≤ 1e-9); `foot_l`, `foot_r`, `ball_l` and `ball_r` have a uniform world scale of `height × feet` = 0.85 × 1.4 on every axis (± 1e-9); and `calf_l` and `thigh_r` have world scale (0.85 × 1.4, 0.85 × 0.70, 0.85 × 1.4) on (cross-section, length, cross-section) (± 1e-9). *(Added 2026-10-09 (M1-33): bounds the accepted residual shear.)* *(Amended 2026-10-09 (FX-CHIBI): the residual shear is gone, so the AC asserts none at 1e-9 instead of bounding it at ± 1e-2 / 1°, and covers bent knees and turned feet at chibi values. The `g-b` arm case at the old 10° rest rotation is covered by AC-ANA-003.1.)*
 
 **REQ-ANA-004 [P1]** WHEN a propagating parameter (`height`, `head`, `hands`, `feet`) scales a bone THE SYSTEM SHALL scale that bone's subtree uniformly, so hair, headwear, fingers and toes grow with it.
 
@@ -104,21 +111,43 @@ Bone names in the "Affects" column are descriptive, written in UE5 style. The en
 
 *(Clarified 2026-10-09 (M1-33), PM decision in M1-24.)* "Anatomy scale" here is the socket joint's full anatomy world scale, which includes `height` (the uniform scale on `rootBone`). So a prop with `inheritScale: false` also keeps its world scale and its unscaled offset when `height` changes; only its position follows the joint. A scale applied to the whole character's container object (outside the skeleton, for example by framing or a caller's transform) is not anatomy and scales every prop, inheriting or not.
 
+*(Amended 2026-10-09 (FX-CHIBI).)* The socket joint's anatomy world scale is its **uniform** factor: the product of the `height`, `head`, `hands` and `feet` factors of the joint and its ancestors (REQ-ANA-004). The compensated factors only skin each joint's own geometry (REQ-ANA-003) and never reach a prop parented to the joint, so for example `torsoWidth` does not widen a prop on socket `spine_03`. `socketPropScale` returns (1, 1, 1) where the prop inherits scale and `1 / uniform` on every axis where it does not; the prop's local scale and authored offset are multiplied by it. AC-ANA-007.1..4 are unchanged.
+
 - **AC-ANA-007.3** Given a sword on socket `hand_r` (`inheritScale` absent, so false) and `height = 1.2`, When rendered, Then the sword's world scale is 1 (± 1e-4) and its grip is at the joint `socketBones.hand_r` plus the authored offset scaled by 1.0 (± 1e-4 m); Given a hat on socket `head` with `height = 1.2`, Then the hat's world scale is 1.2 (± 1e-4). *(Added 2026-10-09 (M1-33).)*
 - **AC-ANA-007.4** Given the character container object scaled by 2 and default anatomy, When rendered, Then both the sword and the hat have world scale 2 (± 1e-4). *(Added 2026-10-09 (M1-33).)*
 
 ### Grounding and animation
 
-**REQ-ANA-008 [P1]** WHEN anatomy changes THE SYSTEM SHALL shift the character vertically so that, in the bind pose, the lowest point of the feet stays at the ground plane (y = 0).
+**REQ-ANA-008 [P1]** WHEN anatomy changes THE SYSTEM SHALL shift the character vertically so that, in the bind pose, the ~~lowest point of the feet~~ sole of the feet (the lowest feet joint lowered by the character skeleton group's `soleOffsetM`, scaled with the feet) stays at the ground plane (y = 0). *(Amended 2026-10-09 (M3-00), user decision on issue #10: the ground is the sole, not the joint; formula in the M3-00 note below.)*
 
-- **AC-ANA-008.1** Given `legLength = 0.7` and `feet = 1.5`, When the bind pose is rendered, Then the lowest foot vertex is at y = 0 (± 1e-3 m) and the feet pivot row in the output equals `pivotRowPx` (spec 003). *(Amended 2026-10-09 (M1-33), see the note below: "lowest foot vertex" reads "lowest feet joint".)*
+- **AC-ANA-008.1** Given `legLength = 0.7` and `feet = 1.5`, When the bind pose is rendered, Then the lowest foot vertex is at y = 0 (± 1e-3 m) and the feet pivot row in the output equals `pivotRowPx` (spec 003). *(Amended 2026-10-09 (M1-33), see the note below: "lowest foot vertex" reads "lowest feet joint".)* *(Amended 2026-10-09 (M3-00): for a character skeleton group with `soleOffsetM`, "lowest foot vertex" again means the lowest vertex of the meshes measured for that group by spec 011 REQ-AST-030 (the body's `feet` region and the `feet`-slot parts); for a group without `soleOffsetM` the M1-33 reading "lowest feet joint" still applies.)*
 
-*(Amended 2026-10-09 (M1-33), PM-accepted in M1-22.)* "The lowest point of the feet" is joint-based: it is the lowest world-space joint origin among the joints in `RigDefinition.anatomyBones.feet` and their descendants (e.g. `ball_*`), evaluated on the character skeleton's rest pose (spec 001 REQ-CMP-037) with the anatomy scales applied. It is never read from mesh vertices, so it does not depend on which parts are equipped, costs no vertex pass, and stays within the < 16 ms budget (REQ-ANA-011). Consequence: the sole of a shoe or foot mesh can sit a few millimetres below or above y = 0 by the distance between the lowest joint and the lowest vertex of the source art; that distance is constant per body and is absorbed by `pivotRowPx` framing (spec 003).
+*(Amended 2026-10-09 (M1-33), PM-accepted in M1-22.)* "The lowest point of the feet" is joint-based: it is the lowest world-space joint origin among the joints in `RigDefinition.anatomyBones.feet` and their descendants (e.g. `ball_*`), evaluated on the character skeleton's rest pose (spec 001 REQ-CMP-037) with the anatomy scales applied. It is never read from mesh vertices, so it does not depend on which parts are equipped, costs no vertex pass, and stays within the < 16 ms budget (REQ-ANA-011). ~~Consequence: the sole of a shoe or foot mesh can sit a few millimetres below or above y = 0 by the distance between the lowest joint and the lowest vertex of the source art; that distance is constant per body and is absorbed by `pivotRowPx` framing (spec 003).~~ *(Consequence superseded 2026-10-09 (M3-00): on the Quaternius rig the distance is about 2 cm, which renders the character 1 px low at 64 px and fails AC-PIX-008.1; it is now corrected by `soleOffsetM`, below.)*
+
+*(Amended 2026-10-09 (M3-00), user decision on issue #10, fixed in M3.)* The ground offset added to the character's root in the bind pose is
+
+`groundOffsetY = −jointMinY(A) + soleOffsetM(G) × height × feet`
+
+where `jointMinY(A)` is the M1-33 joint term above (lowest world Y among `anatomyBones.feet` joints and their descendants, character skeleton rest pose, anatomy `A` applied); `G` is the character skeleton group (spec 001 REQ-CMP-037); `soleOffsetM(G)` is the value stored in `RigDefinition.skeletonGroups[G].soleOffsetM` (metres, the height of the group's lowest feet joint above the lowest sole vertex at default anatomy, measured by the build, spec 011 REQ-AST-030), or 0 when the field is absent; and `height`, `feet` are the anatomy values of `A`. Positive `soleOffsetM` moves the character up. Rules:
+
+- The sole term scales with `height × feet`, which is the uniform world scale of the `anatomyBones.feet` joints (REQ-ANA-004: `feet` propagates uniformly to `ball_*`; `height` is the uniform root scale; `legLength` and `limbThickness` are compensated and leave the feet's world scale at 1, AC-ANA-003.3). Sole geometry weighted to the feet subtree therefore lands on y = 0 for every anatomy, not only the default. `legLength`, `limbThickness` and the other parameters enter only through `jointMinY(A)`.
+- The per-anatomy cost stays joint-only: the inputs are the `RigDefinition`, `G` and `A`. Mesh vertices are never read at runtime; they are read only by the build (spec 011 REQ-AST-030).
+- The sole term does not depend on which parts are equipped: one value per skeleton group serves bare feet and every shoe. A `feet` part whose sole is thinner than the lowest measured mesh hovers by the difference (bounded by the build warning `AST_SOLE_SPREAD`, spec 011).
+- Values below 1e-9 m in magnitude still snap to 0, and equal inputs give a bit-identical offset (AC-ANA-008.3, P-04).
+- Groups without `soleOffsetM` (the fixture rig, rigs of user uploads (spec 008), groups that drive no bundled body) keep the M1-33 joint-only behaviour, so AC-ANA-008.2 and AC-ANA-008.3 are unchanged for them.
+- *(Added 2026-10-09 (FX-CHIBI).)* `jointMinY(A)` uses the same forward kinematics as the posed skeleton (REQ-ANA-003 FX-CHIBI note): each rest translation multiplied by the parent's own-frame `skin` factor and each rest scale by the joint's uniform factor. The compensated factors never scale a bone, so the feet joints' world scale is exactly `height × feet` and the sole term above stays exact.
 
 - **AC-ANA-008.2** Given the fixture rig in groups `g-a` and `g-b`, `legLength = 0.7` and `feet = 1.5`, When the ground offset is computed and added to the bind pose, Then the lowest world Y among `foot_l`, `foot_r` and their descendants is 0 (± 1e-3 m), and the offset is negative (shorter legs move the character down). *(Added 2026-10-09 (M1-33).)*
-- **AC-ANA-008.3** Given the fixture rig, whose lowest feet joint rests at y = 0, and default anatomy, When the ground offset is computed, Then it is exactly 0 (values below 1e-9 m snap to 0); Given the same anatomy twice, Then the same offset is returned (bit-identical). *(Added 2026-10-09 (M1-33). On the Quaternius rig the default offset is minus the rest height of its lowest feet joint, typically the `ball_leaf_*` toe tip.)*
+- **AC-ANA-008.3** Given the fixture rig, whose lowest feet joint rests at y = 0, and default anatomy, When the ground offset is computed, Then it is exactly 0 (values below 1e-9 m snap to 0); Given the same anatomy twice, Then the same offset is returned (bit-identical). *(Added 2026-10-09 (M1-33). On the Quaternius rig the default offset is minus the rest height of its lowest feet joint, typically the `ball_leaf_*` toe tip.)* *(Amended 2026-10-09 (M3-00): this holds for groups without `soleOffsetM`; on the Quaternius groups `male` and `female` the default offset is that value plus the group's `soleOffsetM`.)*
+- **AC-ANA-008.4** Given a fixture rig variant whose group `g-a` has `soleOffsetM: 0.02` (lowest feet joint at rest y = 0) and default anatomy, When the ground offset is computed, Then it is +0.02 m (± 1e-9 m); Given `height = 1.2` and `feet = 1.5` on the same variant, Then it is `−jointMinY(A) + 0.036` m (± 1e-9 m), where `jointMinY(A)` is the value AC-ANA-008.2 computes for that anatomy without `soleOffsetM`. *(Added 2026-10-09 (M3-00).)*
+- **AC-ANA-008.5** ~~Given the fixture rig variant of AC-ANA-008.4 and a fixture body in `g-a` whose `feet`-region vertices are weighted 1.0 to `foot_*` or `ball_*` and whose lowest rest vertex is 0.02 m below the lowest feet joint,~~ Given the fixture rig variant of AC-ANA-008.4 (`g-a.soleOffsetM: 0.02`) and a feet mesh built in the test on a `g-a` character, with per foot joint one vertex 0.02 m below the joint's rest position and one 0.05 m above it, each weighted 1.0 to that joint (so its lowest rest vertex is exactly `soleOffsetM` below the lowest feet joint), When `legLength = 0.7`, `feet = 1.5` and `height = 0.8` are applied and the ground offset is added to the bind pose, Then the lowest of those vertices is at y = 0 (± 1e-4 m); and with the joint-only offset of the same rig without `soleOffsetM` it is at y = −0.02 × 0.8 × 1.5 = −0.024 m (± 1e-6 m). *(Added 2026-10-09 (M3-00).)* *(Amended 2026-10-09 (M3 PM decision): restated to the measured fixture. The shared fixture body `pack/parts/fixture-body.glb` is not used here: its foot boxes reach 0.04 m below the foot joint (box padding), not 0.02 m, so the test builds the feet mesh in code with the offset equal to `soleOffsetM`.)*
+- **AC-ANA-008.6** Given the committed rig and the default character (spec 001 Data & contracts; body `superhero-m`, character skeleton group `male`) at default anatomy and no clip, When the ground offset is added to the bind pose, Then the lowest vertex over the default body's `feet` region and every `feet`-slot part measured for group `male` (spec 011 REQ-AST-030) is at y = 0 (± 1e-3 m), and no vertex of the equipped `feet` part is below y = −1e-3 m; the same holds for body `superhero-f` and group `female`. *(Added 2026-10-09 (M3-00).)*
+- **AC-ANA-008.7** Given the default character, When the ground offset is computed once with every mesh loaded and once from a skeleton-only input (the same `RigDefinition`, group and anatomy, no mesh), Then the two offsets are bit-identical, and a spy on the vertex position attributes records no read during the computation. *(Added 2026-10-09 (M3-00): the offset stays joint-only at runtime.)*
+- **AC-ANA-008.8** Given the default character with body `superhero-m`, and again with body `superhero-f` and every part that is then incompatible removed (spec 001 REQ-CMP-010, so the body's own feet show), the `idle` clip, side view, resolution 64×64, `pivotRowPx = 2`, outer and inner outline off, 2 directions × 8 frames, When rendered on WebGPU and on WebGL2 (`forceWebGL`), Then in each of the 16 frames per body the lowest opaque pixel row is row 2 from the bottom (never 1, never 3). *(Added 2026-10-09 (M3-00): the anatomy-side counterpart of spec 003 AC-PIX-008.1, which covers the male default only.)*
 
 **REQ-ANA-009 [P1]** THE SYSTEM SHALL apply anatomy after animation sampling on every frame: clip rotation tracks are kept, clip translation of non-root bones is scaled by the parent's length factor, and clip scale tracks on anatomy bones are multiplied by the anatomy scale.
+
+*(Amended 2026-10-09 (FX-CHIBI).)* "Sampled scale × anatomy scale" holds for the **effective** scale of the joint's skinned geometry (bone world matrix × `S(skin(j))`, AC-ANA-003.1). For uniform factors the product is written into `Bone.scale`; for compensated factors `Bone.scale` keeps the clip's sampled value and the factor is applied through the skin matrices (REQ-ANA-003). "Scaled by the parent's length factor" means the parent's own-frame `skin` factor, applied to the child's local translation. Example: a clip scale (1, 2, 1) on `upperarm_l` with `armLength = 1.2` leaves `Bone.scale` = (1, 2, 1) and gives the upper-arm geometry the world scale (1, 2.4, 1) (± 1e-9).
 
 - **AC-ANA-009.1** Given `armLength = 1.2` and a clip with position tracks on `lowerarm_l`, When frame 3 is sampled, Then the elbow-to-wrist distance is 1.2× the distance at `armLength = 1` (± 1e-4 m).
 - **AC-ANA-009.2** Given the same spec, When the same frame is sampled twice, Then the bone matrices are bit-identical (P-04).
@@ -158,6 +187,8 @@ Bone names in the "Affects" column are descriptive, written in UE5 style. The en
 `realistic` equals `default` on purpose: it means "authored proportions" and is meant for 96–128 px. Values are initial tuning targets, adjustable in data without a spec change once golden images are reviewed.
 
 *(Amended 2026-10-09 (STY), PM decision.)* The `chibi` preset ships in M3 as data and is the anatomy preset of style `chibi` (spec 001 REQ-CMP-042, REQ-ANA-024). Its row is now fixed: `height` 0.90 → 0.85, `armLength` 0.85 → 0.75, `legLength` 0.75 → 0.70; the other six values are unchanged (`head` stays 1.80, inside the requested 1.6–1.8). Every value is inside its REQ-ANA-001 range, so no range widens. `armLength` 0.75 and `legLength` 0.70 sit exactly on their range minimums, so a body-shape preset (REQ-ANA-023) cannot shorten chibi arms or legs further; widening `armLength` below 0.75 or `legLength` below 0.70 would need an amendment of REQ-ANA-001. Unlike the other rows, the `chibi` row changes only with a spec amendment, because the chibi golden images and the clip exclusion list (REQ-ANA-025) depend on it.
+
+*(Note 2026-10-09 (FX-CHIBI).)* The skin-matrix compensation of REQ-ANA-003 changes how the values are applied, not the values: every row of this table, including `chibi`, is unchanged. Chibi renders made before the fix (plank feet, folded legs) are not a reference for these values; golden images are regenerated with the fix.
 
 - **AC-ANA-013.1** Given the `chibi` preset, When applied, Then the nine values equal the table row and one undo restores the previous values.
 - **AC-ANA-013.2** Given a new preset JSON file added to the presets data (no code change), When the app builds, Then it appears in the preset menu.
@@ -213,6 +244,10 @@ Bone names in the "Affects" column are descriptive, written in UE5 style. The en
 - **AC-ANA-021.7** Given the fixture rig with `g-b.restPose` lacking `lowerarm_l`, or with two groups both named `g-a`, When validated, Then validation fails with a path naming `skeletonGroups`, the group index and `lowerarm_l` (first case) or the duplicate ID (second case).
 - **AC-ANA-021.8** Given a fixture rig with no `hipBone` field and `socketBones.pelvis = 'pelvis'`, When the spec 004 REQ-ANM-023 retarget plan is built, Then the hip joint it uses for `k = L_t / L_s` is `pelvis`; and given the same rig with `socketBones.pelvis = 'spine_01'`, Then the hip joint is `spine_01`.
 
+*(Amended 2026-10-09 (M3-00), issue #10.)* Rule (f): a skeleton group MAY carry `soleOffsetM` (REQ-ANA-008); when present it SHALL be a finite number in −0.1…0.1 m that is a whole multiple of 0.0001 m (`|v × 10000 − round(v × 10000)| < 1e-6`), and otherwise validation fails with path `skeletonGroups.<index>.soleOffsetM`. An absent field is valid and means 0.
+
+- **AC-ANA-021.9** Given the fixture rig with `g-a.soleOffsetM` set to `0.0213`, `0`, or absent, When validated, Then validation passes; Given `0.15`, `-0.2`, `0.02134`, `NaN` or the string `"0.02"`, Then validation fails with path `skeletonGroups.0.soleOffsetM`. *(Added 2026-10-09 (M3-00).)*
+
 ### Body shapes, styles and clip exclusions (added 2026-10-09 (STY), PM decision)
 
 Body-shape presets serve the "Body shape" step of the Easy workspace and the new-avatar wizard (spec 014). They are **relative**: each gives a factor per parameter that multiplies the anatomy preset of the current style, so the same "Stocky" works on Realistic and on Chibi.
@@ -229,6 +264,8 @@ Body-shape presets serve the "Body shape" step of the Easy workspace and the new
 | `petite` | 0.90 | 1.00 | 0.94 | 0.92 | 1.00 | 1.00 | 0.92 | 0.92 | 0.92 |
 
 The factors are initial tuning targets: they can change in data without a spec amendment once the M3 golden images are reviewed. Labels: Average, Slim, Athletic, Stocky, Tall, Petite.
+
+*(Note 2026-10-09 (FX-CHIBI).)* The body-shape factors above are unchanged by the skin-matrix compensation of REQ-ANA-003; it changes how anatomy values are applied, not the values.
 
 - **AC-ANA-022.1** Given the shipped body-shape files, When they are validated, Then there are at least 6, the first six IDs are the table's in order, and every factor equals the table.
 - **AC-ANA-022.2** Given a body-shape file with factor `limbThickness: 1.51`, or with an unknown key `neck`, When validated, Then validation fails naming the file ID and the field.
@@ -269,7 +306,9 @@ The factors are initial tuning targets: they can change in data without a spec a
 - Root motion clips with long legs → stride scaled (REQ-ANA-010).
 - Props on scaled hands → not scaled (REQ-ANA-007).
 - `height` changed with a hand prop equipped → the prop keeps world scale 1; a `head` prop grows; a container scale grows both (REQ-ANA-007 clarification, AC-ANA-007.3/.4). *(Added 2026-10-09 (M1-33).)*
-- Child joint with a rotated rest pose under a length-scaled parent → small residual shear (≤ about 0.7 %), accepted for M1 (REQ-ANA-003 known limitation, AC-ANA-003.4). *(Added 2026-10-09 (M1-33).)*
+- ~~Child joint with a rotated rest pose under a length-scaled parent → small residual shear (≤ about 0.7 %), accepted for M1 (REQ-ANA-003 known limitation, AC-ANA-003.4).~~ *(Added 2026-10-09 (M1-33).)* *(Struck 2026-10-09 (FX-CHIBI): limitation removed.)*
+- Child joint with a rotated rest or animated pose under a length-scaled parent (Quaternius foot 70° from the calf, upper arm 93° from the clavicle, thigh 164° from the pelvis; a 90° knee bend) → no shear; the child keeps its world scale and orientation (REQ-ANA-003 FX-CHIBI note, AC-ANA-003.4). *(Added 2026-10-09 (FX-CHIBI).)*
+- Part whose inverse bind matrices are shared with the registry's source mesh → the engine writes anatomy into its own copy per skeleton; the source is never modified and default anatomy restores the original exactly (REQ-ANA-003). *(Added 2026-10-09 (FX-CHIBI).)*
 - User-uploaded character with its own rig → anatomy uses the bone map to canonical names (spec 008); unmapped anatomy bones disable that slider with a reason.
 - Morph names that collide across parts → same name, same weight (REQ-ANA-012).
 - Source joint names with mixed case (`Head` next to `hand_r`) → kept as-is and matched case-sensitively (REQ-ANA-020); sockets resolve through `socketBones` (REQ-ANA-019).
@@ -279,6 +318,9 @@ The factors are initial tuning targets: they can change in data without a spec a
 - Body-shape preset on Chibi pushes a value past its range (e.g. `legLength` 0.67) → clamped to the REQ-ANA-001 range (REQ-ANA-023, AC-ANA-023.2). *(Added 2026-10-09 (STY).)*
 - Style change while an excluded clip is selected → kept with a warning (REQ-ANA-027); the picker hides it (REQ-ANA-025). *(Added 2026-10-09 (STY).)*
 - Style file references a clip from a pack that is not loaded → ignored (AC-ANA-024.3). *(Added 2026-10-09 (STY).)*
+- Source art whose sole sits below the lowest feet joint (Quaternius: about 2 cm) → corrected by the group's `soleOffsetM`, scaled by `height × feet` (REQ-ANA-008 M3-00 note). *(Added 2026-10-09 (M3-00).)*
+- Bare feet and a thicker-soled shoe in the same skeleton group → one `soleOffsetM` from the lowest of them; the thinner one hovers by the difference, which the build warns about above 0.010 m (`AST_SOLE_SPREAD`, spec 011 REQ-AST-031). *(Added 2026-10-09 (M3-00).)*
+- Character skeleton group without `soleOffsetM` (fixture rig, uploads, a group that drives no bundled body) → joint-only grounding, as in M1 (REQ-ANA-008). *(Added 2026-10-09 (M3-00).)*
 - Auto camera framing (spec 003) normalizes overall size, so `height` is visible only with fixed framing or when comparing characters. The slider shows a hint about this when framing is `auto`.
 
 ## Data & contracts
@@ -346,7 +388,17 @@ export interface RigDefinition {
    * differ between source files with the same names and hierarchy. Each group has a rest transform
    * for every joint in `bones`. Group IDs match [a-z0-9-]{1,32}.
    */
-  skeletonGroups: Array<{ id: string; restPose: Record<JointName, RestTransform> }>;
+  skeletonGroups: Array<{
+    id: string;
+    restPose: Record<JointName, RestTransform>;
+    /**
+     * Added 2026-10-09 (M3-00), issue #10. Height in metres of the group's lowest feet joint
+     * above the lowest sole vertex, at default anatomy (REQ-ANA-008 ground offset). Written by
+     * `assets:build` (spec 011 REQ-AST-030), never hand-edited. −0.1..0.1, multiple of 0.0001
+     * (REQ-ANA-021 rule f). Absent = 0 (joint-only grounding).
+     */
+    soleOffsetM?: number;
+  }>;
   /**
    * Added 2026-10-08 (M1-01c). ID of the entry in `skeletonGroups` used when a body declares
    * neither `characterSkeletonGroup` nor `skeletonGroup` (spec 001 REQ-CMP-037). It is the group
@@ -391,11 +443,48 @@ export interface StyleDefinition {
   /** Clips hidden while this style is active (REQ-ANA-025). */
   excludedClips: Array<{ clip: ClipRef; reason: string }>;
 }
+
+// Added 2026-10-09 (FX-CHIBI), REQ-ANA-003/007/009. Engine API, `packages/engine/src/anatomy/apply.ts`.
+// `AnatomyBinding` = rig + character skeleton (engine contracts). Vector3, Object3D from three.
+
+/**
+ * Own-frame skin factor per joint (exact joint name): the compensated factors on the joint's
+ * length / cross-section axes, (1, 1, 1) elsewhere. Never written into Bone.scale.
+ * Cached per binding and values; read-only.
+ */
+export function anatomySkinScales(
+  binding: AnatomyBinding,
+  params: AnatomyParams,
+): ReadonlyMap<JointName, Vector3>;
+
+/**
+ * For every SkinnedMesh under `root`: boneInverses[b] = S(skin(joint b)) · B⁻¹(b), written into a
+ * per-skeleton copy (shared source matrices untouched). Rewrites a skeleton only when the values
+ * changed; skin (1, 1, 1) restores B⁻¹ exactly. Allocation-free after the first call per skeleton.
+ */
+export function applyAnatomyToSkins(
+  binding: AnatomyBinding,
+  params: AnatomyParams,
+  root: Object3D,
+): void;
+
+/**
+ * Factor for a static prop's local scale and offset (REQ-ANA-007): (1, 1, 1) when it inherits
+ * scale, else 1 / uniform(joint) on every axis. The returned vector is reused between calls.
+ */
+export function socketPropScale(
+  binding: AnatomyBinding,
+  params: AnatomyParams,
+  socket: SocketId,
+  inheritScale?: boolean, // default: true for 'head' only
+): Vector3;
 ```
 
 *(Added 2026-10-09 (STY).)* Spec 013 REQ-STY-019 adds the socket ID `tail` in M3.5. From then on `SocketId` is `'hand_r' | 'hand_l' | 'head' | 'spine_03' | 'pelvis' | 'tail'`, and the committed rig gains `socketBones.tail = 'pelvis'`. REQ-ANA-019 then requires the `tail` entry like every other socket ID (a missing `tail` fails validation), and REQ-ANA-007 applies to `tail` with `inheritScale` default false.
 
-Application order per frame (contract for engine and tests): 1) sample clip (spec 004), including the rest-pose correction of spec 004 REQ-ANM-023 onto the character's skeleton group *(added 2026-10-08, M1 PM rig update b)*; 2) apply root-motion policy (spec 004); 3) apply anatomy (`height` → length/width/thickness with compensation → propagating `head`/`hands`/`feet`); 4) apply grounding offset (computed once per anatomy change in bind pose); 5) update socket props; 6) skinning.
+Application order per frame (contract for engine and tests): 1) sample clip (spec 004), including the rest-pose correction of spec 004 REQ-ANM-023 onto the character's skeleton group *(added 2026-10-08, M1 PM rig update b)*; 2) apply root-motion policy (spec 004); 3) apply anatomy (`height` → length/width/thickness with compensation → propagating `head`/`hands`/`feet`); 4) apply grounding offset (computed once per anatomy change in bind pose, from joints and `soleOffsetM` only, REQ-ANA-008); 5) update socket props; 6) skinning.
+
+*(Amended 2026-10-09 (FX-CHIBI).)* Step 3 has two parts: 3a) pose: uniform factors into `Bone.scale`, each child's local translation times its parent's `skin` factor, root/pelvis translation per REQ-ANA-010 (`applyAnatomyToPose`); 3b) skins: `S(skin) · B⁻¹` into each skeleton's inverse bind matrices (`applyAnatomyToSkins`), rewritten only when the anatomy values change. The "compensation" in step 3 above means this, not inverse scales on child bones.
 
 ## Non-functional
 
@@ -413,11 +502,16 @@ Application order per frame (contract for engine and tests): 1) sample clip (spe
 - [NEEDS CLARIFICATION: (added 2026-10-09 (STY)) Initial content of the chibi clip exclusion list (AC-ANA-025.2), from the M3 visual review. Owner: graphics-engineer with the PM. Blocks the shipped `chibi.json` content, not the mechanism.]
 - (Added 2026-10-09 (STY).) Body-shape presets are relative factors over the style's anatomy preset (REQ-ANA-023) rather than absolute values, so one preset list serves Realistic and Chibi. The PM decision asked for "named presets over the existing 9 multipliers"; for style `realistic` the two readings give identical values (AC-ANA-023.1).
 
+- Resolved 2026-10-09 (M3-00, user decision on GitHub issue #10): the ground is the sole, not the lowest feet joint. REQ-ANA-008 adds the per-skeleton-group `soleOffsetM` from the rig data, scaled by `height × feet`; spec 011 REQ-AST-030..034 measure, store and check it. Lands in M3 (plan rows M3-01 schema, M3-05 engine, M3-06 tools, M3-17 goldens).
+
 ## References
 
+- GitHub issue #10 (AC-PIX-008.1 fails: joint-based grounding leaves the Quaternius soles about 2 cm below ground) and the FX-G diagnosis in `packages/engine/test/gpu/idle-grounding.gpu.ts` (lowest feet joint rest height 0.0152 m male, 0.0148 m female; lowest idle sole −0.024 to −0.031 m)
+- `.tagconn/work/m3-plan.md` row M3-00 and §8
 - PM decision 2026-10-09 (STY): chibi in M3, body-shape presets, per-style clip exclusions, NG2 amendment; spec 013
 - ADR-0001 (readability risk), ADR-0008 (M1 rig outcome, `docs/adr/0008-shared-rig-skeleton-groups-runtime-retarget.md`); `docs/architecture.md` §2.1 (assembly order), §3.2–3.3
 - M1 implementation read for the 2026-10-09 (M1-33) clarifications: `packages/engine/src/anatomy/apply.ts` (compensation, ground offset, root/pelvis scaling, prop scale), `packages/engine/src/anatomy/anatomy.test.ts`, `packages/engine/src/composition/evaluate-pose.ts`
+- FX-CHIBI fix read for the 2026-10-09 (FX-CHIBI) amendments: `packages/engine/src/anatomy/apply.ts` (`anatomySkinScales`, `applyAnatomyToSkins`, `socketPropScale`), `packages/engine/src/composition/evaluate-pose.ts` (step 3 order), `packages/engine/src/anatomy/anatomy.test.ts` (AC-ANA-003.1/.4 at 1e-9, inverse-bind test, AC-ANA-009.1 clip-scale case)
 - `.tagconn/work/research.md` (anatomy and readability notes, 2026-10-08)
 - Autodesk Maya joint attribute "Segment Scale Compensate" (concept reference for child compensation; Maya documentation, joint attributes)
 - three.js `SkinnedMesh` / `Skeleton` docs (r186): https://threejs.org/docs/#api/en/objects/SkinnedMesh (accessed 2026-10-08)

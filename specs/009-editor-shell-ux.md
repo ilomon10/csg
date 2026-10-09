@@ -164,7 +164,7 @@ Easy, on home or in the wizard. An Easy tour variant is deferred to the P3 backl
 
 - **AC-UX-014.1** Given focus in the project-name field, When the user types "mr", Then the text is "mr", Mute and Randomize do not run, and Ctrl+Z undoes the typing in the field, not an editor command.
 
-**REQ-UX-015 [P1]** THE SYSTEM SHALL NOT bind chords the browser or OS reserves or users rely on: Ctrl+N/T/W, Ctrl+Shift+N/T/W, Ctrl+Tab, Ctrl+Shift+Tab, Ctrl+1…9, Ctrl+L, Ctrl+R, F5, F11, F12, Ctrl+Shift+I/J/C, Ctrl+P, browser zoom (Ctrl+= / Ctrl+- / Ctrl+0), Alt+F4, Alt+← / Alt+→, and macOS Cmd+Q/H/M; the CI conflict check (REQ-UX-013) fails on any of them.
+**REQ-UX-015 [P1]** THE SYSTEM SHALL NOT bind chords the browser or OS reserves or users rely on: Ctrl+N/T/W, Ctrl+Shift+N/T/W, Ctrl+Tab, Ctrl+Shift+Tab, Ctrl+1…9, Ctrl+L, Ctrl+R, F5, F11, F12, Ctrl+Shift+I/J/C, Ctrl+P, browser zoom (Ctrl+= / Ctrl+- / Ctrl+0), Alt+F4, Alt+← / Alt+→, and macOS Cmd+Q/H/M and Cmd+Option+H ("Hide Others"; added 2026-10-09, PM, written `Mod+Alt+H` in the registry); the CI conflict check (REQ-UX-013) fails on any of them.
 
 - **AC-UX-015.1** Given a registry entry `Mod+=`, When the check runs, Then it fails with "Reserved chord: browser zoom".
 
@@ -172,6 +172,10 @@ Easy, on home or in the wizard. An Easy tour variant is deferred to the P3 backl
 
 - **AC-UX-016.1** Given focus on the top-bar Export button, When M is pressed, Then nothing happens.
 - **AC-UX-016.2** Given "Single-key shortcuts" off, When F is pressed in the viewport, Then the camera does not move, and Ctrl+Z still works.
+
+*(Clarified 2026-10-09 (M3-00), PM decision.)* "Single-character shortcut" means any binding whose chord holds none of Ctrl, Alt and Meta (Cmd) and whose key produces a printable character, Shift included (WCAG 2.1.4 counts Shift+letter as a character key): `M`, `?`, `+`, `,`, `Space`, and also `Shift+A`, `Shift+D`, `Shift+H`, `Shift+R` and `Shift+S` are single-key; `Delete`, `Backspace`, `Home`, `End`, `Enter`, `Escape`, `Tab`, arrow keys and F-keys (with or without Shift) are not. The classification is derived from the chord (no per-binding flag), applies to remapped chords too (REQ-UX-017), and every single-key default binding is marked † in the Default shortcuts table.
+
+- **AC-UX-016.3** Given "Single-key shortcuts" off and focus on the graph canvas with one node selected, When Shift+D, then Shift+H, then Shift+A is pressed, Then no node is duplicated, the node's preview does not toggle and no node search opens; When Mod+D is pressed, Then the node is duplicated. Given the chord classifier, When `Shift+D`, `?`, `Space` and `,` are classified, Then each is single-key; When `Shift+F6`, `Delete`, `Mod+D`, `Alt+A` and `Alt+Shift+H` are classified, Then none is. *(Added 2026-10-09 (M3-00).)*
 
 **REQ-UX-017 [P2]** THE SYSTEM SHALL let the user remap any binding in Settings › Keyboard, validate remaps with the same conflict and reserved-chord rules, store them locally, and offer "Reset to defaults".
 
@@ -186,7 +190,7 @@ Easy, on home or in the wizard. An Easy tour variant is deferred to the P3 backl
 #### Default shortcuts
 
 `Mod` = Ctrl / Cmd. Scope names as in REQ-UX-012. "Owner" is the spec defining the command's
-behavior; this table owns the binding. Bindings marked † are single-key (REQ-UX-016).
+behavior; this table owns the binding. Bindings marked † are single-key (REQ-UX-016, including Shift+printable key per its 2026-10-09 clarification).
 
 | Command id | Keys | Scope | Action | Owner |
 |------------|------|-------|--------|-------|
@@ -219,26 +223,26 @@ behavior; this table owns the binding. Bindings marked † are single-key (REQ-U
 | `viewport.frame` | F † | viewport | Frame character | 009 |
 | `viewport.prevDir` / `nextDir` | [ / ] † | viewport | Previous/next direction | 003 |
 | `viewport.zoomIn` / `zoomOut` | + / - † | viewport | Integer zoom in/out (Pixel) | 009 |
-| `graph.search` | Shift+A, Space † (tap: press and release < 200 ms without pointer movement) | graph | Open node search | 006 |
+| `graph.search` | Shift+A †, Space † (tap: press and release < 200 ms without pointer movement) | graph | Open node search | 006 |
 | `graph.zoomIn` / `zoomOut` | + / - † | graph | Zoom canvas in/out (10–400 %) | 006 |
 | `graph.mute` | M † | graph | Mute/bypass selected nodes | 006 |
-| `graph.hideUnused` | Mod+H | graph | Hide unused sockets | 006 |
+| `graph.hideUnused` | ~~Mod+H~~ Alt+Shift+H | graph | Hide unused sockets (amended 2026-10-09, PM: Mod+H is macOS Cmd+H, reserved by REQ-UX-015; Mod+Alt+H is macOS "Hide Others" (⌥⌘H), so Alt+Shift+H is used, matched on `code` `KeyH` because Alt is held) | 006 |
 | `graph.frameSelection` | F † | graph | Frame selection (all if none) | 006 |
 | `graph.frameAll` | Home | graph | Frame all nodes | 006 |
 | `graph.frameBox` | J † | graph | Add frame (box) around selection | 006 |
 | `graph.toggleSubgraph` | Tab | graph (`when`: a group instance is selected → enter; or inside a group with nothing selected → exit; otherwise Tab moves focus normally, AC-UX-037.2) | Enter/exit subgraph | 006 |
 | `graph.exitSubgraph` | Escape | graph (`when`: inside a group, nothing selected, focus not inside a node) | Exit subgraph | 006 |
 | `graph.copy` / `cut` / `paste` | Mod+C / Mod+X / Mod+V | graph | Copy/cut/paste nodes as JSON | 006 |
-| `graph.duplicate` | Mod+D, Shift+D | graph | Duplicate selection | 006 |
+| `graph.duplicate` | Mod+D, Shift+D † | graph | Duplicate selection | 006 |
 | `graph.delete` | Delete, Backspace | graph | Delete selection | 006 |
 | `graph.selectAll` | A †, Mod+A | graph | Select all nodes | 006 |
 | `graph.deselectAll` | Alt+A | graph | Deselect all | 006 |
 | `graph.group` / `ungroup` | Mod+G / Mod+Alt+G | graph | Group into subgraph / ungroup | 006 |
-| `graph.togglePreview` | Shift+H | graph | Toggle preview on selected nodes | 006 |
+| `graph.togglePreview` | Shift+H † | graph | Toggle preview on selected nodes | 006 |
 | `graph.collapse` | H † | graph | Collapse/expand selected nodes | 006 |
 | `graph.nudge` | Mod+← / → / ↑ / ↓ | graph | Move selected nodes one grid step (16 px) | 006 |
 | `graph.connect` | C † | graph (socket focused) | Open "Connect to…" list | 006 |
-| `graph.toggleSnap` | Shift+S | graph | Toggle grid snapping | 006 |
+| `graph.toggleSnap` | Shift+S † | graph | Toggle grid snapping | 006 |
 | `graph.alignLeft` / `alignRight` / `alignTop` / `alignBottom` (P2) | Alt+Shift+← / → / ↑ / ↓ | graph | Align selected nodes | 006 |
 | `graph.find` (P2) | Mod+F | graph | Find in graph | 006 |
 | `graph.contextMenu` (P2) | Shift+F10, ContextMenu | graph | Open context menu | 006 |
@@ -256,6 +260,19 @@ rotate the preview one 45° step (REQ-UX-058); in option-tile grids, arrows move
 Enter/Space select (REQ-UX-061); in swatch rows and wizard option cards, arrows move and check
 (REQ-UX-062, REQ-UX-092); in the home avatar strip, ← / → / Home / End change the selection and Enter
 runs the primary action (REQ-UX-075). Those requirements are in spec 014.
+
+List-local reordering keys (added 2026-10-09, PM decision): WHILE focus is on an item of a
+reorderable list, Alt+↑ / Alt+↓ move that item one position up or down. They are widget-local keys,
+handled inside the list widget and allowed by AC-UX-011.1 the same way as arrows in grids; they are
+not registry chords, so they are not rows of the table above and the REQ-UX-013 conflict check does
+not see them. They do not clash with `graph.alignTop` / `alignBottom` (Alt+Shift+↑ / ↓) and are not
+in the REQ-UX-015 reserved list (only Alt+← / → are). The help overlay lists them under the scope
+of the region that holds the list:
+
+| Keys | Where (widget) | Scope listed in help overlay | Action | Owner |
+|------|----------------|------------------------------|--------|-------|
+| Alt+↑ / Alt+↓ | Clip selection list of the Animation inspector tab (AC-ANM-004.3) | inspector | Move the focused clip up / down (one undo step) | 004 |
+| Alt+↑ / Alt+↓ | Blackboard param list (spec 006 REQ-EDT-030; `docs/guide/shader-graph/blackboard.md`) | graph | Move the focused param up / down | 006 |
 
 `Mod+Alt+P` was chosen for `app.toggleWorkspace` because it is not in the REQ-UX-015 list and no
 documented default exists for it in Chrome, Firefox or Safari (checked 2026-10-09, References).
@@ -367,7 +384,7 @@ Keyboard map is a copy of the `graph` rows; a change is made here first.
 **REQ-UX-037 [P1]** THE SYSTEM SHALL manage focus for overlays: dialogs trap focus, label themselves (`aria-labelledby`), close on Escape and return focus to the invoking element; no region is a keyboard trap (graph Tab handling per the shortcut table; Escape or F6 always leaves).
 
 - **AC-UX-037.1** Given the export dialog opened from the top bar, When Escape is pressed, Then the dialog closes and focus is on the Export button.
-- **AC-UX-037.2** Given focus in the graph canvas with no group node selected, When Tab is pressed, Then focus leaves the canvas to the next focusable element.
+- **AC-UX-037.2** Given focus in the graph canvas with no group node selected, When Tab is pressed, Then focus leaves the canvas to the next focusable element. *(Note 2026-10-09 (PM): not testable in M3; verification lands in M4 with the shader graph editor (spec 006), when a graph canvas exists. Until then the dock graph tabs show the "arrives with the shader graph editor" notice. Meaning unchanged.)*
 
 **REQ-UX-038 [P1]** WHERE `prefers-reduced-motion: reduce` is set (or the in-app "Reduce motion" setting is on) THE SYSTEM SHALL disable non-essential UI motion (panel slides, toast slides, tour highlights, auto-orbit) and start the viewport animation paused; otherwise UI transitions SHALL last ≤ 200 ms.
 
@@ -435,10 +452,10 @@ router and no path segments.
 
 **REQ-UX-049 [P1]** IF the GPU device is lost twice within 30 s after a shader graph change or a session/project restore THEN THE SYSTEM SHALL revert that graph to its last successfully rendered version (or to the built-in default graph for its target if none rendered in this session), recording the revert as one undoable history entry, SHALL show a warning toast with code `UX_GRAPH_REVERTED`, and SHALL offer "Start in safe mode" on the next launch, which opens the project with built-in graphs only and no user assets loaded. (security review 2026-10-08)
 
-- **AC-UX-049.1** Given a post graph edit followed by two simulated device losses 5 s and 12 s later, When the second loss is handled, Then the post graph equals the last graph that produced a rendered frame, the toast shows `UX_GRAPH_REVERTED`, and the history has exactly one new entry labelled "Revert graph after GPU crash".
-- **AC-UX-049.2** Given a restored project whose graph causes two device losses within 30 s and no earlier successful render, When handled, Then the graph is replaced by `builtin:post-default` (or `builtin:material-toon`) and the renderer recovers within 2 s.
-- **AC-UX-049.3** Given a reverted graph in the previous session, When the editor next starts, Then the start prompt offers "Start in safe mode"; When chosen, Then no user graph is compiled, no `user:` asset is read from OPFS (spec 008), user parts show "Missing asset" placeholders, and a banner "Safe mode — Exit safe mode" is shown.
-- **AC-UX-049.4** Given two device losses 31 s apart, or two losses with no graph change or restore in the preceding 30 s, When handled, Then REQ-UX-046 applies only and no graph is reverted.
+- **AC-UX-049.1** Given a post graph edit followed by two simulated device losses 5 s and 12 s later, When the second loss is handled, Then the post graph equals the last graph that produced a rendered frame, the toast shows `UX_GRAPH_REVERTED`, and the history has exactly one new entry labelled "Revert graph after GPU crash". *(Note 2026-10-09 (PM): AC-UX-049.1 to .4 are not testable in M3; verification lands in M4 with the shader graph editor (spec 006), when user graphs can be edited, compiled and reverted. Until then the dock graph tabs show the "arrives with the shader graph editor" notice. Meaning unchanged.)*
+- **AC-UX-049.2** Given a restored project whose graph causes two device losses within 30 s and no earlier successful render, When handled, Then the graph is replaced by `builtin:post-default` (or `builtin:material-toon`) and the renderer recovers within 2 s. *(Note 2026-10-09 (PM): verification lands in M4; see AC-UX-049.1. Meaning unchanged.)*
+- **AC-UX-049.3** Given a reverted graph in the previous session, When the editor next starts, Then the start prompt offers "Start in safe mode"; When chosen, Then no user graph is compiled, no `user:` asset is read from OPFS (spec 008), user parts show "Missing asset" placeholders, and a banner "Safe mode — Exit safe mode" is shown. *(Note 2026-10-09 (PM): verification lands in M4; see AC-UX-049.1. Meaning unchanged.)*
+- **AC-UX-049.4** Given two device losses 31 s apart, or two losses with no graph change or restore in the preceding 30 s, When handled, Then REQ-UX-046 applies only and no graph is reverted. *(Note 2026-10-09 (PM): verification lands in M4; see AC-UX-049.1. Meaning unchanged.)*
 
 **REQ-UX-050 [P1]** THE SYSTEM SHALL count the bytes of the current projects and of every autosave snapshot (`project-snapshots`) in the storage usage display (spec 008, REQ-UPL-038) as a separate "Projects and autosaves" line, and SHALL apply the same free-space check before an autosave write; IF the check fails THEN autosave follows the REQ-UX-027 "Save failed" path. (security review 2026-10-08)
 
@@ -615,9 +632,9 @@ The `ViewRoute`, `EasyCategoryDef`, `SwatchSetDef`, `HOME_RENDER_PROFILE`, `Home
 - ~~Final graph bindings must be reconciled with spec 006.~~ Resolved 2026-10-08: node preview is Shift+H (not P), `A`/`Alt+A` select/deselect all added, cut, Shift+D, zoom, nudge, connect, snapping, align, find and context-menu rows added, Tab/Escape conditions aligned, `,`/`.` frame steps added from spec 004.
 - [NEEDS CLARIFICATION: Can F6 be reliably intercepted in all target browsers (Firefox/Safari may move focus to the address bar)? If not, keep skip links + palette "Focus region…" as the guaranteed path. Owner: editor-ux-engineer during M3.]
 - [NEEDS CLARIFICATION: Should the history persist across reloads (e.g. last 50 entries in IndexedDB)? Default for v1: no; history starts empty after reload. Owner: project owner.]
-- [NEEDS CLARIFICATION: `Mod+E`, `Mod+J`, `Mod+H`, `Mod+D`, `Mod+G`, `Mod+F` override browser defaults (search bar, downloads, history, bookmark, find next, find). Accepted for v1 because they only fire in the matching scope; confirm with user testing. `graph.nudge` uses `Mod+←/→`, which is browser Back/Forward on macOS (Cmd+←/→); the canvas must call `preventDefault`, or the binding moves to `Alt+arrow` if that proves unreliable. Owner: editor-ux-engineer.]
+- [NEEDS CLARIFICATION: `Mod+E`, `Mod+J`, `Mod+D`, `Mod+G`, `Mod+F` override browser defaults (search bar, downloads, bookmark, find next, find; `Mod+H` dropped 2026-10-09, PM: `graph.hideUnused` moved to Alt+Shift+H). Accepted for v1 because they only fire in the matching scope; confirm with user testing. `graph.nudge` uses `Mod+←/→`, which is browser Back/Forward on macOS (Cmd+←/→); the canvas must call `preventDefault`, or the binding moves to `Alt+arrow` if that proves unreliable. Owner: editor-ux-engineer.]
 - Home screen visual design (resolved 2026-10-09), the workspace toggle placement and the M3 presets: see spec 014 Open questions.
-- [NEEDS CLARIFICATION: On macOS, Option changes `KeyboardEvent.key` (Cmd+Option+P gives "π"; the same affects `Mod+Alt+N` and `Mod+Alt+G`). REQ-UX-018 matches characters on `key`. Should chords with Alt match on `code` instead? Proposed: yes, for letters only. Owner: editor-ux-engineer. Non-blocking for the spec, blocking for the Mod+Alt+P implementation on macOS.]
+- ~~[NEEDS CLARIFICATION: On macOS, Option changes `KeyboardEvent.key` (Cmd+Option+P gives "π"; the same affects `Mod+Alt+N` and `Mod+Alt+G`). REQ-UX-018 matches characters on `key`. Should chords with Alt match on `code` instead? Proposed: yes, for letters only. Owner: editor-ux-engineer. Non-blocking for the spec, blocking for the Mod+Alt+P implementation on macOS.]~~ Resolved 2026-10-09 (PM, plan question Q7, recorded in M3-00): a chord that holds Alt matches its letter key on `KeyboardEvent.code` (`KeyA`…`KeyZ`, the physical key) instead of `key`, so `Mod+Alt+P` works on macOS; this extends the REQ-UX-018 `code` list, and all other keys keep the REQ-UX-018 rule.
 - ~~[NEEDS CLARIFICATION: Should the onboarding tour (REQ-UX-010) have an Easy variant? Its steps describe Pro regions. Default until answered: the tour is offered only when a project first opens in Pro. Owner: user.]~~ Resolved 2026-10-09 (PM): the tour is Pro-only in M3 (REQ-UX-010 note); an Easy variant is deferred to the P3 backlog.
 
 ## References

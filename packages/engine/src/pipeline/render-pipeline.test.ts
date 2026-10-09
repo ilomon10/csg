@@ -2,13 +2,14 @@ import {describe, expect, it, vi} from 'vitest';
 import type {Color, Vector2} from 'three';
 import {DataTexture, Scene} from 'three';
 import {float, texture} from 'three/tsl';
-import {NodeFrame} from 'three/webgpu';
+import {NodeFrame, RenderPipeline} from 'three/webgpu';
 import type {WebGPURenderer} from 'three/webgpu';
 import {defaultRenderSettings} from '@csg/parts-schema';
 import type {RenderSettings} from '@csg/parts-schema';
 import type {Framing} from '../contracts/pipeline';
 import {buildPaletteLut} from './palette-lut';
 import {
+  POST_CHAIN_CACHE_SIZE,
   buildDefaultPostChain,
   cellReadbackLayout,
   createPixelPipeline,
@@ -142,7 +143,8 @@ function fakePipeline(
     seen.push({time: r.nodeFrame.time, deltaTime: r.nodeFrame.deltaTime});
     return undefined;
   };
-  (pipeline as unknown as {post: {render(): void}}).post.render = () => {};
+  // The post chains are created per structure (POST_CHAIN_CACHE_SIZE); none draws in Node.
+  vi.spyOn(RenderPipeline.prototype, 'render').mockImplementation(() => {});
   return {pipeline, binder, renderer: r, seen};
 }
 
@@ -265,6 +267,61 @@ describe('pixel pipeline (fake renderer)', () => {
       pipeline.dispose();
     },
   );
+
+  it('AC-PIX-034.2: switching back to a recent post structure reuses its compiled chain (LRU of POST_CHAIN_CACHE_SIZE), uniform changes stay rebuild-free', async () => {
+    const {pipeline} = fakePipeline({buildPaletteLut: memoLut});
+    const dispose = vi.spyOn(RenderPipeline.prototype, 'dispose');
+    const active = () => (pipeline as unknown as {post: RenderPipeline}).post;
+    const withDither = (mode: 'none' | 'bayer2' | 'bayer4' | 'bayer8') => ({
+      ...PICO(),
+      palette: {...PICO().palette, dither: {mode, strength: 0.5}},
+    });
+    const none = {
+      ...defaultRenderSettings(),
+      palette: {...PICO().palette, id: 'none' as const},
+    };
+    try {
+      await pipeline.setRenderSettings(withDither('none'));
+      const first = active();
+      // The first build replaces (and disposes) the uncached placeholder chain.
+      expect(dispose).toHaveBeenCalledTimes(1);
+      dispose.mockClear();
+      await pipeline.setRenderSettings(withDither('bayer4'));
+      const bayer4 = active();
+      expect(pipeline.stats.rebuilds).toBe(2);
+      expect(bayer4).not.toBe(first);
+      // Back to a cached structure: no build, the same compiled chain.
+      await pipeline.setRenderSettings(withDither('none'));
+      expect(active()).toBe(first);
+      await pipeline.setRenderSettings({
+        ...withDither('bayer4'),
+        alphaCutoff: 0.3,
+      });
+      expect(active()).toBe(bayer4);
+      expect(pipeline.stats.rebuilds).toBe(2);
+      expect(dispose).not.toHaveBeenCalled();
+      // Fill the cache past its size: the least recently used chain is evicted and disposed.
+      await pipeline.setRenderSettings(withDither('bayer8'));
+      await pipeline.setRenderSettings(none);
+      expect(POST_CHAIN_CACHE_SIZE).toBe(4);
+      expect(pipeline.stats.rebuilds).toBe(4);
+      expect(dispose).not.toHaveBeenCalled();
+      await pipeline.setRenderSettings(withDither('bayer2'));
+      expect(pipeline.stats.rebuilds).toBe(5);
+      expect(dispose).toHaveBeenCalledTimes(1);
+      await pipeline.setRenderSettings(withDither('bayer4'));
+      expect(active()).toBe(bayer4);
+      expect(pipeline.stats.rebuilds).toBe(5);
+      await pipeline.setRenderSettings(withDither('none'));
+      expect(active()).not.toBe(first); // evicted: built again
+      expect(pipeline.stats.rebuilds).toBe(6);
+      dispose.mockClear();
+      pipeline.dispose();
+      expect(dispose).toHaveBeenCalledTimes(POST_CHAIN_CACHE_SIZE);
+    } finally {
+      dispose.mockRestore();
+    }
+  });
 
   it('review L2: dispose closes the WebGL2 fence-wait channel', () => {
     const original = () => Promise.resolve();

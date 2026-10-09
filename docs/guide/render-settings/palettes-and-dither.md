@@ -7,8 +7,7 @@ description: Limit a sprite to the PICO-8 or Endesga-32 palette, or to your own 
 
 A palette limits every color in the sprite to a fixed list. Pixel artists use palettes to keep a set of sprites visually consistent. Dithering mixes palette colors in a pattern, so a gradient can look smooth with a short palette.
 
-> [!NOTE]
-> **Planned.** These controls are planned with the Render tab. The palette is set to **None** by default, so the default look uses exact colors.
+Set the palette and dithering in the **Render** tab of the Pro workspace. The palette is set to **None** by default, so the default look uses exact colors.
 
 ## Choose a palette
 

@@ -6,9 +6,19 @@
  */
 import {Group, Matrix4, Skeleton, SkinnedMesh} from 'three';
 import type {Bone, Object3D} from 'three';
-import type {AttachSkinnedPart, AttachedPart} from '../contracts/composition';
+import type {
+  AttachSkinnedPart,
+  AttachedPart,
+  MaterialLinker,
+} from '../contracts/composition';
 import type {EngineError, Result} from '../contracts/errors';
 import {linkMaterial, unlinkMaterial} from './tint-material';
+
+/** M1 behaviour: clones mirror the material of their registry source mesh. */
+const DEFAULT_LINKER: MaterialLinker = {
+  link: linkMaterial,
+  unlink: unlinkMaterial,
+};
 
 /** A part joint whose parent differs from the rig's parent of its target bone. */
 export interface ParentMismatch {
@@ -43,7 +53,8 @@ function rigMismatch(
 /**
  * Rebinds every skinned mesh of a loaded part to the character skeleton
  * (REQ-CMP-037). For each source mesh the function creates a `SkinnedMesh`
- * that shares the source geometry and material (material kept in sync with
+ * that shares the source geometry and gets its material from
+ * `options.materials` (default: the source material, kept in sync with
  * `linkMaterial`) and binds it to a new `Skeleton` whose bones are the body's
  * bones, in the part's joint order, with the part's own `boneInverses` (the
  * same `Matrix4` objects) and its own bind matrix. The part object is added to
@@ -104,6 +115,7 @@ export const attachSkinnedPart: AttachSkinnedPart = (part, body, options) => {
     );
   }
 
+  const linker = options?.materials ?? DEFAULT_LINKER;
   const object = new Group();
   object.name = part.ref;
   part.scene.updateMatrixWorld(true);
@@ -131,7 +143,7 @@ export const attachSkinnedPart: AttachSkinnedPart = (part, body, options) => {
     clone.renderOrder = source.renderOrder;
     relative.multiplyMatrices(sceneInverse, source.matrixWorld);
     relative.decompose(clone.position, clone.quaternion, clone.scale);
-    linkMaterial(source, clone);
+    linker.link(source, clone);
     object.add(clone);
     clone.bind(skeleton, source.bindMatrix);
     clones.push({source, clone});
@@ -150,7 +162,7 @@ export const attachSkinnedPart: AttachSkinnedPart = (part, body, options) => {
       disposed = true;
       object.removeFromParent();
       for (const {source, clone} of clones) {
-        unlinkMaterial(source, clone);
+        linker.unlink(source, clone);
         object.remove(clone);
       }
       // Geometry, materials and bones are shared; only the skeletons are ours.

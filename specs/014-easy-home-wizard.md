@@ -154,7 +154,7 @@ contrast: amber and mint are never the only carrier of state (check marks, rings
 - **AC-UX-054.1** Given a fresh profile, When the first project opens, Then it opens in Easy.
 - **AC-UX-054.2** Given the user switched to Pro, When the page reloads and a project opens, Then it opens in Pro.
 
-**REQ-UX-055 [P1]** IF the document holds a value Easy cannot represent (anatomy values equal to no anatomy preset, a tint not in the channel's swatch set, a part that is not among the category's tiles such as a `user:` part) THEN THE SYSTEM SHALL show it in Easy as a selected "Custom" tile, card or swatch with an "Edit in Pro" action that switches to Pro and focuses the control that edits that value, and SHALL never change the value just because Easy displays it.
+**REQ-UX-055 [P1]** IF the document holds a value Easy cannot represent (anatomy values equal to no anatomy preset, a tint not in the channel's swatch set, a part that is not among the category's tiles such as a `user:` part) THEN THE SYSTEM SHALL show it in Easy as a selected "Custom" tile, card or swatch with an "Edit in Pro" action that switches to Pro and focuses the control that edits that value, and SHALL never change the value just because Easy displays it. *(Amended 2026-10-09 (M3-00), Q3: in the Shape group, "anatomy values equal to no anatomy preset" reads "anatomy values equal to the result of no body-shape card applied to the current style's base (REQ-ANA-023)"; AC-UX-055.1 holds as written.)*
 
 - **AC-UX-055.1** Given `head = 1.2` and the other eight anatomy values at 1, When the Body tab opens, Then the Shape group shows a selected "Custom" card; When "Edit in Pro" is activated, Then Pro is shown with the Anatomy inspector tab active and focus on the anatomy preset selector, which reads "(modified)" (REQ-ANA-014).
 - **AC-UX-055.2** Given hair tint `#123456` not in the hair swatch set, When the Hair tab opens, Then a checked swatch named "Custom color #123456" is shown; When "Edit in Pro" is activated, Then the Colors tab is active and the hair tint control is focused.
@@ -194,16 +194,16 @@ contrast: amber and mint are never the only carrier of state (check marks, rings
 - **AC-UX-062.1** Given the hair swatch row with "Chestnut brown" checked, When → is pressed, Then the next swatch is checked, its name (e.g. "Auburn") is spoken, the hair tint equals that swatch's hex, and the preview shows it within 150 ms.
 - **AC-UX-062.2** Given 4 → presses 100 ms apart, When undo is pressed once, Then the tint returns to "Chestnut brown".
 
-**REQ-UX-063 [P1]** THE SYSTEM SHALL show no sliders, numeric fields or free color pickers in the Easy workspace, and SHALL present body shape as 4 to 6 anatomy preset cards (spec 002 REQ-ANA-013 data) in a Shape group of the Body tab, where choosing a card applies that preset as one undoable command.
+**REQ-UX-063 [P1]** THE SYSTEM SHALL show no sliders, numeric fields or free color pickers in the Easy workspace, and SHALL present body shape as ~~4 to 6 anatomy preset cards (spec 002 REQ-ANA-013 data)~~ one card per body-shape preset (spec 002 REQ-ANA-022 data, menu order; six in M3) in a Shape group of the Body tab, where choosing a card applies that ~~preset~~ body shape relative to the current style's base anatomy (spec 002 REQ-ANA-023) as one undoable command. *(Amended 2026-10-09 (M3-00), PM decision on plan question Q3: the Shape group uses the six body-shape presets, not the anatomy presets; anatomy presets are applied by the style choice (spec 001 REQ-CMP-042) and stay selectable in Pro (spec 002 REQ-ANA-013). A body-shape data file added later adds a card (AC-ANA-022.3), so the former 4-to-6 cap no longer applies.)*
 
 - **AC-UX-063.1** Given each Easy tab in turn, When the DOM is queried, Then it contains no element with role `slider` or `spinbutton` and no `input[type=range|number|color]`.
-- **AC-UX-063.2** Given the `chibi` card, When chosen, Then the nine anatomy values equal the `chibi` preset and one undo restores the previous values.
+- **AC-UX-063.2** ~~Given the `chibi` card, When chosen, Then the nine anatomy values equal the `chibi` preset and one undo restores the previous values.~~ Given the Body tab of a project with style `realistic`, When the Shape group renders, Then it shows the cards Average, Slim, Athletic, Stocky, Tall and Petite in that order and no `chibi` or `heroic` card; When `stocky` is chosen, Then the nine anatomy values equal the `stocky` factors (AC-ANA-023.1), the `stocky` card is checked, and one undo restores the previous values; Given style `chibi` instead, When `stocky` is chosen, Then `torsoWidth` is 1.32 and `legLength` 0.70 (AC-ANA-023.2). *(Amended 2026-10-09 (M3-00), PM decision Q3.)*
 
 **REQ-UX-064 [P1]** THE SYSTEM SHALL show in the Easy bottom bar, in this order, Undo and Redo (accessible names include the entry label, e.g. "Undo: Equip Ponytail", disabled when empty), Randomize (menu button: "This tab", "Everything"), Reset tab, ~~the workspace toggle (REQ-UX-053)~~ and Export (opens the spec 005 export dialog). *(Amended 2026-10-09, PM: workspace toggle removed from the bottom bar, REQ-UX-053.)*
 
 - **AC-UX-064.1** Given a project just opened (empty history), When the bottom bar renders, Then Undo and Redo are disabled, the ~~six~~ five controls are present in order, no workspace toggle is in the bottom bar, and Export opens the export dialog with focus inside it. *(Amended 2026-10-09, PM.)*
 
-**REQ-UX-065 [P2]** WHEN the user chooses Randomize › This tab THE SYSTEM SHALL randomize only the active category's slots, tint channels and (Body) anatomy preset choice, as if every other field were locked (REQ-CMP-019), and WHEN Randomize › Everything is chosen THE SYSTEM SHALL randomize per REQ-CMP-018 with the user's locks; each press SHALL use a fresh seed (reroll, REQ-CMP-018) stored in `CharacterSpec.seed`, pick tints only from swatch sets and anatomy only from presets, and record one history entry.
+**REQ-UX-065 [P2]** WHEN the user chooses Randomize › This tab THE SYSTEM SHALL randomize only the active category's slots, tint channels and (Body) anatomy preset choice, as if every other field were locked (REQ-CMP-019), and WHEN Randomize › Everything is chosen THE SYSTEM SHALL randomize per REQ-CMP-018 with the user's locks; each press SHALL use a fresh seed (reroll, REQ-CMP-018) stored in `CharacterSpec.seed`, pick tints only from swatch sets and anatomy only from presets, and record one history entry. *(Amended 2026-10-09 (M3-00), Q3: in Easy, "anatomy preset choice" and "anatomy only from presets" mean one of the body-shape presets of the Shape group, applied as REQ-ANA-023 to the style's base; the style's anatomy preset itself changes only with the style.)*
 
 - **AC-UX-065.1** Given the Hair tab, When Randomize › This tab runs 20 times, Then each time only `parts.hair` and the hair tint channels may differ from before, and each result has a different `seed`.
 - **AC-UX-065.2** Given Randomize › Everything, When the result is shown, Then no "Custom" tile, card or swatch is selected in any Easy tab.
@@ -241,6 +241,10 @@ contrast: amber and mint are never the only carrier of state (check marks, rings
 
 - **AC-UX-072.1** Given saved A (edited day 3), B (day 5, pinned), C (day 4) and 6 presets, When home renders, Then the order is B, C, A, then the 6 presets, and B is selected.
 
+*(Amended 2026-10-09 (M3-00), PM decision on plan question Q4.)* A preset "covers" a camera preset through its `camera` field (`CharacterPreset`, Data & contracts): an absent `camera` means the default `side`. The home lineup itself always renders with `HOME_RENDER_PROFILE` (REQ-UX-080), whatever the preset's `camera`.
+
+- **AC-UX-072.2** Given the shipped M3 preset data, When validated, Then at least one preset has `camera` absent or `side`, and at least one has `camera` `three-quarter` or `isometric`. *(Added 2026-10-09 (M3-00).)*
+
 **REQ-UX-073 [P1]** THE SYSTEM SHALL draw the lineup as one horizontal row of characters standing left to right on a stage, each from its pre-rendered idle frames (REQ-UX-080) at an integer scale with a name tag above it, where the selected character is horizontally centered (± 1 px), drawn at the largest integer scale `s` with 64·`s` ≤ 50 % of the lineup height (minimum 2) and is the only one with a highlighted name tag, and the others are drawn at scale max(1, `s` − 1) with sprite opacity 70 % at distance 1 and 45 % at distance 2 or more; name tags keep text contrast ≥ 4.5:1 at every distance.
 
 - **AC-UX-073.1** Given a 600 px tall lineup and the 4th character selected, When rendered, Then the selected sprite is drawn at 4× (256 px), its center is within 1 px of the lineup center, its neighbours are at 3×, and every name tag passes the 4.5:1 contrast check.
@@ -263,10 +267,14 @@ contrast: amber and mint are never the only carrier of state (check marks, rings
 
 - **AC-UX-077.1** Given 6 presets, When the tile is activated 600 times (mocked random source), Then each preset is selected 100 times and no project is created.
 
-**REQ-UX-078 [P1]** THE SYSTEM SHALL label the bottom-center primary action "Edit" for a saved character, opening it in the last workspace (`#p=<id>`), and "Start from this preset" for a preset, creating and saving (REQ-UX-025) a new project named after the preset with a copy of its `CharacterSpec` and default render settings and opening it directly in the editor in the last workspace (not the wizard); built-in presets are never modified.
+**REQ-UX-078 [P1]** THE SYSTEM SHALL label the bottom-center primary action "Edit" for a saved character, opening it in the last workspace (`#p=<id>`), and "Start from this preset" for a preset, creating and saving (REQ-UX-025) a new project named after the preset with a copy of its `CharacterSpec` and ~~default render settings~~ the default render settings of the preset's `camera` (spec 003 Defaults table for that `camera.preset`; the `side` defaults when `camera` is absent) and opening it directly in the editor in the last workspace (not the wizard); built-in presets are never modified.
 
 - **AC-UX-078.1** Given saved "Knight" selected and Pro as last workspace, When Edit is activated, Then Knight opens in Pro.
 - **AC-UX-078.2** Given preset "Mage" selected, When "Start from this preset" is activated, Then within 500 ms a new project "Mage" is in IndexedDB, it opens in the last workspace, its spec deep-equals the preset spec, and on the reference machine the character renders within 5 s (P-07).
+
+*(Amended 2026-10-09 (M3-00), PM decision on plan question Q4.)* A `CharacterPreset` may carry `camera`; when it is set, it sets `render.camera.preset` of the new project, and every other render field (including `camera.pivotRowPx`, filled by the spec 003 resolution-relative default rule) takes the spec 003 default for that camera preset. The camera is not copied back into the preset and is not part of the `CharacterSpec`, so AC-UX-078.2's spec equality is unchanged. The wizard (REQ-UX-099) does not use preset cameras and keeps the plain default render settings.
+
+- **AC-UX-078.3** Given preset "Scout" with `camera: 'isometric'`, When "Start from this preset" is activated, Then the saved project's `render` deep-equals the spec 003 defaults for `camera.preset` `isometric` (so `camera.pivotRowPx` is 10 at 64×64 with the default outline); Given preset "Mage" without `camera`, Then the project's `render` deep-equals the `side` defaults. *(Added 2026-10-09 (M3-00).)* *(Note 2026-10-10 (PM): "deep-equals the spec 003 defaults" excludes `render.animations`, which spec 004 owns; every new project starts with the spec 001/004 default clip selection (idle, then walk), as for the wizard and share-link paths. Meaning otherwise unchanged.)*
 
 **REQ-UX-079 [P1]** THE SYSTEM SHALL offer, for the selected saved character only, a ⋯ menu (ARIA menu button) with Open, Duplicate ("<name> copy", then selected), Rename (dialog, 1 to 64 characters after trimming), Export (opens the project with the export dialog), Pin/Unpin, and Delete, where Delete asks for confirmation in a dialog whose default focus is Cancel and then removes the project, its autosave snapshots and its home frames.
 
@@ -332,9 +340,9 @@ contrast: amber and mint are never the only carrier of state (check marks, rings
 - **AC-UX-092.2** Given ~~a fixture pack that provides Stickman content~~ a test build whose `SUPPORTED_STYLE_COMBOS` contains `stickman`/`human` and a loaded fixture pack that provides `presets/styles/stickman.json`, When the wizard opens with species Human, Then Stickman is enabled and selectable. *(Amended 2026-10-09, PM gating decision.)*
 - **AC-UX-092.3** Given a test build whose `SUPPORTED_STYLE_COMBOS` contains `stickman`/`human` but no loaded pack provides `presets/styles/stickman.json`, When the Style step renders, Then Stickman has `aria-disabled="true"` and the "Coming soon" label; Given the fixture pack loaded but `stickman`/`human` not in `SUPPORTED_STYLE_COMBOS`, Then Stickman is also disabled. *(Added 2026-10-09, PM gating decision.)*
 
-**REQ-UX-093 [P1]** THE SYSTEM SHALL offer on the Body shape step 4 to 6 anatomy preset cards (spec 002 REQ-ANA-013, those valid for the chosen style) with a still image and a name, and no sliders.
+**REQ-UX-093 [P1]** THE SYSTEM SHALL offer on the Body shape step ~~4 to 6 anatomy preset cards (spec 002 REQ-ANA-013, those valid for the chosen style)~~ one card per body-shape preset (spec 002 REQ-ANA-022, menu order; six in M3), applied relative to the base anatomy of the style chosen on step 1 (spec 002 REQ-ANA-023), with a still image and a name, and no sliders. *(Amended 2026-10-09 (M3-00), PM decision on plan question Q3: body shapes, not anatomy presets; body shapes are relative, so every card is valid for every style.)*
 
-- **AC-UX-093.1** Given the Body shape step, When rendered, Then it shows between 4 and 6 cards, no `slider` role, and choosing `heroic` sets the draft's nine anatomy values to that preset.
+- **AC-UX-093.1** ~~Given the Body shape step, When rendered, Then it shows between 4 and 6 cards, no `slider` role, and choosing `heroic` sets the draft's nine anatomy values to that preset.~~ Given the Body shape step after Realistic was chosen on step 1, When rendered, Then it shows the six cards Average, Slim, Athletic, Stocky, Tall and Petite in that order, no `slider` role, and choosing `athletic` sets the draft's nine anatomy values to the `athletic` row of spec 002 REQ-ANA-022 (the Realistic base is all 1.00); Given Chibi chosen on step 1, When `petite` is chosen, Then the draft's `height` is 0.80 (AC-ANA-023.3). *(Amended 2026-10-09 (M3-00), PM decision Q3.)*
 
 **REQ-UX-094 [P1]** THE SYSTEM SHALL build the Face, Hair, Outfit and Colors steps from the Easy option-tile groups (REQ-UX-061) and swatch row (REQ-UX-062) of the matching Easy categories, with the same keyboard model and accessible names.
 
@@ -345,7 +353,7 @@ contrast: amber and mint are never the only carrier of state (check marks, rings
 - **AC-UX-095.1** Given Hair chosen on step 5, When Back is pressed twice and Next twice, Then step 5 shows the same hair selected.
 - **AC-UX-095.2** Given a hair chosen on step 5, When Skip is pressed, Then the draft's hair equals the starting draft's hair and step 6 is shown with focus on its heading.
 
-**REQ-UX-096 [P2]** THE SYSTEM SHALL offer a Randomize button on steps 1 to 7 that randomizes only that step's fields with a fresh seed (REQ-CMP-018), choosing only enabled options, swatch-set tints and preset anatomy.
+**REQ-UX-096 [P2]** THE SYSTEM SHALL offer a Randomize button on steps 1 to 7 that randomizes only that step's fields with a fresh seed (REQ-CMP-018), choosing only enabled options, swatch-set tints and preset anatomy. *(Amended 2026-10-09 (M3-00), Q3: on the Body shape step, "preset anatomy" is one of the body-shape cards of REQ-UX-093.)*
 
 - **AC-UX-096.1** Given the Outfit step, When Randomize runs 20 times, Then only the outfit slots and their tints may differ from before.
 - **AC-UX-096.2** Given the Style step with Stickman and Voxel disabled, When Randomize runs 100 times, Then the chosen style is always Realistic or Chibi.
@@ -419,7 +427,9 @@ export interface EasyCategoryDef {
   readonly icon: string;              // icon id from the bundled icon set
   readonly slots: readonly string[];  // slot ids from the slot registry (spec 001), group order
   readonly tintChannels: readonly string[];
-  readonly anatomyPresets: boolean;   // true only for 'body' (Shape group)
+  /** True only for 'body': show the Shape group. Amended 2026-10-09 (M3-00, Q3): the group lists
+   *  body-shape presets (spec 002 REQ-ANA-022), not anatomy presets; the field name is kept. */
+  readonly anatomyPresets: boolean;
 }
 
 /** Data file of swatches for one or more tint channels (REQ-UX-062). */
@@ -430,6 +440,23 @@ export interface SwatchSetDef {
   readonly channels: readonly string[];
   /** 4 to 24 entries; `nameKey` resolves to the spoken color name. */
   readonly swatches: ReadonlyArray<{ readonly hex: string; readonly nameKey: string }>;
+}
+
+/**
+ * Added 2026-10-09 (M3-00), PM decision Q4. Built-in character preset file in a pack's
+ * `presets/` folder (spec 011 output layout; REQ-UX-072, -078, -103; spec 001 REQ-CMP-027). Validated by
+ * `characterPresetSchema` in `@csg/parts-schema` (`packages/parts-schema/src/presets.ts`, plan row
+ * M3-01). Strict object; `character` is migrated forward like any CharacterSpec (AC-CMP-049.2).
+ */
+export interface CharacterPreset {
+  readonly format: 'sprite-character-preset';
+  readonly version: 1;
+  readonly id: string;                 // [a-z0-9-]{1,32}, unique per pack
+  readonly name: string;               // display name, e.g. "Ranger" (REQ-UX-103)
+  readonly character: CharacterSpec;   // spec 001
+  /** Optional. Sets `render.camera.preset` of a project started from this preset (REQ-UX-078).
+   *  Absent = 'side'. 'custom' is not allowed (it needs angles a preset does not carry). */
+  readonly camera?: 'side' | 'three-quarter' | 'isometric';
 }
 
 /** Fixed render profile for home frames (REQ-UX-080). A change bumps `version`. */
@@ -491,6 +518,9 @@ dev-mode warning.
 - ~~[NEEDS CLARIFICATION: Which character presets ship as the ≥ 6 home presets for M3, and which of them are Chibi? Owner: asset-pipeline-engineer with the user (spec 011 / 001 preset data), pending the mockup review.]~~ Resolved 2026-10-09 (PM): the spec states the rule (REQ-UX-103: at least 6 presets from the bundled `quaternius-ubc` and `quaternius-outfits` peasant/ranger parts, role-style names true to the outfit); the exact list, including which presets use Chibi, is data owned by asset-pipeline-engineer.
 - Resolved 2026-10-09 (PM): the onboarding tour (REQ-UX-010, spec 009) is Pro-only in M3; an Easy tour variant is deferred to the P3 backlog.
 - Resolved 2026-10-09 (PM, after the user approved the mockup): visual direction, see Layout › Visual direction.
+- Resolved 2026-10-09 (PM, plan question Q3, recorded in M3-00): the Easy Shape group (REQ-UX-063) and the wizard Body shape step (REQ-UX-093) show the six body-shape presets of spec 002 REQ-ANA-022, applied relative to the style's base anatomy (REQ-ANA-023), not the anatomy presets of REQ-ANA-013. AC-UX-063.2 and AC-UX-093.1 amended.
+- Resolved 2026-10-09 (PM, plan question Q4, recorded in M3-00): a `CharacterPreset` may carry `camera`; when set, it sets `render.camera.preset` of a project started from that preset (REQ-UX-078 amended, AC-UX-078.3), which is how the presets cover side and top-down cameras (REQ-UX-072, AC-UX-072.2).
+- ~~[NEEDS CLARIFICATION: (added 2026-10-09, M3-00) spec 001 REQ-CMP-027 and AC-CMP-049.2 describe a pack preset file as a bare `CharacterSpec`, while `CharacterPreset` here (and plan contract C1) wraps it with `format`, `id`, `name` and `camera`. Proposal: spec 001 adopts the wrapper, and AC-CMP-049.2 reads "a pack preset file whose `character` is a version-1 `CharacterSpec`". Owner: spec-writer for spec 001 (outside the M3-00 edit scope). Non-blocking: M3-01 implements the wrapper as in C1.]~~ Resolved 2026-10-09 (PM): spec 001 REQ-CMP-027 and AC-CMP-049.2 adopt the wrapper.
 
 ## References
 

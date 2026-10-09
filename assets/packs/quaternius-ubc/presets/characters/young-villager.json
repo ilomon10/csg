@@ -1,0 +1,59 @@
+{
+  "format": "sprite-character-preset",
+  "version": 1,
+  "id": "young-villager",
+  "name": "Young Villager",
+  "character": {
+    "format": "sprite-character",
+    "version": 2,
+    "name": "Young Villager",
+    "seed": 108,
+    "style": "chibi",
+    "species": "human",
+    "body": {
+      "ref": "builtin:quaternius-ubc/superhero-f"
+    },
+    "parts": {
+      "hair": {
+        "ref": "builtin:quaternius-ubc/hair-buzzed-female"
+      },
+      "eyebrows": {
+        "ref": "builtin:quaternius-ubc/eyebrows-female"
+      },
+      "torso": {
+        "ref": "builtin:quaternius-outfits/female-peasant-torso"
+      },
+      "arms": {
+        "ref": "builtin:quaternius-outfits/female-peasant-arms"
+      },
+      "legs": {
+        "ref": "builtin:quaternius-outfits/female-peasant-legs"
+      },
+      "feet": {
+        "ref": "builtin:quaternius-outfits/female-peasant-feet"
+      }
+    },
+    "anatomy": {
+      "height": 0.85,
+      "head": 1.8,
+      "torsoWidth": 1.1,
+      "shoulders": 0.9,
+      "armLength": 0.75,
+      "legLength": 0.7,
+      "hands": 1.4,
+      "feet": 1.4,
+      "limbThickness": 1.4
+    },
+    "morphs": {},
+    "tints": {
+      "skin": "#d29c72",
+      "hair": "#1b1714",
+      "eyes": "#ffffff",
+      "primary": "#ffffff",
+      "secondary": "#ffffff",
+      "metal": "#ffffff",
+      "leather": "#ffffff"
+    }
+  },
+  "camera": "isometric"
+}

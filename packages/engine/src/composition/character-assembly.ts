@@ -1,10 +1,17 @@
 /**
- * Diff-based character assembly (spec 001 REQ-CMP-002, REQ-CMP-011/012,
- * REQ-CMP-013, REQ-CMP-033, REQ-CMP-037; spec 002 REQ-ANA-006, REQ-ANA-011;
- * spec 004 REQ-ANM-013/014/023). Framework-agnostic and renderer-free: it owns
- * a three `Group` that a renderer adds to its scene, so it runs in Node tests.
+ * Diff-based character assembly (spec 001 REQ-CMP-002, REQ-CMP-007,
+ * REQ-CMP-011/012, REQ-CMP-013/015, REQ-CMP-033, REQ-CMP-037,
+ * REQ-CMP-043/048; spec 002 REQ-ANA-006, REQ-ANA-011; spec 004
+ * REQ-ANM-013/014/023). Framework-agnostic and renderer-free: it owns a three
+ * `Group` that a renderer adds to its scene, so it runs in Node tests.
+ *
+ * Materials are owned per assembly (M3-05): every attached clone gets a
+ * material built by this assembly from the part's original material
+ * ({@link createPartMaterials}); the registry's cached part scenes are never
+ * re-materialed, so two renderers on one registry keep their own tints.
  */
 import {Group} from 'three';
+import type {Color} from 'three';
 import type {UniformNode} from 'three/webgpu';
 import {TINT_SLOTS, V1_SLOT_IDS} from '@csg/parts-schema';
 import type {
@@ -12,11 +19,17 @@ import type {
   AssetRef,
   CharacterSpec,
   ClipRef,
+  HexColor,
+  PartEntry,
   PartSelection,
   PartSocket,
   SlotId,
   SlotRegistry,
+  TintSlot,
 } from '@csg/parts-schema';
+import {resolveRenderPair} from '../catalog/resolve-render-pair';
+import type {RenderPair} from '../catalog/resolve-render-pair';
+import {SUPPORTED_STYLE_COMBOS} from '../catalog/supported-style-combos';
 import {createAnatomyBinding} from '../anatomy/binding';
 import {createClipPlayer} from '../animation/clip-player';
 import {inPlaceVariantRef} from '../animation/root-motion';
@@ -36,6 +49,7 @@ import type {
   ClipEntryView,
   LoadedClip,
   LoadedPartInternal,
+  StyleCombo,
 } from '../contracts/registry';
 import {partIdFor} from '../pipeline/part-ids';
 import type {PartIdRegistry} from '../pipeline/part-ids';
@@ -47,12 +61,12 @@ import {createBodySkeleton} from './body-skeleton';
 import {evaluatePose} from './evaluate-pose';
 import {computeHides, createRegionMask} from './region-mask';
 import {
-  applyTintMaterial,
+  createPartMaterials,
+  createTintUniform,
   createTintUniforms,
-  restoreMaterials,
   setTint,
 } from './tint-material';
-import type {TintMaterialOptions} from './tint-material';
+import type {PartMaterials, TintMaterialOptions} from './tint-material';
 
 /** Name of {@link CharacterAssembly.root}. */
 export const CHARACTER_ROOT_NAME = 'character';
@@ -72,6 +86,23 @@ export interface AssemblyRegistry {
   resolveClip(ref: ClipRef): Promise<Result<LoadedClip, EngineError>>;
   /** Registered clip entry (for `inPlaceVariant`), or `undefined`. */
   clipEntry(ref: ClipRef): ClipEntryView | undefined;
+  /**
+   * Available (style, species) pairs (REQ-CMP-043/045; `EngineAssetRegistry`
+   * has it). Omitted: `SUPPORTED_STYLE_COMBOS`.
+   */
+  availableStyleCombos?(): readonly StyleCombo[];
+}
+
+/**
+ * Why an equipped part is not drawn although it stays in the spec:
+ * `hair` (another part hides `hair`, REQ-CMP-012), `occupied` (another part's
+ * `alsoOccupies` lists the slot, REQ-CMP-007), `style` / `species` (the part
+ * does not fit the rendered pair, REQ-CMP-048 rules (d)/(e), REQ-CMP-043).
+ */
+export interface HiddenSlot {
+  readonly reason: 'hair' | 'occupied' | 'style' | 'species';
+  /** The slot whose part hides or occupies this one (`hair`, `occupied`). */
+  readonly by?: SlotId;
 }
 
 /** Options of {@link createCharacterAssembly}. */
@@ -120,8 +151,22 @@ export interface CharacterAssembly {
   readonly player: ClipPlayer | null;
   /** Last successfully applied spec. */
   readonly spec: CharacterSpec | null;
-  /** One color uniform per tint slot, shared by every part (REQ-CMP-013). */
+  /**
+   * One color uniform per tint slot, shared by every part (REQ-CMP-013) that
+   * has no override for that slot (REQ-CMP-015).
+   */
   readonly tints: TintUniforms;
+  /**
+   * The (style, species) pair the character renders with (REQ-CMP-043): the
+   * stored pair when available, else the fallback with `fallback: true`.
+   * `null` before the first successful spec.
+   */
+  readonly renderPair: RenderPair | null;
+  /**
+   * Equipped slots that are not drawn and why (REQ-CMP-007/012/048). Their
+   * parts stay attached and in the spec; their `hides` do not apply.
+   */
+  readonly hidden: ReadonlyMap<SlotId, HiddenSlot>;
   /** Hidden-body-region mask uniform (REQ-CMP-011). */
   readonly regionMask: UniformNode<'float', number>;
   /** Attached parts by slot, the body under `body`. */
@@ -137,13 +182,15 @@ export interface CharacterAssembly {
   /**
    * Event log for tests and diagnostics: `body:rebuild:<group>`,
    * `clip-cache:invalidate:<group>`, `part:attach:<slot>`,
-   * `part:detach:<slot>`, `tint:<slot>`, `clip:<ref>`,
-   * `materials:<unlit|toon>`.
+   * `part:detach:<slot>`, `tint:<slot>`, `tint-override:<slot>:<tintSlot>`,
+   * `clip:<ref>`, `materials:<unlit|toon>`.
    */
   readonly log: readonly string[];
   /**
    * Applies only the differences from the previous spec (REQ-CMP-033): tint
-   * change → uniform update; part change → load and rebind that part only;
+   * change → uniform update (a per-part override value too; adding or
+   * removing an override slot rebuilds that part's materials only, REQ-CMP-015);
+   * part change → load and rebind that part only;
    * body change → full rebuild (new skeleton from the body's
    * `characterSkeletonGroup`, REQ-CMP-037, and a new clip player, which drops
    * the retarget cache of the old group). Anatomy changes only update the
@@ -176,15 +223,25 @@ export interface CharacterAssembly {
   /** Poses the character at an absolute time ({@link evaluatePose}); no-op without a body. */
   evaluate(timeSec: number): void;
   /**
-   * Switches every tinted part between the M1 unlit materials (`undefined`)
-   * and the pixel-pipeline toon materials (spec 003); attached clones follow
-   * through `linkMaterial`. Parts attached later use the same options.
+   * Switches every part between the M1 unlit materials (`undefined`) and the
+   * pixel-pipeline toon materials (spec 003). Only this assembly's materials
+   * change. Parts attached later use the same options.
    *
    * @param options Toon binding, or `undefined` for unlit materials.
    */
   setMaterialOptions(options: TintMaterialOptions | undefined): void;
-  /** Detaches everything and restores the materials this assembly tinted. */
+  /** Detaches everything and disposes the materials this assembly built. */
   dispose(): void;
+}
+
+/** Materials of one (slot, part) of the assembly, shared while re-attached (body rebuild). */
+interface MaterialSet {
+  readonly materials: PartMaterials;
+  count: number;
+  /** Override uniform per overridden tint slot (REQ-CMP-015). */
+  readonly own: Map<TintSlot, UniformNode<'color', Color>>;
+  /** Sorted overridden slots the materials were built for. */
+  overrideKey: string;
 }
 
 /** Default tints before the first spec (overwritten by every spec). */
@@ -250,6 +307,21 @@ function partIdsOf(
   return out;
 }
 
+/**
+ * REQ-CMP-048 rules (d) and (e) of a part against the rendered pair: `null`
+ * when it fits, else the first failing rule.
+ */
+function pairFit(
+  entry: PartEntry,
+  pair: RenderPair,
+): 'style' | 'species' | null {
+  const styles = entry.styles ?? [];
+  if (styles.length > 0 && !styles.includes(pair.style)) return 'style';
+  const species = entry.species ?? [];
+  if (species.length > 0 && !species.includes(pair.species)) return 'species';
+  return null;
+}
+
 /** Slot keys of a spec's non-body parts, sorted (deterministic order). */
 function slotKeys(spec: CharacterSpec): SlotId[] {
   return Object.keys(spec.parts)
@@ -288,8 +360,10 @@ export function createCharacterAssembly(
   const partIds = new Map<SlotId, number>();
   const idRegistry: PartIdRegistry = options.slots ?? DEFAULT_PART_ID_REGISTRY;
   let materialOptions = options.material;
-  /** Part scenes tinted by this assembly, with their attachment count. */
-  const tinted = new Map<object, {part: LoadedPartInternal; count: number}>();
+  /** Material sets by `slot`+`ref`, with their attachment count. */
+  const materialSets = new Map<string, MaterialSet>();
+  const hidden = new Map<SlotId, HiddenSlot>();
+  let renderPair: RenderPair | null = null;
   let pose: PoseState | null = null;
   let spec: CharacterSpec | null = null;
   let clip: {loaded: LoadedClip; rootMotion: RootMotionMode} | null = null;
@@ -302,29 +376,94 @@ export function createCharacterAssembly(
     return next;
   };
 
-  const tintOnce = (part: LoadedPartInternal): void => {
-    const known = tinted.get(part.scene);
-    if (known !== undefined) {
-      known.count++;
-      return;
-    }
-    applyTintMaterial(
-      part,
-      part.entry.tintSlots,
-      tints,
-      regionMask,
-      materialOptions,
-    );
-    tinted.set(part.scene, {part, count: 1});
+  const setKey = (slot: SlotId, part: LoadedPartInternal): string =>
+    `${slot}\u0000${part.ref}`;
+
+  /** Overridden tint slots of a selection, sorted (REQ-CMP-015). */
+  const overridesOf = (selection: PartSelection): TintSlot[] =>
+    TINT_SLOTS.filter(t => selection.tints?.[t] !== undefined);
+
+  /** Uniforms of a set: its own override uniforms, else the shared ones. */
+  const uniformsOf = (own: MaterialSet['own']): TintUniforms => {
+    const out = {} as Record<TintSlot, TintUniforms[TintSlot]>;
+    for (const t of TINT_SLOTS) out[t] = own.get(t) ?? tints[t];
+    return out;
   };
 
-  const untint = (part: LoadedPartInternal): void => {
-    const known = tinted.get(part.scene);
+  /** Gets (or builds) the material set of a slot's part; counts the use. */
+  const acquire = (
+    slot: SlotId,
+    selection: PartSelection,
+    part: LoadedPartInternal,
+  ): MaterialSet => {
+    const key = setKey(slot, part);
+    const known = materialSets.get(key);
+    if (known !== undefined) {
+      known.count++;
+      return known;
+    }
+    const own = new Map<TintSlot, UniformNode<'color', Color>>();
+    const overridden = overridesOf(selection);
+    for (const t of overridden) {
+      own.set(t, createTintUniform(selection.tints?.[t] as HexColor));
+    }
+    const set: MaterialSet = {
+      materials: createPartMaterials(part, {
+        tintSlots: part.entry.tintSlots,
+        uniforms: uniformsOf(own),
+        mask: regionMask,
+        material: materialOptions,
+      }),
+      count: 1,
+      own,
+      overrideKey: overridden.join(','),
+    };
+    materialSets.set(key, set);
+    return set;
+  };
+
+  const releaseSet = (slot: SlotId, part: LoadedPartInternal): void => {
+    const key = setKey(slot, part);
+    const known = materialSets.get(key);
     if (known === undefined) return;
     known.count--;
     if (known.count <= 0) {
-      tinted.delete(part.scene);
-      restoreMaterials(part.scene);
+      materialSets.delete(key);
+      known.materials.dispose();
+    }
+  };
+
+  /**
+   * Applies a selection's tint overrides to its material set (REQ-CMP-015):
+   * values in place; a changed set of overridden slots rebuilds the set's
+   * materials (that part only).
+   */
+  const applyOverrides = (
+    slot: SlotId,
+    selection: PartSelection,
+    part: LoadedPartInternal,
+  ): void => {
+    const set = materialSets.get(setKey(slot, part));
+    if (set === undefined) return;
+    const overridden = overridesOf(selection);
+    const key = overridden.join(',');
+    for (const t of overridden) {
+      const hex = selection.tints?.[t] as HexColor;
+      const u = set.own.get(t);
+      if (u === undefined) {
+        set.own.set(t, createTintUniform(hex));
+      } else if (`#${u.value.getHexString()}` !== hex) {
+        u.value.set(hex);
+        log.push(`tint-override:${slot}:${t}`);
+      }
+    }
+    for (const t of [...set.own.keys()]) {
+      if (!overridden.includes(t)) set.own.delete(t);
+    }
+    if (key !== set.overrideKey) {
+      set.overrideKey = key;
+      set.materials.rebuild({uniforms: uniformsOf(set.own)});
+      log.push(`tint-override:${slot}:rebuild`);
     }
   };
 
@@ -355,10 +494,12 @@ export function createCharacterAssembly(
           {ref: part.ref, slot, reason: 'no-socket'},
         );
       }
-      tintOnce(part);
-      const attached = attachStaticPart(part, body, socket);
+      const set = acquire(slot, selection, part);
+      const attached = attachStaticPart(part, body, socket, {
+        materials: set.materials,
+      });
       if (!attached.ok) {
-        untint(part);
+        releaseSet(slot, part);
         return attached;
       }
       return {
@@ -366,10 +507,10 @@ export function createCharacterAssembly(
         value: {slot, selection, part, attached: attached.value},
       };
     }
-    tintOnce(part);
-    const attached = attachSkinnedPart(part, body);
+    const set = acquire(slot, selection, part);
+    const attached = attachSkinnedPart(part, body, {materials: set.materials});
     if (!attached.ok) {
-      untint(part);
+      releaseSet(slot, part);
       return attached;
     }
     return {ok: true, value: {slot, selection, part, attached: attached.value}};
@@ -377,7 +518,7 @@ export function createCharacterAssembly(
 
   const detach = (assembled: AssembledPart): void => {
     assembled.attached.dispose();
-    untint(assembled.part);
+    releaseSet(assembled.slot, assembled.part);
   };
 
   const rebuildProps = (state: PoseState): void => {
@@ -400,19 +541,71 @@ export function createCharacterAssembly(
     }
   };
 
-  const applyLooks = (next: CharacterSpec): void => {
+  /**
+   * Slots not drawn because their part does not fit the rendered pair
+   * (REQ-CMP-048 (d)/(e)) or another drawn part's `alsoOccupies` lists them
+   * (REQ-CMP-007). Parts are visited in part-ID order (body first, then the
+   * slot registry order), so a part hidden earlier occupies nothing.
+   */
+  const excludedSlots = (pair: RenderPair): void => {
+    hidden.clear();
+    const order = [...parts.keys()].sort(
+      (a, b) => (partIds.get(a) ?? 0) - (partIds.get(b) ?? 0),
+    );
+    for (const slot of order) {
+      if (slot === 'body') continue;
+      const fit = pairFit((parts.get(slot) as AssembledPart).part.entry, pair);
+      if (fit !== null) hidden.set(slot, {reason: fit});
+    }
+    for (const slot of order) {
+      if (hidden.has(slot)) continue;
+      const entry = (parts.get(slot) as AssembledPart).part.entry;
+      for (const other of entry.alsoOccupies ?? []) {
+        if (other === slot || other === 'body' || !parts.has(other)) continue;
+        if (!hidden.has(other))
+          hidden.set(other, {reason: 'occupied', by: slot});
+      }
+    }
+  };
+
+  const applyLooks = (next: CharacterSpec, pair: RenderPair): void => {
     for (const slot of TINT_SLOTS) {
       if (spec === null || spec.tints[slot] !== next.tints[slot]) {
         setTint(tints, slot, next.tints[slot]);
         log.push(`tint:${slot}`);
       }
     }
+    for (const [slot, assembled] of parts) {
+      const selection =
+        slot === 'body' ? next.body : (next.parts[slot] ?? assembled.selection);
+      applyOverrides(slot, selection, assembled.part);
+      if (selection !== assembled.selection) {
+        parts.set(slot, {...assembled, selection});
+      }
+    }
+    excludedSlots(pair);
     const hides = computeHides(
-      [...parts.values()].map(p => ({slot: p.slot, entry: p.part.entry})),
+      [...parts.values()]
+        .filter(p => !hidden.has(p.slot))
+        .map(p => ({slot: p.slot, entry: p.part.entry})),
     );
     regionMask.value = hides.mask;
+    for (const slot of hides.hiddenSlots) {
+      if (parts.has(slot) && !hidden.has(slot)) {
+        const by = [...parts.values()].find(
+          p =>
+            p.slot !== slot &&
+            !hidden.has(p.slot) &&
+            p.part.entry.hides.includes('hair'),
+        );
+        hidden.set(
+          slot,
+          by === undefined ? {reason: 'hair'} : {reason: 'hair', by: by.slot},
+        );
+      }
+    }
     for (const [slot, assembled] of parts) {
-      assembled.attached.setVisible(!hides.hiddenSlots.includes(slot));
+      assembled.attached.setVisible(!hidden.has(slot));
     }
   };
 
@@ -589,6 +782,10 @@ export function createCharacterAssembly(
     get spec() {
       return spec;
     },
+    get renderPair() {
+      return renderPair;
+    },
+    hidden,
     tints,
     regionMask,
     parts,
@@ -610,8 +807,13 @@ export function createCharacterAssembly(
             ? await rebuild(next)
             : await update(pose, spec, next);
         if (!result.ok) return result;
+        const pair = resolveRenderPair(
+          next,
+          registry.availableStyleCombos?.() ?? SUPPORTED_STYLE_COMBOS,
+        );
         assignPartIds();
-        applyLooks(next);
+        applyLooks(next, pair);
+        renderPair = pair;
         spec = next;
         return result;
       });
@@ -662,14 +864,8 @@ export function createCharacterAssembly(
     setMaterialOptions(next) {
       if (disposed) return;
       materialOptions = next;
-      for (const {part} of tinted.values()) {
-        applyTintMaterial(
-          part,
-          part.entry.tintSlots,
-          tints,
-          regionMask,
-          materialOptions,
-        );
+      for (const set of materialSets.values()) {
+        set.materials.rebuild({material: materialOptions});
       }
       log.push(`materials:${next === undefined ? 'unlit' : 'toon'}`);
     },
@@ -680,6 +876,10 @@ export function createCharacterAssembly(
       for (const assembled of parts.values()) detach(assembled);
       parts.clear();
       partIds.clear();
+      hidden.clear();
+      for (const set of materialSets.values()) set.materials.dispose();
+      materialSets.clear();
+      renderPair = null;
       if (pose !== null) {
         pose.body.root.removeFromParent();
         pose.body.skeleton.dispose();

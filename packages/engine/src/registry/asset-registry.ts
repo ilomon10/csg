@@ -1,10 +1,13 @@
 /**
- * Asset registry of bundled parts and clips (architecture 3.6, spec 001 REQ-CMP-008, spec 004
- * REQ-ANM-001/002/021/022, spec 011 REQ-AST-022/028/029). User assets arrive in M5 (spec 008).
+ * Asset registry of bundled parts and clips (architecture 3.6, spec 001 REQ-CMP-008,
+ * REQ-CMP-043/045, spec 004 REQ-ANM-001/002/021/022, spec 011 REQ-AST-022/028/029). User assets
+ * arrive in M5 (spec 008).
  */
+import {availableStyleCombos} from '@csg/parts-schema';
 import type {
   AssetLicense,
   AssetRef,
+  CharacterStyle,
   ClipEntry,
   ClipManifest,
   ClipRef,
@@ -13,6 +16,7 @@ import type {
   RigDefinition,
   RigId,
   SlotId,
+  StyleDefinition,
 } from '@csg/parts-schema';
 import type {
   ClipLoadFailedReason,
@@ -26,14 +30,16 @@ import type {
   LoadedClip,
   LoadedPartInternal,
   PartEntryView,
+  StyleCombo,
 } from '../contracts/registry';
+import {SUPPORTED_STYLE_COMBOS} from '../catalog/supported-style-combos';
 import {createGlbLoader} from '../loaders/glb-loader';
 import type {GlbLoader} from '../loaders/glb-loader';
 import {joinPackUrl} from '../loaders/url-policy';
 import {restPoseOf} from './rest-pose';
 
 /** Options of {@link createAssetRegistry}. */
-export interface AssetRegistryOptions {
+export interface AssetRegistryOptions extends AssetRegistryTestOptions {
   /** GLB loader (and its cache); default a new {@link createGlbLoader} loader. */
   readonly loader?: GlbLoader;
 }
@@ -56,6 +62,17 @@ export interface EngineAssetRegistry extends AssetRegistry {
   partEntry(ref: AssetRef): PartEntryView | undefined;
   /** Registered clip entry, or `undefined`. */
   clipEntry(ref: ClipRef): ClipEntryView | undefined;
+  /** The registered style data file of `style` (REQ-ANA-024), or `undefined`. */
+  styleDefinition(style: CharacterStyle): StyleDefinition | undefined;
+}
+
+/** Options of {@link createAssetRegistry} that only tests set. */
+export interface AssetRegistryTestOptions {
+  /**
+   * The engine's supported pairs (default `SUPPORTED_STYLE_COMBOS`). Tests use it for
+   * AC-CMP-045.3-style builds that support more pairs.
+   */
+  readonly supportedStyleCombos?: readonly StyleCombo[];
 }
 
 interface PartRecord {
@@ -141,6 +158,11 @@ export function createAssetRegistry(
     Promise<Result<LoadedPartInternal, EngineError>>
   >();
   const clipCache = new Map<string, Promise<Result<LoadedClip, EngineError>>>();
+  const supported = options.supportedStyleCombos ?? SUPPORTED_STYLE_COMBOS;
+  /** Style data files by style; `null` until the first `registerStyles` (no gating yet). */
+  let styles: Map<CharacterStyle, StyleDefinition> | null = null;
+  /** Memo of {@link EngineAssetRegistry.availableStyleCombos}; reset by every registration. */
+  let available: readonly StyleCombo[] | null = null;
 
   const registerRig = (rig: RigDefinition): void => {
     if (!rigs.has(rig.id)) rigs.set(rig.id, rig);
@@ -252,6 +274,7 @@ export function createAssetRegistry(
     registerRig,
 
     registerPack(manifest: PartManifest, baseUrl: string): void {
+      available = null;
       for (const rig of manifest.rigs) registerRig(rig);
       dropPack(parts, partCache, manifest.packId);
       packLicenses.set(manifest.packId, manifest.license);
@@ -277,6 +300,28 @@ export function createAssetRegistry(
           url: joinPackUrl(baseUrl, clip.file),
         });
       }
+    },
+
+    registerStyles(defs: readonly StyleDefinition[]): void {
+      styles ??= new Map();
+      for (const def of defs) styles.set(def.style, def);
+      available = null;
+    },
+
+    availableStyleCombos(): readonly StyleCombo[] {
+      if (available !== null) return available;
+      available =
+        styles === null
+          ? supported
+          : availableStyleCombos(supported, {
+              styles: new Set(styles.keys()),
+              parts: [...parts.values()].map(record => record.view),
+            });
+      return available;
+    },
+
+    styleDefinition(style: CharacterStyle): StyleDefinition | undefined {
+      return styles?.get(style);
     },
 
     registerUserAsset(): void {

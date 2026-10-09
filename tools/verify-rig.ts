@@ -5,13 +5,14 @@
  * 2 usage or source errors.
  */
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
-import {mkdir, writeFile} from 'node:fs/promises';
+import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import {dirname, join, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {format, resolveConfig} from 'prettier';
 import {parseJson} from '@csg/parts-schema';
 import {readRigFile, SourceReadError} from './lib/gltf-skeleton.js';
 import {checkDefaultSkeletonGroup} from './lib/check/default-group.js';
+import {carrySoleOffsets} from './lib/build/sole.js';
 import {
   annotateSkeletonGroups,
   buildReport,
@@ -421,7 +422,19 @@ async function main(): Promise<number> {
       `packages/parts-schema/rigs/${cfg.rig.id}.json`,
     );
     await mkdir(dirname(target), {recursive: true});
-    await writeFile(target, await formatJson(target, rig));
+    // REQ-AST-034: keep the measured sole offsets of the groups written again.
+    let existing: unknown = null;
+    try {
+      const parsed = parseJson(await readFile(target, 'utf8'));
+      if (parsed.ok) existing = parsed.value;
+    } catch {
+      // No rig file yet: nothing to keep.
+    }
+    const written = {
+      ...rig,
+      skeletonGroups: carrySoleOffsets(rig.skeletonGroups, existing),
+    };
+    await writeFile(target, await formatJson(target, written));
     console.log(
       `  canonical rig: ${relative(REPO_ROOT, target)} (${rig.bones.length} bones, lengthAxis ${rig.lengthAxis}, root ${rig.rootBone}, ${rig.skeletonGroups.length} skeleton groups)`,
     );

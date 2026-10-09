@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {parseJson} from './json';
+import {findForbiddenKey, parseJson} from './json';
 
 describe('parseJson', () => {
   it('AC-GEN-011.1: rejects __proto__ nested three levels deep and does not pollute', () => {
@@ -31,5 +31,20 @@ describe('parseJson', () => {
 
   it('REQ-GEN-011: reports syntax errors as issues instead of throwing', () => {
     expect(parseJson('{nope').ok).toBe(false);
+  });
+
+  it('AC-GEN-013.1: rejects cycles, DAGs, deep and huge structures quickly', () => {
+    const cycle: Record<string, unknown> = {};
+    cycle['self'] = cycle;
+    expect(findForbiddenKey(cycle)).toBe('<shared-reference>');
+    let dag: unknown = {};
+    for (let i = 0; i < 24; i++) dag = {a: dag, b: dag};
+    expect(findForbiddenKey(dag)).toBe('<shared-reference>');
+    let deep: unknown = {};
+    for (let i = 0; i < 100; i++) deep = {d: deep};
+    expect(findForbiddenKey(deep)).toBe('<too-deep>');
+    const wide = Array.from({length: 250_000}, () => ({}));
+    expect(findForbiddenKey(wide)).toBe('<too-large>');
+    expect(findForbiddenKey({a: [{b: 1}, {c: 2}]})).toBeNull();
   });
 });

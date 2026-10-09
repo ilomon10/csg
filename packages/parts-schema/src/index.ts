@@ -1,3 +1,5 @@
+// Must stay first: turns off Zod JIT before any module-load parse (REQ-GEN-010).
+import './zod-config';
 export * from './primitives';
 export * from './license';
 export * from './body';
@@ -12,3 +14,7 @@ export * from './character-spec';
 export * from './pack-config';
 export * from './palettes';
 export * from './render-settings';
+export * from './export-settings';
+export * from './project-document';
+export * from './presets';
+export * from './export-manifest';

@@ -1,0 +1,10 @@
+{
+  "format": "sprite-easy-category",
+  "version": 1,
+  "id": "hair",
+  "labelKey": "ux.easy.hair",
+  "icon": "scissors",
+  "slots": ["hair"],
+  "tintChannels": ["hair"],
+  "anatomyPresets": false
+}

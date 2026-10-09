@@ -1,0 +1,41 @@
+{
+  "format": "sprite-look-preset",
+  "version": 1,
+  "id": "hi-bit",
+  "name": "Hi-bit",
+  "description": "Endesga-32 palette, 4-band toon, rim light and inner outlines.",
+  "thumbnail": "thumbnails/looks/hi-bit.webp",
+  "materialGraph": "builtin:material-toon",
+  "postGraph": "builtin:post-default",
+  "params": {},
+  "palette": {
+    "id": "endesga-32"
+  },
+  "render": {
+    "toon": {
+      "bands": 4,
+      "rim": {
+        "enabled": true,
+        "strength": 0.5
+      }
+    },
+    "outline": {
+      "outer": {
+        "enabled": true,
+        "widthPx": 1
+      },
+      "inner": {
+        "enabled": true
+      },
+      "colorMode": "black"
+    },
+    "palette": {
+      "id": "endesga-32",
+      "metric": "oklab",
+      "dither": {
+        "mode": "none",
+        "strength": 0.5
+      }
+    }
+  }
+}

@@ -1,0 +1,236 @@
+/* New-character wizard (spec 014 REQ-UX-089..100). Tokens come from shared/ui/tokens.css. */
+.wz {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 55fr) minmax(380px, 45fr);
+}
+.wz-preview {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel-sunk);
+  overflow: hidden;
+}
+.wz-preview .cv {
+  height: 100%;
+}
+.wz-nametag {
+  position: absolute;
+  z-index: 2;
+  top: 14px;
+  left: 14px;
+  max-width: calc(100% - 28px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 14px;
+  background: var(--overlay);
+  border: 2px solid var(--accent-edge);
+  color: var(--accent-fg);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.wz-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+}
+.wz-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 0 20px;
+}
+.wz-top__title {
+  flex: 1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.wz-stepper {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 20px 0;
+  list-style: none;
+}
+.wz-stepper > li {
+  flex: 1;
+  min-width: 0;
+}
+.wz-seg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 0 2px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.wz-seg:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.wz-seg__pip {
+  height: 6px;
+  background: var(--line);
+  transition: background var(--dur-fast) var(--ease);
+}
+.wz-seg[data-state='done'] .wz-seg__pip {
+  background: var(--focus);
+}
+.wz-seg[aria-current='step'] {
+  color: var(--text);
+}
+.wz-seg[aria-current='step'] .wz-seg__pip {
+  background: var(--accent);
+}
+.wz-seg__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wz-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 20px;
+}
+.wz-step {
+  animation: wz-in var(--dur-fast) var(--ease);
+}
+@keyframes wz-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.wz-heading {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.1;
+}
+.wz-heading:focus {
+  outline: none;
+}
+.wz-heading:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+.wz-heading__eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.wz-heading__title {
+  display: block;
+  font-size: 30px;
+}
+.wz-sub {
+  margin: 0 0 18px;
+  color: var(--muted);
+}
+.wz-colors {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.wz-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 420px;
+}
+.wz-field label {
+  font-weight: 600;
+}
+.wz-field input {
+  height: 44px;
+  padding: 0 12px;
+  background: var(--bg);
+  border: 2px solid var(--edge);
+  border-radius: var(--radius-btn);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+}
+.wz-field input:focus-visible {
+  border-color: var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.wz-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+.wz-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.wz-summary li {
+  padding: 3px 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+}
+.wz-summary b {
+  color: var(--text);
+}
+.wz-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--line);
+}
+.wz-foot__grow {
+  flex: 1;
+}
+.wz-status {
+  margin: 24px;
+  color: var(--muted);
+}
+@media (width < 1024px) {
+  .wz {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(200px, 38%) minmax(0, 1fr);
+  }
+  .wz-panel {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wz-step {
+    animation: none;
+  }
+  .wz-seg__pip {
+    transition: none;
+  }
+}

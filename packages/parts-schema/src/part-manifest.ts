@@ -8,6 +8,8 @@ import {
 import {bundledLicenseSchema} from './license';
 import {
   bodyTypeSchema,
+  characterSpeciesSchema,
+  characterStyleSchema,
   formatPath,
   packIdSchema,
   partIdSchema,
@@ -85,6 +87,10 @@ export const partEntrySchema = z
     bodies: z.array(partIdSchema).optional(),
     /** Body fit groups this part fits; empty or absent means all. */
     bodyTypes: z.array(bodyTypeSchema).optional(),
+    /** Styles this part fits; empty or absent means all (REQ-CMP-048 rule d). */
+    styles: z.array(characterStyleSchema).optional(),
+    /** Species this part fits; empty or absent means all (REQ-CMP-048 rule e). */
+    species: z.array(characterSpeciesSchema).optional(),
     thumbnail: packPathSchema.optional(),
     sha256: sha256Schema,
     stats: z.object({

@@ -92,6 +92,20 @@ Palettes are color lists stored as data in `packages/parts-schema/data/palettes/
 - Source: <https://lospec.com/palette-list/endesga-32>
 - Use: palette preset `endesga-32` (32 colors), `packages/parts-schema/data/palettes/endesga-32.json`
 
+### Nintendo GameBoy (bgb)
+
+- Author: the bgb emulator's default palette (the source page names no author)
+- License: color list, no license stated by source
+- Source: <https://lospec.com/palette-list/nintendo-gameboy-bgb>
+- Use: look preset `gameboy-4` (4 colors, spec 006 REQ-EDT-044), `tools/packs/quaternius-ubc/presets/looks/gameboy-4.json`
+
+### Nintendo Entertainment System
+
+- Author: not named by the source page
+- License: color list, no license stated by source
+- Source: <https://lospec.com/palette-list/nintendo-entertainment-system>
+- Use: look preset `nes-like` (55 colors, spec 006 REQ-EDT-044), `tools/packs/quaternius-ubc/presets/looks/nes-like.json`
+
 Custom palettes are supplied by users. They are not bundled.
 
 ## Vendored code
@@ -113,6 +127,16 @@ The site serves these three families from its own origin, subset to Latin. They 
 | Silkscreen | Pixel display face, headings of 24 px and up only | The Silkscreen Project Authors, https://github.com/googlefonts/silkscreen | SIL OFL 1.1 | `@fontsource/silkscreen` 5.3.0          |
 | Geist      | Body and UI sans                                  | The Geist Project Authors, https://github.com/vercel/geist-font           | SIL OFL 1.1 | `@fontsource-variable/geist` 5.3.0      |
 | Geist Mono | Code and monospace                                | The Geist Project Authors, https://github.com/vercel/geist-font           | SIL OFL 1.1 | `@fontsource-variable/geist-mono` 5.3.0 |
+
+## Editor fonts (self-hosted, spec 014 visual direction, M3-04)
+
+The editor (`apps/web`) serves these three families from its own origin as Latin-subset woff2 files in `apps/web/src/shared/ui/fonts/`, with `font-display: swap` and no remote fetch (CSP `font-src 'self'`). The files are copied from the npm packages below (build-time `devDependencies` of `apps/web`, pinned exactly). The SIL OFL 1.1 text of each package is kept next to the files as `OFL-*.txt`.
+
+| Font           | Use                                                  | Author                                                                         | License     | Source                                                                               |
+| -------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------ | ----------- | ------------------------------------------------------------------------------------ |
+| Pixelify Sans  | Logo, home name tags and step titles only (600, 700) | The Pixelify Sans Project Authors, https://github.com/eifetx/Pixelify-Sans     | SIL OFL 1.1 | `@fontsource/pixelify-sans` 5.3.0, https://fonts.google.com/specimen/Pixelify+Sans   |
+| Figtree        | All other UI text (500, 600, 700)                    | The Figtree Project Authors, https://github.com/erikdkennedy/figtree           | SIL OFL 1.1 | `@fontsource/figtree` 5.3.0, https://fonts.google.com/specimen/Figtree               |
+| JetBrains Mono | Numeric readouts and code (400, 600)                 | The JetBrains Mono Project Authors, https://github.com/JetBrains/JetBrainsMono | SIL OFL 1.1 | `@fontsource/jetbrains-mono` 5.3.0, https://fonts.google.com/specimen/JetBrains+Mono |
 
 ## Website icons
 

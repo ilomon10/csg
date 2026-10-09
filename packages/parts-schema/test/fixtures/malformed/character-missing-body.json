@@ -1,8 +1,10 @@
 {
   "format": "sprite-character",
-  "version": 1,
+  "version": 2,
   "name": "Fixture character",
   "seed": 1,
+  "style": "realistic",
+  "species": "human",
   "parts": {
     "torso": {"ref": "builtin:fixture-pack/fixture-shirt"},
     "prop-main-hand": {"ref": "builtin:fixture-pack/fixture-sword"}

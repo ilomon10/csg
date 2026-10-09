@@ -789,6 +789,30 @@ describe('character renderer', () => {
     expect(renderer.resume()).toBe(false);
   });
 
+  it('AC-ANM-017.1 / AC-ANM-018.1 / AC-ANM-018.4: seek near the clip end then resume continues from the sought export frame (fps != N/D)', async () => {
+    const {renderer, fake} = await create();
+    await renderer.setCharacter(fixtureSpec());
+    // 8 frames over 1 s played at 5 fps (N/D = 8).
+    const selection = {frameCount: 8, fps: 5, loop: true} as const;
+    const times = computeSampleTimes(selection, 1).times;
+    renderer.setPreviewTiming(previewTimingFor(selection, 1));
+    await renderer.playClip(FIXTURE_CLIP, 'metadata');
+    renderer.pause();
+    renderer.seek(times[6] ?? -1);
+    expect(renderer.timeSec).toBe(times[6]);
+    expect(renderer.resume()).toBe(true);
+    fake.loop?.(5000);
+    expect(renderer.timeSec).toBe(times[6]);
+    fake.loop?.(5190);
+    expect(renderer.timeSec).toBe(times[6]);
+    fake.loop?.(5210);
+    expect(renderer.timeSec).toBe(times[7]);
+    fake.loop?.(5390);
+    expect(renderer.timeSec).toBe(times[7]);
+    fake.loop?.(5410);
+    expect(renderer.timeSec).toBe(times[0]);
+  });
+
   it('dispose during an in-flight playClip resolves to ENGINE_DISPOSED, starts no loop and calls no onError', async () => {
     const errors: string[] = [];
     const {renderer: r, fake} = await create({onError: c => errors.push(c)});

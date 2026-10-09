@@ -13,14 +13,13 @@
 import {defaultRenderSettings} from '@csg/parts-schema';
 import {afterEach, describe, expect, it} from 'vitest';
 import type {RenderSettings} from '../../src/contracts/pipeline';
-import {previewTimingFor} from '../../src/renderer/preview-clock';
 import {
   createPerfRenderer,
-  gpuIdle,
   ms,
   perfGate,
   reportEnvironment,
-  resetTimers,
+  runPreviewLoop,
+  serialFrameCost,
   summary,
   writePerfReport,
 } from './perf-harness';
@@ -50,67 +49,6 @@ function previewSettings(size: number): RenderSettings {
   };
 }
 
-/** Runs the preview loop for `durationMs` and returns the draw intervals (ms). */
-async function runLoop(
-  p: PerfRenderer,
-  durationMs: number,
-): Promise<{intervals: number[]; drawCpu: number[]; frames: number}> {
-  const r = p.renderer;
-  const played = await r.playClip(WALK);
-  if (!played.ok) throw new Error(played.error.message);
-  // Continuous playback: a new pose every frame (the worst case for the preview).
-  r.setPreviewTiming(
-    previewTimingFor(
-      {frameCount: 8, fps: 8, loop: true},
-      r.assembly.clipDurationSec ?? 1,
-      false,
-    ),
-  );
-  // Warm up (first frames compile pipelines), then measure.
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  resetTimers(p.timers);
-  const drawTimes: number[] = [];
-  const pipeline = r as unknown as {pipelineStats: {frames: number}};
-  let lastFrames = pipeline.pipelineStats.frames;
-  const start = performance.now();
-  await new Promise<void>(resolve => {
-    const tick = (now: number) => {
-      const frames = pipeline.pipelineStats.frames;
-      if (frames !== lastFrames) {
-        drawTimes.push(now);
-        lastFrames = frames;
-      }
-      if (performance.now() - start >= durationMs) resolve();
-      else requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  });
-  r.pause();
-  const intervals: number[] = [];
-  for (let i = 1; i < drawTimes.length; i++) {
-    intervals.push((drawTimes[i] ?? 0) - (drawTimes[i - 1] ?? 0));
-  }
-  return {
-    intervals,
-    drawCpu: [...p.timers.renderSamples],
-    frames: p.timers.renderCalls,
-  };
-}
-
-/** Draw + wait for the GPU, back to back: the serial cost of one preview frame. */
-async function serialFrameCost(p: PerfRenderer, n: number): Promise<number[]> {
-  const r = p.renderer;
-  const duration = r.assembly.clipDurationSec ?? 1;
-  const out: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const t0 = performance.now();
-    r.seek(((i * duration) / n) % duration); // draws once
-    await gpuIdle(r.renderer);
-    out.push(performance.now() - t0);
-  }
-  return out;
-}
-
 let live: PerfRenderer | undefined;
 afterEach(() => {
   live?.dispose();
@@ -122,7 +60,7 @@ async function measure(size: number): Promise<{
   p95: number;
 }> {
   live = await createPerfRenderer({settings: previewSettings(size)});
-  const loop = await runLoop(live, PREVIEW_MS);
+  const loop = await runPreviewLoop(live, WALK, PREVIEW_MS);
   const serial = await serialFrameCost(live, SERIAL_FRAMES);
   const intervals = summary(loop.intervals);
   const elapsedSec = PREVIEW_MS / 1000;

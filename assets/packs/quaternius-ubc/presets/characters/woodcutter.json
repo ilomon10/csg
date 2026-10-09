@@ -1,0 +1,62 @@
+{
+  "format": "sprite-character-preset",
+  "version": 1,
+  "id": "woodcutter",
+  "name": "Woodcutter",
+  "character": {
+    "format": "sprite-character",
+    "version": 2,
+    "name": "Woodcutter",
+    "seed": 106,
+    "style": "realistic",
+    "species": "human",
+    "body": {
+      "ref": "builtin:quaternius-ubc/superhero-m"
+    },
+    "parts": {
+      "hair": {
+        "ref": "builtin:quaternius-ubc/hair-simple-parted"
+      },
+      "eyebrows": {
+        "ref": "builtin:quaternius-ubc/eyebrows-regular"
+      },
+      "beard": {
+        "ref": "builtin:quaternius-ubc/beard-full"
+      },
+      "torso": {
+        "ref": "builtin:quaternius-outfits/male-peasant-torso"
+      },
+      "arms": {
+        "ref": "builtin:quaternius-outfits/male-peasant-arms"
+      },
+      "legs": {
+        "ref": "builtin:quaternius-outfits/male-peasant-legs"
+      },
+      "feet": {
+        "ref": "builtin:quaternius-outfits/male-peasant-feet"
+      }
+    },
+    "anatomy": {
+      "height": 1,
+      "head": 1,
+      "torsoWidth": 1,
+      "shoulders": 1,
+      "armLength": 1,
+      "legLength": 1,
+      "hands": 1,
+      "feet": 1,
+      "limbThickness": 1
+    },
+    "morphs": {},
+    "tints": {
+      "skin": "#e3b48c",
+      "hair": "#6b5a4a",
+      "eyes": "#ffffff",
+      "primary": "#ffffff",
+      "secondary": "#ffffff",
+      "metal": "#ffffff",
+      "leather": "#ffffff"
+    }
+  },
+  "camera": "three-quarter"
+}

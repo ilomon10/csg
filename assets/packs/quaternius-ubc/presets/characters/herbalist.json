@@ -1,0 +1,59 @@
+{
+  "format": "sprite-character-preset",
+  "version": 1,
+  "id": "herbalist",
+  "name": "Herbalist",
+  "character": {
+    "format": "sprite-character",
+    "version": 2,
+    "name": "Herbalist",
+    "seed": 104,
+    "style": "realistic",
+    "species": "human",
+    "body": {
+      "ref": "builtin:quaternius-ubc/superhero-f"
+    },
+    "parts": {
+      "hair": {
+        "ref": "builtin:quaternius-ubc/hair-buns"
+      },
+      "eyebrows": {
+        "ref": "builtin:quaternius-ubc/eyebrows-female"
+      },
+      "torso": {
+        "ref": "builtin:quaternius-outfits/female-peasant-torso"
+      },
+      "arms": {
+        "ref": "builtin:quaternius-outfits/female-peasant-arms"
+      },
+      "legs": {
+        "ref": "builtin:quaternius-outfits/female-peasant-legs"
+      },
+      "feet": {
+        "ref": "builtin:quaternius-outfits/female-peasant-feet"
+      }
+    },
+    "anatomy": {
+      "height": 1,
+      "head": 1,
+      "torsoWidth": 1,
+      "shoulders": 1,
+      "armLength": 1,
+      "legLength": 1,
+      "hands": 1,
+      "feet": 1,
+      "limbThickness": 1
+    },
+    "morphs": {},
+    "tints": {
+      "skin": "#efc9a8",
+      "hair": "#d8a84a",
+      "eyes": "#ffffff",
+      "primary": "#ffffff",
+      "secondary": "#ffffff",
+      "metal": "#ffffff",
+      "leather": "#ffffff"
+    }
+  },
+  "camera": "isometric"
+}

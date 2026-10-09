@@ -207,7 +207,9 @@ Relevant decisions: ADR-0001 (rigged 3D parts rendered to pixels), ADR-0005 (use
 
 - **AC-CMP-026.1** Given a user-uploaded hat, When the user copies a link, Then a dialog lists the hat; on "Share without it" the URL contains no `user:` substring.
 
-**REQ-CMP-027 [P2]** THE SYSTEM SHALL offer built-in character presets defined as data files (`CharacterSpec` JSON in the presets folder of a pack) and a local preset list stored in IndexedDB.
+**REQ-CMP-027 [P2]** THE SYSTEM SHALL offer built-in character presets defined as data files (~~`CharacterSpec` JSON in the presets folder of a pack~~ `CharacterPreset` JSON files, `presets/characters/<id>.json` in a pack, each wrapping a `CharacterSpec` in its `character` member) and a local preset list stored in IndexedDB.
+
+*(Amended 2026-10-09, PM decision, resolves the spec 014 Open question on preset files.)* A pack preset file is a `CharacterPreset` (spec 014 Data & contracts; `characterPresetSchema` and `parseCharacterPreset` in `packages/parts-schema/src/presets.ts`), not a bare `CharacterSpec`: `format: 'sprite-character-preset'`, `version: 1`, `id` (`[a-z0-9-]{1,32}`), `name` (1 to 64 characters, the display name), `character` (a `CharacterSpec`, migrated by its own `version`, REQ-CMP-049) and an optional `camera` (`side`, `three-quarter` or `isometric`; absent means `side`; spec 014 REQ-UX-078). Applying a preset applies its `character`; `camera` applies only when a project is started from the preset (spec 014), never when a preset is applied to an open character. The file path `presets/characters/<id>.json` and the listing through the generated `presets/index.json` (kind `character`) follow `presets.ts` as implemented in M3-01; spec 011 does not yet name either, so that spec should record them. Local presets in IndexedDB (AC-CMP-027.2) use the same `CharacterPreset` record with a locally generated `id` and no `camera` *(resolved 2026-10-09, PM)*.
 
 - **AC-CMP-027.1** Given a new preset JSON added to a pack's presets folder (no code change), When the app builds, Then the preset appears in the preset gallery with its thumbnail.
 - **AC-CMP-027.2** Given the user saves "Knight" to local presets, When the page reloads, Then "Knight" is listed and loads the same spec; no network request is made.
@@ -291,7 +293,7 @@ Persisted-format rules apply (AGENTS.md "Data and formats", architecture §4.5):
 
 **REQ-CMP-039 [P1]** WHEN a `CharacterSpec` with `version: 1` is loaded THE SYSTEM SHALL, before validation, migrate it to version 2 with a pure function registered as `CHARACTER_MIGRATIONS[1]` that sets `style: 'realistic'` and `species: 'human'` and changes no other field.
 
-- **AC-CMP-039.1** Given the version-1 fixture `packages/parts-schema/fixtures/character-v1.json` (the M2 default character, `version: 1`, committed with the bump), When `parseCharacterSpec` runs on it, Then the result is `ok: true`, `version` is 2, `style` is `realistic`, `species` is `human`, there is no `composition` key, and every other field is deep-equal to the fixture.
+- **AC-CMP-039.1** Given the version-1 fixture `packages/parts-schema/test/fixtures/character-v1.json` (the M2 default character, `version: 1`, committed with the bump), When `parseCharacterSpec` runs on it, Then the result is `ok: true`, `version` is 2, `style` is `realistic`, `species` is `human`, there is no `composition` key, and every other field is deep-equal to the fixture. *(Amended 2026-10-09 (M3 PM decision): the path was `packages/parts-schema/fixtures/character-v1.json`; fixtures live under `packages/*/test/fixtures/` (REQ-AST-021), where the M3 build committed it.)*
 - **AC-CMP-039.2** Given a version-1 input object, When `CHARACTER_MIGRATIONS[1]` runs on it twice, Then the input is deep-equal to a clone taken before the first call (not mutated) and the two outputs are deep-equal.
 - **AC-CMP-039.3** Given a hand-edited version-1 document that already contains `style: 'chibi'` and `species: 'monster'` (keys that version 1 never defined), When it is migrated, Then the result has `style: 'realistic'` and `species: 'human'` (version-1 documents always migrate to the defaults).
 - **AC-CMP-039.4** Given a document with `version: 3`, When it is loaded by a version-2 app, Then the message says "Made with a newer version of the app" and nothing changes (AC-CMP-023.3 still holds).
@@ -352,7 +354,7 @@ Unknown top-level keys keep the existing rule: the `CharacterSpec` schema drops 
 **REQ-CMP-049 [P1]** WHEN a `CharacterSpec` is read from any container (character file, `#c=` fragment, pack preset file, local preset in IndexedDB, the shipped default-character data file, or the `character` member of a `ProjectDocument`) THE SYSTEM SHALL run the `CHARACTER_MIGRATIONS` chain on it according to its own `version`, before validation and independently of the container's version.
 
 - **AC-CMP-049.1** Given a stored `ProjectDocument` fixture (spec 009 REQ-UX-025) whose `character` is a version-1 `CharacterSpec`, When the project opens, Then it loads and its character is version 2 with `realistic`/`human`.
-- **AC-CMP-049.2** Given a pack preset file holding a version-1 `CharacterSpec` (REQ-CMP-027), When the preset gallery loads and the preset is applied, Then it applies as a version-2 spec with `realistic`/`human` and no error.
+- **AC-CMP-049.2** Given a pack preset file (a `CharacterPreset`, REQ-CMP-027) whose `character` is a version-1 `CharacterSpec` *(amended 2026-10-09, PM: was "holding a version-1 `CharacterSpec`"; the preset wrapper stays `version: 1` and is not migrated)*, When the preset gallery loads and the preset is applied, Then it applies as a version-2 spec with `realistic`/`human` and no error.
 - **AC-CMP-049.3** Given a `#c=` fragment holding a version-1 spec, When opened, Then the confirmation of REQ-CMP-035 shows and the opened character is version 2 (AC-CMP-034.3).
 
 ## Edge cases
@@ -542,7 +544,7 @@ The default clips are not part of the `CharacterSpec` (refinement 4). The defaul
 
 Refinement 6 (2026-10-08, M1): `PartEntry.skeletonGroup` and `characterSkeletonGroup` added (REQ-CMP-037); `socket.bone` / `defaultSocket` hold semantic socket IDs resolved through `RigDefinition.socketBones` (spec 002). Architecture §3.2 is synced in M1-32.
 
-Refinement 7 (2026-10-09, STY): `CharacterSpec` version 2 adds `style`, `species` and optional `composition`; `PartEntry` adds optional `styles` and `species`; `CHARACTER_MIGRATIONS[1]` and `SUPPORTED_STYLE_COMBOS` are new contracts. The implementing PR updates the shipped `data/default-character.json` to version 2 and adds the version-1 fixture `packages/parts-schema/fixtures/character-v1.json`, a copy of the version-1 default character taken before the bump (under the 200 KB fixture limit). Architecture §3.3 must be synced in that PR. Spec 013 adds `PartEntry.kind: 'procedural'` and the M3.5 slots (REQ-STY-030, REQ-STY-031).
+Refinement 7 (2026-10-09, STY): `CharacterSpec` version 2 adds `style`, `species` and optional `composition`; `PartEntry` adds optional `styles` and `species`; `CHARACTER_MIGRATIONS[1]` and `SUPPORTED_STYLE_COMBOS` are new contracts. The implementing PR updates the shipped `data/default-character.json` to version 2 and adds the version-1 fixture `packages/parts-schema/test/fixtures/character-v1.json` (path corrected 2026-10-09, M3 PM decision; see AC-CMP-039.1), a copy of the version-1 default character taken before the bump (under the 200 KB fixture limit). Architecture §3.3 must be synced in that PR. Spec 013 adds `PartEntry.kind: 'procedural'` and the M3.5 slots (REQ-STY-030, REQ-STY-031).
 
 ## Non-functional
 
@@ -568,6 +570,7 @@ Refinement 7 (2026-10-09, STY): `CharacterSpec` version 2 adds `style`, `species
 - PM decision 2026-10-09 (STY): `CharacterSpec` v2 with `style`, `species` and `composition`; spec 013 (M3.5)
 - PM decisions 2026-10-09 (gating rule, fallback accepted, Chibi to Realistic reset accepted), relayed by the coordinator; spec 014 (wizard, split from spec 009)
 - `packages/parts-schema/src/character-spec.ts` (`CHARACTER_MIGRATIONS`, `migrateCharacterSpec`, read 2026-10-09)
+- `packages/parts-schema/src/presets.ts` (`characterPresetSchema`, `parseCharacterPreset`, read 2026-10-09) and spec 014 `CharacterPreset` contract, for the REQ-CMP-027 amendment (PM decision 2026-10-09)
 - ADR-0001, ADR-0005, ADR-0008 (M1 rig outcome, `docs/adr/0008-shared-rig-skeleton-groups-runtime-retarget.md`); `docs/architecture.md` §2.1, §3.2–3.3, §4.1–4.3
 - M1 implementation read for the 2026-10-09 (M1-33) amendments: `packages/engine/src/registry/compatibility.ts`, `packages/parts-schema/src/character-spec.ts`, `apps/web/src/app/default-character.ts`, `assets/packs/quaternius-{ubc,outfits}/manifest.json`
 - `.tagconn/work/research.md` (2026-10-08)

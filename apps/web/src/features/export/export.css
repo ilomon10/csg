@@ -1,0 +1,99 @@
+/* Export dialog. Tokens come from shared/ui/tokens.css; no colors are hard-coded. */
+.exp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.exp-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+.exp-field legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+.exp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.exp-num {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.exp-num input[type='number'],
+.exp-num input[type='text'] {
+  min-height: 36px;
+  padding: 4px 8px;
+  font: 14px/1.2 var(--font-ui);
+  color: var(--text);
+  background: var(--panel-sunk);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-btn);
+}
+.exp-num input:focus-visible,
+.exp-check input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.exp-checks {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.exp-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  font: 14px/1.2 var(--font-ui);
+}
+.exp-plan-head {
+  margin: 16px 0 6px;
+}
+.exp-note,
+.exp-warn,
+.exp-error {
+  margin: 4px 0;
+  font: 13px/1.4 var(--font-ui);
+}
+.exp-note,
+.exp-muted {
+  color: var(--muted);
+}
+.exp-warn {
+  color: var(--text);
+}
+.exp-error {
+  color: var(--danger);
+}
+.exp-files {
+  margin: 8px 0;
+  padding-left: 18px;
+  max-height: 180px;
+  overflow: auto;
+}
+.exp-progress progress {
+  width: 100%;
+  height: 12px;
+  accent-color: var(--accent);
+}
+.exp-licence {
+  margin-top: 12px;
+}
+.exp-licence__head {
+  margin: 0;
+  font: 700 14px/1.3 var(--font-ui);
+}
+.exp-licence ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+@media (max-width: 480px) {
+  .exp-grid {
+    grid-template-columns: 1fr;
+  }
+}

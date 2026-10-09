@@ -1,4 +1,6 @@
+import './zod-config';
 import {z} from 'zod';
+import slotsJson from '../data/slots.json';
 import {socketIdSchema} from './body';
 import {slotIdSchema, toSchemaIssues} from './primitives';
 import type {SchemaResult} from './primitives';
@@ -88,3 +90,10 @@ export function loadSlotRegistry(json: unknown): SchemaResult<SlotRegistry> {
     ? {ok: true, value: parsed.data}
     : {ok: false, issues: toSchemaIssues(parsed.error)};
 }
+
+/**
+ * The validated bundled slot registry (`data/slots.json`, REQ-CMP-001), parsed once at module
+ * load (throws if the file is invalid). Slots are data (P-11): consumers read it instead of
+ * importing the JSON file.
+ */
+export const SLOT_REGISTRY: SlotRegistry = slotRegistrySchema.parse(slotsJson);

@@ -227,6 +227,21 @@ describe('attachSkinnedPart', () => {
     expect(b.root.children).toHaveLength(1); // only the root bone, nothing attached
   });
 
+  it('AC-ANA-020.2: a part whose skin uses joint Head binds to Head and reports no AST_RIG_MISMATCH', async () => {
+    const part = await loadFixturePart(
+      SHIRT,
+      fixtureEntry(manifest, 'fixture-shirt'),
+      rig,
+    );
+    expect(sourceMesh(part).skeleton.bones.map(b => b.name)).toContain('Head');
+    const b = body('fixture-a');
+    const result = attachSkinnedPart(part, b);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [mesh] = skinnedMeshes(result.value);
+    expect(mesh?.skeleton.bones).toContain(b.bones.get('Head'));
+  });
+
   it('REQ-CMP-037: an explicit bone map (target -> part name) rebinds the renamed joint', async () => {
     const part = await loadFixturePart(
       'variants/shirt-mismatched-rig.glb',

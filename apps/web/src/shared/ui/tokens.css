@@ -1,0 +1,105 @@
+/*
+ * Design tokens (REQ-UX-034, REQ-UX-035). Dark is the default; Light is selected with
+ * `data-theme="light"` on <html>, and `data-theme="system"` follows `prefers-color-scheme`.
+ * Both themes are checked by `tokens.test.ts` (text >= 4.5:1, indicators and control
+ * boundaries >= 3:1). Amber and mint never carry state alone: components add a check mark,
+ * a ring or text. Keep the Light block and the `system` media block identical (the test
+ * asserts it).
+ */
+:root {
+  color-scheme: dark;
+  --bg: #13151a;
+  --panel: #1b1e24;
+  --panel-2: #262a32;
+  --panel-sunk: #171a1f;
+  --overlay: #0c0d10;
+  --line: #363c46; /* decorative dividers only */
+  --edge: #7b8492; /* control boundaries, >= 3:1 */
+  --edge-hover: #9aa3b0;
+  --text: #ecebe4;
+  --muted: #9ca3ac;
+  --accent: #ffb21f; /* amber: primary action, selection */
+  --accent-hover: #ffc24d;
+  --accent-ink: #1a1100;
+  --accent-edge: #c98400;
+  --accent-fg: #ffb21f; /* amber used as text or a glyph */
+  --tile-selected: #2e2a1f;
+  --focus: #46e0a0; /* mint: focus ring, live states */
+  --success-fg: #46e0a0;
+  --danger: #ff7a6b;
+  --scrim: rgb(5 6 8 / 72%);
+  --shadow: 0 12px 32px rgb(0 0 0 / 55%);
+  --font-display: 'Pixelify Sans', 'Courier New', monospace;
+  --font-ui: 'Figtree', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur: 300ms;
+  --dur-fast: 140ms;
+  --radius-tile: 18px;
+  --radius-btn: 3px;
+  --bar-h: 48px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #ecebe4;
+  --panel: #f8f6f0;
+  --panel-2: #e2dfd4;
+  --panel-sunk: #f1efe8;
+  --overlay: #ffffff;
+  --line: #c6c2b4;
+  --edge: #6b7280;
+  --edge-hover: #454c58;
+  --text: #1b1d22;
+  --muted: #4a515c;
+  --accent: #ffb21f;
+  --accent-hover: #ffc24d;
+  --accent-ink: #1a1100;
+  --accent-edge: #8a5a00;
+  --accent-fg: #854f00;
+  --tile-selected: #fbe9c2;
+  --focus: #00694a;
+  --success-fg: #00694a;
+  --danger: #b3261e;
+  --scrim: rgb(20 22 26 / 48%);
+  --shadow: 0 12px 32px rgb(20 22 26 / 28%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme='system'] {
+    color-scheme: light;
+    --bg: #ecebe4;
+    --panel: #f8f6f0;
+    --panel-2: #e2dfd4;
+    --panel-sunk: #f1efe8;
+    --overlay: #ffffff;
+    --line: #c6c2b4;
+    --edge: #6b7280;
+    --edge-hover: #454c58;
+    --text: #1b1d22;
+    --muted: #4a515c;
+    --accent: #ffb21f;
+    --accent-hover: #ffc24d;
+    --accent-ink: #1a1100;
+    --accent-edge: #8a5a00;
+    --accent-fg: #854f00;
+    --tile-selected: #fbe9c2;
+    --focus: #00694a;
+    --success-fg: #00694a;
+    --danger: #b3261e;
+    --scrim: rgb(20 22 26 / 48%);
+    --shadow: 0 12px 32px rgb(20 22 26 / 28%);
+  }
+}
+
+/* Reduced motion (REQ-UX-038): OS setting or the in-app switch on <html data-reduce-motion>. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 0ms;
+    --dur-fast: 0ms;
+  }
+}
+:root[data-reduce-motion='true'] {
+  --dur: 0ms;
+  --dur-fast: 0ms;
+}

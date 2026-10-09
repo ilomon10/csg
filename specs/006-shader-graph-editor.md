@@ -108,9 +108,9 @@ Architecture (ADR-0004): `@xyflow/react` v12 is only a **view**. The graph model
 
 - **AC-EDT-011.1** Given a selected `post.bayerDither@1`, When `M` is pressed, Then the node shows the badge, the preview loses the dither pattern within 500 ms, and pressing `M` again restores it.
 
-**REQ-EDT-012 [P1]** WHEN the user presses `Ctrl/⌘+H` THE SYSTEM SHALL toggle hiding of unconnected sockets on the selected nodes. Connected sockets always stay visible.
+**REQ-EDT-012 [P1]** WHEN the user presses ~~`Ctrl/⌘+H`~~ `Alt+Shift+H` THE SYSTEM SHALL toggle hiding of unconnected sockets on the selected nodes. Connected sockets always stay visible. *(Amended 2026-10-09, PM: `Ctrl/⌘+H` is macOS Cmd+H "Hide", reserved by spec 009 REQ-UX-015, and `Mod+Alt+H` is macOS "Hide Others"; the binding is `Alt+Shift+H` (Option+Shift+H on macOS), matched on `KeyboardEvent.code` `KeyH` because Alt is held, spec 009 Default shortcuts.)*
 
-- **AC-EDT-012.1** Given `color.mix@1` with only `a` and `out` connected, When `Ctrl+H` is pressed, Then only `a` and `out` are shown, and `hideUnused: true` is stored.
+- **AC-EDT-012.1** Given `color.mix@1` with only `a` and `out` connected, When ~~`Ctrl+H`~~ `Alt+Shift+H` is pressed, Then only `a` and `out` are shown, and `hideUnused: true` is stored. *(Amended 2026-10-09, PM: was `Ctrl+H`; the chord is platform-neutral and holds the same physical key on every layout and platform.)*
 
 **REQ-EDT-013 [P1]** IF a document contains a node type that is not registered THEN THE SYSTEM SHALL show it as a "Missing node" placeholder with the type ID, keep its sockets (inferred from its edges and inputs) and wires, and show the `SGF_UNKNOWN_NODE_TYPE` error on it (REQ-SGF-015).
 
@@ -331,7 +331,7 @@ Architecture (ADR-0004): `@xyflow/react` v12 is only a **view**. The graph model
 | Collapse | `H` | 009 | `graph.collapse` |
 | Toggle node preview | `Shift+H` | 010 | `graph.togglePreview` |
 | Mute / bypass | `M` | 011 | `graph.mute` |
-| Hide unused sockets | `Ctrl+H` | 012 | `graph.hideUnused` |
+| Hide unused sockets | ~~`Ctrl+H`~~ `Alt+Shift+H` (amended 2026-10-09, PM: Cmd+H and Cmd+Option+H are reserved on macOS, spec 009 REQ-UX-015) | 012 | `graph.hideUnused` |
 | Insert reroute | `Alt+click` wire | 020 | gesture (help overlay) |
 | Cut wires (P2) | `Ctrl+right-drag` | 021 | gesture (help overlay) |
 | Delete | `Delete`, `Backspace` | 021 | `graph.delete` |
@@ -508,7 +508,7 @@ export interface LookPreset {
   id: string;                         // 'classic-16bit' | 'gameboy-4' | 'nes-like' | 'hi-bit' | user id
   name: string;
   description: string;
-  thumbnail: string;                  // relative path to a 64×64 PNG
+  thumbnail: string;                  // relative path to a 64×64 image; bundled looks are lossless WebP (2026-10-09, spec 011 REQ-AST-040/042)
   materialGraph: ShaderGraphDocument | `builtin:${string}`;
   postGraph: ShaderGraphDocument | `builtin:${string}`;
   params: Record<string, number | boolean | HexColor | [number, number, number]>;

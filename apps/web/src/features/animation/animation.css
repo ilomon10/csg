@@ -1,0 +1,205 @@
+.csg-anim {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  font-family: var(--font-ui);
+  color: var(--text);
+}
+.csg-anim__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.csg-anim__head h3,
+.csg-anim-heading {
+  margin: 0;
+}
+.csg-anim-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.csg-anim-input {
+  min-height: 30px;
+  background: var(--panel-sunk);
+  color: var(--text);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-btn);
+  padding: 0 8px;
+  font: inherit;
+}
+.csg-anim-input:focus-visible,
+.csg-anim-sel__name:focus-visible,
+.csg-tl__track:focus-visible,
+.csg-anim-check input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.csg-anim-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  font-size: 12.5px;
+}
+.csg-anim-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+.csg-anim-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.csg-anim-picker__tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.csg-anim-picker__tools .csg-anim-input {
+  flex: 1;
+  min-width: 120px;
+}
+.csg-anim-clips,
+.csg-anim-sel,
+.csg-anim-warn {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.csg-anim-clip,
+.csg-anim-sel__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border-bottom: 1px solid var(--line);
+}
+.csg-anim-clip__name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 13px;
+}
+.csg-anim-clip__dur,
+.csg-anim-sel__meta {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.csg-anim-clip__why {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.csg-anim-warn {
+  padding: 8px 10px;
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--accent-fg);
+  background: var(--panel-2);
+  font-size: 12.5px;
+}
+.csg-anim-sel__name {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 6px;
+  background: transparent;
+  color: var(--text);
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.csg-anim-sel__name[aria-expanded='true'] {
+  background: var(--tile-selected);
+}
+.csg-anim-rot-up svg {
+  transform: rotate(90deg);
+}
+.csg-anim-rot-down svg {
+  transform: rotate(90deg);
+}
+.csg-anim-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  padding: 10px 6px 12px;
+  background: var(--panel-sunk);
+}
+.csg-anim-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.csg-anim-range {
+  display: contents;
+}
+.csg-anim-error {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--danger);
+}
+
+/* ---------- timeline ---------- */
+.csg-tl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 10px;
+  font-family: var(--font-ui);
+  color: var(--text);
+}
+.csg-tl__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.csg-tl__readout {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+.csg-tl__track {
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--edge);
+  background: var(--panel-sunk);
+}
+.csg-tl__cells {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--count), minmax(24px, 1fr));
+  min-width: calc(var(--count) * 24px);
+}
+.csg-tl__cell {
+  height: 44px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-right: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.csg-tl__cell[aria-current='true'] {
+  background: var(--tile-selected);
+  color: var(--accent-fg);
+}
+.csg-tl__playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--focus);
+  left: calc((var(--at) + 0.5) * 100% / var(--count));
+  pointer-events: none;
+  transition: left var(--dur-fast) linear;
+}

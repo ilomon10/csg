@@ -13,9 +13,13 @@ export type {
 export {createAnatomyBinding} from './binding';
 export {
   applyAnatomy,
+  anatomySkinScales,
+  anatomyUniformScales,
   applyAnatomyToPose,
+  applyAnatomyToSkins,
   computeGroundOffset,
   defaultInheritScale,
   resetBodyToRest,
   socketPropScale,
+  soleOffsetOf,
 } from './apply';

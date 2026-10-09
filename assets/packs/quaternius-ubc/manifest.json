@@ -31,6 +31,7 @@
         "beard",
         "male"
       ],
+      "thumbnail": "thumbnails/beard-full.webp",
       "tintSlots": [
         {
           "material": "MI_Hair_1",
@@ -60,6 +61,7 @@
         "eyebrows",
         "female"
       ],
+      "thumbnail": "thumbnails/eyebrows-female.webp",
       "tintSlots": [
         {
           "material": "MI_Hair_2",
@@ -89,6 +91,7 @@
         "eyebrows",
         "male"
       ],
+      "thumbnail": "thumbnails/eyebrows-regular.webp",
       "tintSlots": [
         {
           "material": "MI_Hair_1",
@@ -119,6 +122,7 @@
         "updo",
         "female"
       ],
+      "thumbnail": "thumbnails/hair-buns.webp",
       "tintSlots": [
         {
           "material": "MI_Hair_2",
@@ -149,6 +153,7 @@
         "short",
         "male"
       ],
+      "thumbnail": "thumbnails/hair-buzzed.webp",
       "tintSlots": [
         {
           "material": "MI_Hair_1",
@@ -179,6 +184,7 @@
         "short",
         "female"
       ],
+      "thumbnail": "thumbnails/hair-buzzed-female.webp",
       "tintSlots": [
         {
           "material": "MI_Hair_1",
@@ -209,6 +215,7 @@
         "long",
         "female"
       ],
+      "thumbnail": "thumbnails/hair-long.webp",
       "tintSlots": [
         {
           "material": "MI_Hair_2",
@@ -239,6 +246,7 @@
         "short",
         "male"
       ],
+      "thumbnail": "thumbnails/hair-simple-parted.webp",
       "tintSlots": [
         {
           "material": "MI_Hair_1",
@@ -268,6 +276,7 @@
         "female",
         "base-body"
       ],
+      "thumbnail": "thumbnails/superhero-f.webp",
       "tintSlots": [
         {
           "material": "MI_Superhero_Female",
@@ -307,6 +316,7 @@
         "male",
         "base-body"
       ],
+      "thumbnail": "thumbnails/superhero-m.webp",
       "tintSlots": [
         {
           "material": "MI_Superhero_Male",
@@ -2951,7 +2961,8 @@
                 -0.01228591613471508
               ]
             }
-          }
+          },
+          "soleOffsetM": 0.0232
         },
         {
           "id": "male",
@@ -4126,7 +4137,8 @@
                 -0.03967198729515076
               ]
             }
-          }
+          },
+          "soleOffsetM": 0.0247
         },
         {
           "id": "ual",

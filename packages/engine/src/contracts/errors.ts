@@ -29,8 +29,8 @@ export type AnimationErrorCode = 'ANM_CLIP_LOAD_FAILED';
 /** Asset errors (spec 011). */
 export type AssetErrorCode = 'AST_RIG_MISMATCH';
 
-/** Renderer errors (spec 003, architecture 4.4). */
-export type RendererErrorCode = 'PIX_BACKEND_UNAVAILABLE';
+/** Renderer errors (spec 003, architecture 4.4; device loss REQ-PIX-036). */
+export type RendererErrorCode = 'PIX_BACKEND_UNAVAILABLE' | 'PIX_DEVICE_LOST';
 
 /** Every error code the M1 engine returns. */
 export type M1ErrorCode =
@@ -88,6 +88,18 @@ export interface BackendUnavailableDetails {
   readonly backend: 'webgpu' | 'webgl2';
   /** Missing capability, for example `EXT_color_buffer_half_float`. */
   readonly reason: string;
+}
+
+/**
+ * `details` of `PIX_DEVICE_LOST` (spec 003 REQ-PIX-036, spec 009 REQ-UX-046):
+ * reported once through the renderer's `onError` when the GPU device or the
+ * WebGL2 context is lost; the renderer is inert until disposed.
+ */
+export interface DeviceLostDetails {
+  /** Backend whose device was lost. */
+  readonly backend: 'webgpu' | 'webgl2';
+  /** `GPUDeviceLostInfo.reason` (for example `unknown`) on WebGPU; `null` on WebGL2. */
+  readonly reason: string | null;
 }
 
 /** `details.reason` of `CMP_PART_LOAD_FAILED` (spec 011 REQ-AST-028/029). */

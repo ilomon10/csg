@@ -1,0 +1,146 @@
+{
+  "files": [
+    {
+      "kind": "anatomy-preset",
+      "path": "presets/anatomy/chibi.json"
+    },
+    {
+      "kind": "anatomy-preset",
+      "path": "presets/anatomy/default.json"
+    },
+    {
+      "kind": "anatomy-preset",
+      "path": "presets/anatomy/heroic.json"
+    },
+    {
+      "kind": "anatomy-preset",
+      "path": "presets/anatomy/realistic.json"
+    },
+    {
+      "kind": "body-shape",
+      "path": "presets/body-shapes/athletic.json"
+    },
+    {
+      "kind": "body-shape",
+      "path": "presets/body-shapes/average.json"
+    },
+    {
+      "kind": "body-shape",
+      "path": "presets/body-shapes/petite.json"
+    },
+    {
+      "kind": "body-shape",
+      "path": "presets/body-shapes/slim.json"
+    },
+    {
+      "kind": "body-shape",
+      "path": "presets/body-shapes/stocky.json"
+    },
+    {
+      "kind": "body-shape",
+      "path": "presets/body-shapes/tall.json"
+    },
+    {
+      "kind": "style",
+      "path": "presets/styles/chibi.json"
+    },
+    {
+      "kind": "style",
+      "path": "presets/styles/realistic.json"
+    },
+    {
+      "kind": "easy-category",
+      "path": "presets/categories/accessories.json"
+    },
+    {
+      "kind": "easy-category",
+      "path": "presets/categories/body.json"
+    },
+    {
+      "kind": "easy-category",
+      "path": "presets/categories/colors.json"
+    },
+    {
+      "kind": "easy-category",
+      "path": "presets/categories/face.json"
+    },
+    {
+      "kind": "easy-category",
+      "path": "presets/categories/hair.json"
+    },
+    {
+      "kind": "easy-category",
+      "path": "presets/categories/outfit.json"
+    },
+    {
+      "kind": "easy-category",
+      "path": "presets/categories/skin.json"
+    },
+    {
+      "kind": "swatch-set",
+      "path": "presets/swatches/eyes.json"
+    },
+    {
+      "kind": "swatch-set",
+      "path": "presets/swatches/general.json"
+    },
+    {
+      "kind": "swatch-set",
+      "path": "presets/swatches/hair.json"
+    },
+    {
+      "kind": "swatch-set",
+      "path": "presets/swatches/skin.json"
+    },
+    {
+      "kind": "character",
+      "path": "presets/characters/herbalist.json"
+    },
+    {
+      "kind": "character",
+      "path": "presets/characters/ranger.json"
+    },
+    {
+      "kind": "character",
+      "path": "presets/characters/scout.json"
+    },
+    {
+      "kind": "character",
+      "path": "presets/characters/villager.json"
+    },
+    {
+      "kind": "character",
+      "path": "presets/characters/wanderer.json"
+    },
+    {
+      "kind": "character",
+      "path": "presets/characters/woodcutter.json"
+    },
+    {
+      "kind": "character",
+      "path": "presets/characters/young-ranger.json"
+    },
+    {
+      "kind": "character",
+      "path": "presets/characters/young-villager.json"
+    },
+    {
+      "kind": "look",
+      "path": "presets/looks/classic-16bit.json"
+    },
+    {
+      "kind": "look",
+      "path": "presets/looks/gameboy-4.json"
+    },
+    {
+      "kind": "look",
+      "path": "presets/looks/hi-bit.json"
+    },
+    {
+      "kind": "look",
+      "path": "presets/looks/nes-like.json"
+    }
+  ],
+  "format": "sprite-preset-index",
+  "version": 1
+}

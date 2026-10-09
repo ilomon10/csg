@@ -1,13 +1,22 @@
 ---
-title: Anatomy sliders
-description: Use the nine anatomy sliders to change head size, limb length and other proportions, then reset them or apply a preset.
+title: Anatomy
+description: Change proportions with body shapes in Easy or the nine anatomy sliders in Pro, and understand how a style sets the starting proportions and presets.
 ---
 
-# Anatomy sliders
+# Anatomy
 
-The **Anatomy** tab changes the proportions of your character. Every value is a multiplier of the body as it was made. A value of 1.00 means no change.
+Anatomy is the set of proportions of your character: how tall it is, how big its head is, how long its limbs are. There are two ways to change it.
 
-<!-- TODO(screenshot): Anatomy tab with the nine sliders and the preset menu -->
+- **Body shapes** (Easy, and the wizard): six ready-made shapes, such as **Stocky** or **Slim**. See [Body shapes](./body-shapes.md).
+- **Anatomy sliders** (Pro, **Anatomy** tab): nine values you can set exactly, with presets.
+
+Every value is a multiplier of the body as it was made. A value of 1.00 means no change.
+
+<!-- TODO(screenshot): Pro Anatomy tab with the nine sliders and the preset menu -->
+
+## Styles set the starting point
+
+Choosing a **style** also sets the anatomy values. Realistic sets the Realistic preset, and Chibi sets the Chibi preset. The change is one undo step. Parts stay on your character unless they do not fit the new style. See [Styles and species](./styles-and-species.md).
 
 ## The nine sliders
 
@@ -64,3 +73,4 @@ If you change a value after applying a preset, the preset name shows "(modified)
 <!-- spec: REQ-ANA-008 -->
 <!-- spec: REQ-ANA-013 -->
 <!-- spec: REQ-ANA-017 -->
+<!-- spec: REQ-CMP-042 -->

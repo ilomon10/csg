@@ -11,3 +11,4 @@ assets
 apps/site/.source
 apps/site/next-env.d.ts
 apps/site/public/sprites/manifest.json
+dist-e2e

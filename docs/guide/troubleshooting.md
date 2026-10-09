@@ -13,7 +13,7 @@ The editor needs WebGPU or WebGL2. Update your browser to the latest stable vers
 
 ## The viewport is blank
 
-- Wait a few seconds. A sample character can take up to five seconds to appear.
+- Wait a few seconds. A character preview can take up to five seconds to appear after you open a project or start from a preset.
 - If the badge in the top bar reads **Renderer restarting**, the graphics device was reset. The editor recovers on its own within a few seconds, and your project is not changed.
 - If the viewport still does not render, reload the page. Your project is restored from the last autosave.
 
@@ -102,5 +102,13 @@ When an upload fails, the wizard shows the code, a message and a hint. Codes sta
 | `UX_SAVE_FAILED`      | The browser refused to save the project.                                | See "Save failed" above.                                        |
 | `UX_PANEL_CRASHED`    | One panel stopped working. The rest of the editor still works.          | See "A panel says" above.                                       |
 | `PIX_DEVICE_LOST`     | The graphics device was reset during an export. No files were produced. | Export again.                                                   |
+
+## Export is disabled: "is coming soon"
+
+Your character uses a style or species that is not available yet, such as Stickman or Animal. The preview shows a fallback, and the export button says why. Choose an available style and species, such as Realistic or Chibi, and Human, to export. See [Styles and species](./anatomy/styles-and-species.md).
+
+## The home screen opens with `UX_PROJECT_NOT_FOUND`
+
+The project you tried to open was deleted, for example in another tab, or it is not in this browser. The home screen opens instead, with a warning. Choose another character from the lineup.
 
 If you still need help, open an issue in the project's repository and include the code, the steps you took and your browser version. Do not attach files you do not want to share in public.

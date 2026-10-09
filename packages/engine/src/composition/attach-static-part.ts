@@ -5,7 +5,11 @@
 import {Group} from 'three';
 import type {Mesh, Object3D, Vector3} from 'three';
 import type {AnatomyScales} from '../contracts/anatomy';
-import type {AttachStaticPart, AttachedPart} from '../contracts/composition';
+import type {
+  AttachStaticPart,
+  AttachedPart,
+  MaterialLinker,
+} from '../contracts/composition';
 import {
   bindSocketedProp,
   composeSocketOffset,
@@ -17,6 +21,12 @@ import {
 import {linkMaterial, unlinkMaterial} from './tint-material';
 
 const NO_ANATOMY: AnatomyScales = new Map<string, Vector3>();
+
+/** M1 behaviour: clones mirror the material of their registry source mesh. */
+const DEFAULT_LINKER: MaterialLinker = {
+  link: linkMaterial,
+  unlink: unlinkMaterial,
+};
 
 function isMesh(object: Object3D): object is Mesh {
   return (object as Partial<Mesh>).isMesh === true;
@@ -47,10 +57,11 @@ function meshPairs(
 /**
  * Attaches a static part to the joint `body.rig.socketBones[socket.bone]`
  * (REQ-ANA-019) with the socket's offset. The part scene is cloned (geometry
- * and materials stay shared with the registry cache; each cloned mesh is linked
- * to its source mesh with `linkMaterial`, so a later `applyTintMaterial` or
- * `restoreMaterials` on the part scene, such as the pixel-pipeline toon
- * re-tint, reaches the prop too) into a wrapper group named
+ * stays shared with the registry cache; each cloned mesh gets its material from
+ * `options.materials`, by default linked to its source mesh with
+ * `linkMaterial`, so a later `applyTintMaterial` or `restoreMaterials` on the
+ * part scene reaches the prop too; a character assembly passes its own
+ * linker and never touches the registry scene) into a wrapper group named
  * `socket:<socketId>` that is parented to the joint, so the prop follows the
  * pose; the wrapper's matrix is computed (see `placeSocketedProp`) and is
  * refreshed under anatomy by `updateSockets` (REQ-ANA-007). It is placed here
@@ -63,7 +74,12 @@ function meshPairs(
  * `dispose()` detaches the prop and forgets its binding; it is idempotent and
  * never disposes the shared geometry or materials, which the registry owns.
  */
-export const attachStaticPart: AttachStaticPart = (part, body, socket) => {
+export const attachStaticPart: AttachStaticPart = (
+  part,
+  body,
+  socket,
+  options,
+) => {
   if (part.entry.kind !== 'static') {
     throw new Error(
       `attachStaticPart: part "${part.ref}" is ${part.entry.kind}, expected static`,
@@ -76,7 +92,8 @@ export const attachStaticPart: AttachStaticPart = (part, body, socket) => {
   wrapper.name = `socket:${socket.bone}`;
   const clone = part.scene.clone(true);
   const pairs = meshPairs(part.scene, clone);
-  for (const pair of pairs) linkMaterial(pair.source, pair.clone);
+  const linker = options?.materials ?? DEFAULT_LINKER;
+  for (const pair of pairs) linker.link(pair.source, pair.clone);
   wrapper.add(clone);
   bindSocketedProp(wrapper, {
     socket,
@@ -100,7 +117,7 @@ export const attachStaticPart: AttachStaticPart = (part, body, socket) => {
       if (disposed) return;
       disposed = true;
       unbindSocketedProp(wrapper);
-      for (const pair of pairs) unlinkMaterial(pair.source, pair.clone);
+      for (const pair of pairs) linker.unlink(pair.source, pair.clone);
       wrapper.removeFromParent();
       wrapper.clear();
     },

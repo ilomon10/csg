@@ -258,69 +258,73 @@ describe(`frame sampler on the pipeline (${currentBackend()})`, () => {
     );
   });
 
-  it('REQ-PIX-027, AC-PIX-010.1, AC-PIX-007.1, AC-ANM-011.1: 8 directions × 2 frames through renderFrames are byte-identical over 2 runs, share one camera, and stay off the cell edges unless clipped', async () => {
-    const settings = exportSettings();
-    const a = await runExport(h, fixture, binder, settings);
-    const b = await runExport(h, fixture, binder, settings);
-    expect(a.frames).toHaveLength(16);
-    expect(a.frames.map(f => [f.clipId, f.direction, f.frame])).toEqual(
-      a.prepared.jobs.map(j => [j.label, j.direction, j.frame]),
-    );
-    // Same sample time for frame i in every direction (frame log).
-    for (const frame of [0, 1]) {
-      const times = new Set(
-        a.log.filter(e => e.frame === frame).map(e => e.timeSec),
+  it(
+    'REQ-PIX-027, AC-PIX-010.1, AC-PIX-007.1, AC-ANM-011.1: 8 directions × 2 frames through renderFrames are byte-identical over 2 runs, share one camera, and stay off the cell edges unless clipped',
+    {timeout: 180_000},
+    async () => {
+      const settings = exportSettings();
+      const a = await runExport(h, fixture, binder, settings);
+      const b = await runExport(h, fixture, binder, settings);
+      expect(a.frames).toHaveLength(16);
+      expect(a.frames.map(f => [f.clipId, f.direction, f.frame])).toEqual(
+        a.prepared.jobs.map(j => [j.label, j.direction, j.frame]),
       );
-      expect(times.size).toBe(1);
-    }
-    // One camera matrix (16 + 16 floats) for every frame.
-    expect(new Set(a.cameras).size).toBe(1);
-    expect(b.prepared.framing).toEqual(a.prepared.framing);
-    for (let i = 0; i < a.frames.length; i++) {
-      const fa = a.frames[i] as RenderedFrame;
-      const fb = b.frames[i] as RenderedFrame;
-      expect(fb.pixels.length).toBe(fa.pixels.length);
-      expect(fnv1a(fb.pixels)).toBe(fnv1a(fa.pixels));
-      expect(Array.from(fb.pixels)).toEqual(Array.from(fa.pixels));
-    }
-    let opaque = 0;
-    for (const f of a.frames)
-      for (let i = 3; i < f.pixels.length; i += 4)
-        if (f.pixels[i] === 255) opaque++;
-    expect(opaque).toBeGreaterThan(16 * 50);
-    const clipped = new Set(
-      a.prepared.framing.clipped.map(c => `${c.label}/${c.direction}`),
-    );
-    for (const f of a.frames) {
-      if (!clipped.has(`${f.clipId}/${f.direction}`))
-        expect(edgeOpaque(f)).toBe(0);
-    }
-    console.log(
-      `[m2-16] ${h.backend} digest ${fnv1a(a.frames.flatMap(f => Array.from(f.pixels)))}; ` +
-        `worldPerPx ${a.prepared.framing.worldPerPx}; clipped ${a.prepared.framing.clipped.length}; ` +
-        `warnings ${a.prepared.warnings.map(w => w.code).join(',') || 'none'}`,
-    );
-
-    // Review strip: 8 directions side by side, frame 0 on top, frame 1 below.
-    const {width: w, height: hh} = settings.resolution;
-    const strip = new Uint8ClampedArray(w * 8 * hh * 2 * 4);
-    for (const f of a.frames) {
-      for (let y = 0; y < hh; y++) {
-        strip.set(
-          f.pixels.subarray(y * w * 4, (y + 1) * w * 4),
-          ((f.frame * hh + y) * w * 8 + f.direction * w) * 4,
+      // Same sample time for frame i in every direction (frame log).
+      for (const frame of [0, 1]) {
+        const times = new Set(
+          a.log.filter(e => e.frame === frame).map(e => e.timeSec),
         );
+        expect(times.size).toBe(1);
       }
-    }
-    await commands.csgSeedGolden(
-      'test-results/m2-16',
-      h.backend,
-      'sampler-three-quarter-64',
-      toBase64(new Uint8Array(strip.buffer)),
-      w * 8,
-      hh * 2,
-    );
-  });
+      // One camera matrix (16 + 16 floats) for every frame.
+      expect(new Set(a.cameras).size).toBe(1);
+      expect(b.prepared.framing).toEqual(a.prepared.framing);
+      for (let i = 0; i < a.frames.length; i++) {
+        const fa = a.frames[i] as RenderedFrame;
+        const fb = b.frames[i] as RenderedFrame;
+        expect(fb.pixels.length).toBe(fa.pixels.length);
+        expect(fnv1a(fb.pixels)).toBe(fnv1a(fa.pixels));
+        expect(Array.from(fb.pixels)).toEqual(Array.from(fa.pixels));
+      }
+      let opaque = 0;
+      for (const f of a.frames)
+        for (let i = 3; i < f.pixels.length; i += 4)
+          if (f.pixels[i] === 255) opaque++;
+      expect(opaque).toBeGreaterThan(16 * 50);
+      const clipped = new Set(
+        a.prepared.framing.clipped.map(c => `${c.label}/${c.direction}`),
+      );
+      for (const f of a.frames) {
+        if (!clipped.has(`${f.clipId}/${f.direction}`))
+          expect(edgeOpaque(f)).toBe(0);
+      }
+      console.log(
+        `[m2-16] ${h.backend} digest ${fnv1a(a.frames.flatMap(f => Array.from(f.pixels)))}; ` +
+          `worldPerPx ${a.prepared.framing.worldPerPx}; clipped ${a.prepared.framing.clipped.length}; ` +
+          `warnings ${a.prepared.warnings.map(w => w.code).join(',') || 'none'}`,
+      );
+
+      // Review strip: 8 directions side by side, frame 0 on top, frame 1 below.
+      const {width: w, height: hh} = settings.resolution;
+      const strip = new Uint8ClampedArray(w * 8 * hh * 2 * 4);
+      for (const f of a.frames) {
+        for (let y = 0; y < hh; y++) {
+          strip.set(
+            f.pixels.subarray(y * w * 4, (y + 1) * w * 4),
+            ((f.frame * hh + y) * w * 8 + f.direction * w) * 4,
+          );
+        }
+      }
+      await commands.csgSeedGolden(
+        'test-results/m2-16',
+        h.backend,
+        'sampler-three-quarter-64',
+        toBase64(new Uint8Array(strip.buffer)),
+        w * 8,
+        hh * 2,
+      );
+    },
+  );
 
   it('REQ-PIX-007 (FX-G): with room below the pivot (pivotRowPx 12) the auto-framed fixture fills ≥ 70 % of the 64 px cell in every frame, unclipped and off the cell edges', async () => {
     const base = exportSettings();

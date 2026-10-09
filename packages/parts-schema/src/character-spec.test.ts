@@ -62,13 +62,13 @@ describe('character spec', () => {
   it('REQ-CMP-023: unknown format and newer versions are CMP_SPEC_INVALID', () => {
     const wrong = parseCharacterSpec({...clone(), format: 'other'});
     expect(wrong.ok === false && wrong.code).toBe('CMP_SPEC_INVALID');
-    const newer = parseCharacterSpec({...clone(), version: 2});
+    const newer = parseCharacterSpec({...clone(), version: 3});
     expect(newer.ok === false && newer.code).toBe('CMP_SPEC_INVALID');
     expect(parseCharacterSpec('nope').ok).toBe(false);
   });
 
-  it('REQ-CMP-023: the migration chain is empty at version 1 and passes a v1 document through', () => {
-    expect(CHARACTER_MIGRATIONS).toEqual({});
+  it('REQ-CMP-023: a current-version document passes through the chain unchanged', () => {
+    expect(Object.keys(CHARACTER_MIGRATIONS)).toEqual(['1']);
     const doc = clone();
     expect(migrateCharacterSpec(doc)).toEqual({ok: true, value: doc});
   });

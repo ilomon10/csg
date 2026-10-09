@@ -268,6 +268,40 @@ describe('AC-AST-011.1 normalize', () => {
   });
 });
 
+describe('AC-AST-011.2 non-uniform armature scale', () => {
+  it('bakes the uniform mean scale (cube root of the product), warns AST_NORMALIZE_NONUNIFORM and does not fail', () => {
+    const doc = makeBody();
+    const scene = doc.getRoot().listScenes()[0]!;
+    const root = doc
+      .getRoot()
+      .listNodes()
+      .find(n => n.getName() === 'root')!;
+    const pelvisBefore = doc
+      .getRoot()
+      .listNodes()
+      .find(n => n.getName() === 'pelvis')!
+      .getTranslation()[1];
+    const armature = doc.createNode('Armature').setScale([1, 1, 1.01]);
+    scene.removeChild(root);
+    armature.addChild(root);
+    scene.addChild(armature);
+    const result = normalizeDocument(doc);
+    expect(result.applied).toBe(true);
+    const mean = Math.cbrt(1.01);
+    expect(mean).toBeCloseTo(1.00332, 5);
+    const warnings = result.warnings.filter(
+      w => w.code === 'AST_NORMALIZE_NONUNIFORM',
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain('Armature "Armature"');
+    const pelvis = doc
+      .getRoot()
+      .listNodes()
+      .find(n => n.getName() === 'pelvis')!;
+    expect(pelvis.getTranslation()[1]).toBeCloseTo(pelvisBefore * mean, 6);
+  });
+});
+
 describe('AC-AST-012 regions', () => {
   const item = {kind: 'part' as const, id: 'body', config: {slot: 'body'}};
   function regionsOf(doc: Document) {
@@ -335,6 +369,182 @@ describe('AC-AST-012 regions', () => {
       writeRegions(doc, {kind: 'part', id: 's', config: {slot: 'top'}}, rig())
         .written,
     ).toBe(false);
+  });
+});
+
+describe('AC-AST-012 regions (fixture triangles)', () => {
+  const body = {kind: 'part' as const, id: 'tri-body', config: {slot: 'body'}};
+  const regionRig = (): RigDefinition => {
+    const regionBones = Object.fromEntries(
+      BODY_REGIONS.map(r => [r, [] as string[]]),
+    ) as unknown as RigDefinition['regionBones'];
+    regionBones['lower-arms'] = ['la'];
+    regionBones.hands = ['hd'];
+    return {regionBones} as unknown as RigDefinition;
+  };
+
+  /** Two-joint skinned mesh; each vertex is [la weight, hd weight]. */
+  function triDoc(
+    weights: Array<[number, number]>,
+    indices: number[],
+    withSkinAttributes = true,
+  ): Document {
+    const doc = new Document();
+    const buffer = doc.createBuffer();
+    const scene = doc.createScene();
+    const la = doc.createNode('la');
+    const hd = doc.createNode('hd');
+    scene.addChild(la);
+    scene.addChild(hd);
+    const n = weights.length;
+    const positions = new Float32Array(n * 3);
+    const normals = new Float32Array(n * 3);
+    weights.forEach((_w, i) => {
+      positions.set([i * 0.1, i * 0.2 + 1, 0.05 * i], i * 3);
+      normals.set([0, 0, 1], i * 3);
+    });
+    const acc = (
+      type: 'VEC3' | 'VEC4' | 'SCALAR',
+      array: Float32Array<ArrayBuffer> | Uint16Array<ArrayBuffer>,
+    ) => doc.createAccessor().setType(type).setArray(array).setBuffer(buffer);
+    const prim = doc
+      .createPrimitive()
+      .setAttribute('POSITION', acc('VEC3', positions))
+      .setAttribute('NORMAL', acc('VEC3', normals))
+      .setIndices(acc('SCALAR', new Uint16Array(indices)));
+    if (withSkinAttributes) {
+      const joints = new Uint16Array(n * 4);
+      const w = new Float32Array(n * 4);
+      weights.forEach(([a, h], i) => {
+        joints.set([0, 1, 0, 0], i * 4);
+        w.set([a, h, 0, 0], i * 4);
+      });
+      prim
+        .setAttribute('JOINTS_0', acc('VEC4', joints))
+        .setAttribute('WEIGHTS_0', acc('VEC4', w));
+    }
+    const skin = doc
+      .createSkin('skin')
+      .addJoint(la)
+      .addJoint(hd)
+      .setInverseBindMatrices(
+        doc
+          .createAccessor()
+          .setType('MAT4')
+          .setArray(
+            new Float32Array([
+              1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1,
+              0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+            ]),
+          )
+          .setBuffer(buffer),
+      );
+    scene.addChild(
+      doc
+        .createNode('mesh')
+        .setMesh(doc.createMesh('m').addPrimitive(prim))
+        .setSkin(skin),
+    );
+    return doc;
+  }
+
+  it('AC-AST-012.3: a primitive without JOINTS_0/WEIGHTS_0, or a vertex whose weights are all 0, fails with AST_REGION_UNWEIGHTED naming the body (and the vertex)', () => {
+    const noAttrs = triDoc(
+      [
+        [1, 0],
+        [1, 0],
+        [1, 0],
+      ],
+      [0, 1, 2],
+      false,
+    );
+    expect(() => writeRegions(noAttrs, body, regionRig())).toThrow(
+      /AST_REGION_UNWEIGHTED.*tri-body/,
+    );
+    const zeroVertex = triDoc(
+      [
+        [1, 0],
+        [1, 0],
+        [0, 0],
+      ],
+      [0, 1, 2],
+    );
+    expect(() => writeRegions(zeroVertex, body, regionRig())).toThrow(
+      /AST_REGION_UNWEIGHTED.*tri-body.*vertex 2/,
+    );
+  });
+
+  it('AC-AST-012.4: every triangle has three equal _REGION values, the triangle count equals the source and every source vertex position is in the output', () => {
+    const weights: Array<[number, number]> = [
+      [1, 0],
+      [0, 1],
+      [0.6, 0.4],
+      [0.2, 0.8],
+      [1, 0],
+    ];
+    const indices = [0, 1, 2, 2, 3, 4, 1, 3, 4];
+    const doc = triDoc(weights, indices);
+    const before = new Set<string>();
+    const pos0 = doc
+      .getRoot()
+      .listMeshes()[0]!
+      .listPrimitives()[0]!
+      .getAttribute('POSITION')!;
+    for (let i = 0; i < pos0.getCount(); i++) {
+      before.add(pos0.getElement(i, [0, 0, 0]).join(','));
+    }
+    writeRegions(doc, body, regionRig());
+    const prim = doc.getRoot().listMeshes()[0]!.listPrimitives()[0]!;
+    const idx = prim.getIndices()!;
+    const region = prim.getAttribute('_REGION')!;
+    const pos = prim.getAttribute('POSITION')!;
+    expect(idx.getCount() / 3).toBe(indices.length / 3);
+    for (let t = 0; t < idx.getCount() / 3; t++) {
+      const values = [0, 1, 2].map(k =>
+        region.getScalar(idx.getScalar(t * 3 + k)),
+      );
+      expect(new Set(values).size).toBe(1);
+    }
+    const after = new Set<string>();
+    for (let i = 0; i < pos.getCount(); i++) {
+      after.add(pos.getElement(i, [0, 0, 0]).join(','));
+    }
+    for (const p of before) expect(after.has(p)).toBe(true);
+  });
+
+  it('AC-AST-012.5: a triangle with summed weights 1.2 lower-arms and 1.8 hands gets hands (6), its lower-arms neighbour gets lower-arms (5), and the two shared vertices exist once per value with identical attributes', () => {
+    expect(BODY_REGIONS.indexOf('lower-arms')).toBe(5);
+    expect(BODY_REGIONS.indexOf('hands')).toBe(6);
+    const doc = triDoc(
+      [
+        [0, 1],
+        [0.6, 0.4],
+        [0.6, 0.4],
+        [1, 0],
+      ],
+      [0, 1, 2, 1, 2, 3],
+    );
+    writeRegions(doc, body, regionRig());
+    const prim = doc.getRoot().listMeshes()[0]!.listPrimitives()[0]!;
+    const idx = prim.getIndices()!;
+    const region = prim.getAttribute('_REGION')!;
+    const regionOfTri = (t: number) =>
+      [0, 1, 2].map(k => region.getScalar(idx.getScalar(t * 3 + k)));
+    expect(regionOfTri(0)).toEqual([6, 6, 6]);
+    expect(regionOfTri(1)).toEqual([5, 5, 5]);
+    const attrs = (v: number) =>
+      ['POSITION', 'NORMAL', 'JOINTS_0', 'WEIGHTS_0']
+        .map(s => prim.getAttribute(s)!.getElement(v, [0, 0, 0, 0]).join(','))
+        .join('|');
+    // Shared vertices 1 and 2: tri 0 corners 1 and 2 hold the first copies, tri 1 corners 0 and 1
+    // hold the duplicates.
+    for (const [first, second] of [
+      [idx.getScalar(1), idx.getScalar(3)],
+      [idx.getScalar(2), idx.getScalar(4)],
+    ] as const) {
+      expect(first).not.toBe(second);
+      expect(attrs(first)).toBe(attrs(second));
+    }
   });
 });
 
@@ -434,5 +644,15 @@ describe('AC-AST-010 optimize', () => {
   it('is deterministic: same input, same bytes', async () => {
     const [a, b] = [await build(), await build()];
     expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
+  });
+});
+
+describe('AC-AST-010.3 texture limits', () => {
+  it('textureLimit returns 512 for bodies and 256 for every other kind', async () => {
+    const {textureLimit} = await import('./optimize');
+    expect(textureLimit('body')).toBe(512);
+    expect(textureLimit('part')).toBe(256);
+    expect(textureLimit('prop')).toBe(256);
+    expect(textureLimit('clip')).toBe(256);
   });
 });

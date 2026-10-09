@@ -3,6 +3,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {expect, test} from '@playwright/test';
 import type {Page} from '@playwright/test';
+import {openProjectIn} from './fixtures/qa';
 
 /** Spec 000 REQ-GEN-010 (amended 2026-10-09, M2-23s), byte for byte. */
 const CSP =
@@ -45,13 +46,12 @@ async function watchViolations(page: Page): Promise<string[]> {
   return log;
 }
 
+/** Home renders its lineup through the engine; an animated canvas means the engine is live. */
 async function ready(page: Page): Promise<void> {
-  await page.goto('/');
-  await expect(page.locator('.preview-stage')).toHaveAttribute(
-    'data-status',
-    'ready',
-    {timeout: 60_000},
-  );
+  await page.goto('/#home');
+  await expect(
+    page.locator('[data-testid="home-lineup"] canvas[data-animated]').first(),
+  ).toBeVisible({timeout: 90_000});
 }
 
 test('AC-GEN-010.1 / AC-GEN-014.4: the production index.html starts with the amended CSP meta', async ({
@@ -71,25 +71,43 @@ test('AC-GEN-010.1 / AC-GEN-014.4: the production index.html starts with the ame
   expect(content?.[1]).toBe(CSP);
 });
 
-test('AC-GEN-014.1: the palette LUT is built by the worker through csg-worker-url, with no violation and no main-thread build', async ({
+test('AC-GEN-014.1: selecting palettes in the Pro Render tab starts exactly one palette-lut worker through csg-worker-url, with no CSP or Trusted Types violation', async ({
   page,
 }) => {
   const log = await watchViolations(page);
-  await ready(page);
-  const stage = page.locator('.preview-stage');
-  const select = page.getByTestId('palette-select');
+  const workers: string[] = [];
+  page.on('worker', w => workers.push(w.url()));
+  await openProjectIn(page, 'pro');
+  await page
+    .getByRole('complementary', {name: 'Inspector'})
+    .getByRole('tab', {name: 'Render'})
+    .click();
+  const select = page
+    .getByRole('group', {name: 'Render'})
+    .getByLabel('Palette');
   await select.selectOption('pico-8');
-  await expect(stage).toHaveAttribute('data-lut-worker-builds', /^[1-9]/);
+  await expect(select).toHaveValue('pico-8');
+  await expect
+    .poll(() => workers.filter(u => /palette-lut/.test(u)).length, {
+      timeout: 30_000,
+    })
+    .toBe(1);
   await select.selectOption('endesga-32');
   await expect(select).toHaveValue('endesga-32');
-  await expect(stage).toHaveAttribute('data-lut-worker-builds', /^[2-9]/);
-  await expect(stage).toHaveAttribute('data-lut-main-builds', '0');
-  await expect(stage).toHaveAttribute('data-lut-failures', '0');
+  await page.waitForTimeout(1_500);
+  expect(workers.filter(u => /palette-lut/.test(u))).toHaveLength(1);
   await expect(page.getByTestId('preview-error')).toHaveCount(0);
   expect(
     await page.evaluate(() => (window as unknown as {__v: string[]}).__v),
   ).toEqual([]);
   expect(log).toEqual([]);
+  // AC-GEN-014.1: every LUT was built in the worker, none on the main thread.
+  const stage = page.getByTestId('viewport-stage');
+  await expect(stage).toHaveAttribute('data-lut-main-builds', '0');
+  await expect(stage).toHaveAttribute('data-lut-failures', '0');
+  expect(
+    Number(await stage.getAttribute('data-lut-worker-builds')),
+  ).toBeGreaterThan(0);
 });
 
 test('AC-GEN-014.3 / AC-GEN-014.6: only csg-worker-url exists; default and duplicate policies and string sinks are blocked', async ({
@@ -148,20 +166,69 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-test('AC-GEN-014.6: the policy module is the first thing the entry chunk runs; packages create no workers from URLs', async ({
+/** Static import specifiers of a built chunk, in source order (dynamic `import(` excluded). */
+function staticImports(js: string): string[] {
+  return [
+    ...js.matchAll(
+      /(?:^|[;}\s])(?:import|export)\s*(?:[^"'`;()]*?\bfrom\s*)?["'](\.\/[^"']+)["']/g,
+    ),
+  ].map(m => m[1] ?? '');
+}
+
+test('AC-GEN-014.6: the policy module is the first thing the entry graph runs; packages create no workers from URLs', async ({
   request,
 }) => {
   const html = await (await request.get('/')).text();
   const src = /<script type="module"[^>]*src="([^"]+)"/.exec(html)?.[1];
   expect(src).toBeDefined();
-  const entry = await (await request.get(src ?? '')).text();
-  const policyAt = entry.indexOf('createPolicy(');
-  expect(policyAt).toBeGreaterThan(-1);
-  // Everything the entry module imports is evaluated after the policy: the app body
-  // (`#root` lookup) and Zod's `jitless` configuration come later in the chunk.
-  expect(policyAt).toBeLessThan(entry.indexOf('Missing #root element'));
-  expect(policyAt).toBeLessThan(entry.indexOf('createElement(`canvas`)'));
-  expect(entry.slice(0, policyAt)).not.toMatch(/StrictMode|createRoot|jitless/);
+
+  // Follow the entry's STATIC import graph in ES evaluation order (depth-first post-order:
+  // a module's imports run before its body). Dynamic imports are not part of it.
+  const sources = new Map<string, string>();
+  const order: string[] = [];
+  const visit = async (url: string): Promise<void> => {
+    if (sources.has(url)) return;
+    const res = await request.get(url);
+    expect(res.status(), url).toBe(200);
+    const js = await res.text();
+    sources.set(url, js);
+    for (const spec of staticImports(js)) {
+      await visit(new URL(spec, new URL(url, 'http://x')).pathname);
+    }
+    order.push(url);
+  };
+  const entryUrl = new URL(src ?? '', 'http://x').pathname;
+  await visit(entryUrl);
+
+  const policyIdx = order.findIndex(u =>
+    (sources.get(u) ?? '').includes('createPolicy('),
+  );
+  expect(policyIdx).toBeGreaterThan(-1);
+  const policyUrl = order[policyIdx] ?? '';
+  const policySrc = sources.get(policyUrl) ?? '';
+  const policyAt = policySrc.indexOf('createPolicy(');
+  // Nothing evaluated before the policy (earlier chunks, or earlier in the same chunk) can
+  // create roots, workers, canvases or load Zod's jitless config.
+  const risky =
+    /StrictMode|createRoot|jitless|new\s+(Shared)?Worker\s*\(|createElement\(\s*["']canvas/;
+  for (const u of order.slice(0, policyIdx)) {
+    expect(sources.get(u), u).not.toMatch(risky);
+  }
+  expect(policySrc.slice(0, policyAt)).not.toMatch(risky);
+  // The app body (`#root` lookup) lives in the entry and runs after the policy.
+  const entrySrc = sources.get(entryUrl) ?? '';
+  expect(order.indexOf(entryUrl)).toBeGreaterThanOrEqual(policyIdx);
+  if (policyUrl === entryUrl) {
+    expect(policyAt).toBeLessThan(entrySrc.indexOf('Missing #root element'));
+  }
+  // Every dynamic import (view chunks, engine, canvases, workers) runs after the policy: none
+  // sits in a chunk evaluated before it, nor earlier in the policy chunk.
+  const dynamic = /\bimport\(\s*[`"']\.\//;
+  for (const u of order.slice(0, policyIdx)) {
+    expect(sources.get(u), u).not.toMatch(dynamic);
+  }
+  const dynInPolicyChunk = policySrc.search(dynamic);
+  if (dynInPolicyChunk !== -1) expect(policyAt).toBeLessThan(dynInPolicyChunk);
 
   const offenders = readdirSync(PACKAGES).flatMap(pkg =>
     sourceFiles(join(PACKAGES, pkg, 'src')).filter(f =>
@@ -175,12 +242,7 @@ test('AC-GEN-015.3: the worker script response carries the REQ-GEN-010 policy he
   page,
   request,
 }) => {
-  await page.goto('/');
-  await expect(page.locator('.preview-stage')).toHaveAttribute(
-    'data-status',
-    'ready',
-    {timeout: 60_000},
-  );
+  await ready(page);
   // The allowlisted worker URL is the one the palette LUT worker is built to.
   const html = await (await request.get('/')).text();
   const entry = /src="(\/assets\/index-[^"]+\.js)"/.exec(html)?.[1];

@@ -1,0 +1,44 @@
+{
+  "format": "sprite-swatch-set",
+  "version": 1,
+  "id": "eyes",
+  "channels": ["eyes"],
+  "swatches": [
+    {
+      "hex": "#ffffff",
+      "nameKey": "ux.swatch.eyes.natural"
+    },
+    {
+      "hex": "#3a2314",
+      "nameKey": "ux.swatch.eyes.dark-brown"
+    },
+    {
+      "hex": "#6b4423",
+      "nameKey": "ux.swatch.eyes.brown"
+    },
+    {
+      "hex": "#8e6b2f",
+      "nameKey": "ux.swatch.eyes.hazel"
+    },
+    {
+      "hex": "#c78a1c",
+      "nameKey": "ux.swatch.eyes.amber"
+    },
+    {
+      "hex": "#3f8a4f",
+      "nameKey": "ux.swatch.eyes.green"
+    },
+    {
+      "hex": "#3f6fc4",
+      "nameKey": "ux.swatch.eyes.blue"
+    },
+    {
+      "hex": "#7a8794",
+      "nameKey": "ux.swatch.eyes.grey"
+    },
+    {
+      "hex": "#7a4fb3",
+      "nameKey": "ux.swatch.eyes.violet"
+    }
+  ]
+}

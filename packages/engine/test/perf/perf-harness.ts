@@ -24,9 +24,11 @@ import * as THREE from 'three/webgpu';
 import type {AssemblyRegistry} from '../../src/composition/character-assembly';
 import type {RenderSettings} from '../../src/contracts/pipeline';
 import {createPixelPipeline} from '../../src/pipeline/render-pipeline';
+import {createPaletteLutWorker} from '../../src/pipeline/palette-lut';
 import type {PaletteLutWorker} from '../../src/pipeline/palette-lut';
 import {createAssetRegistry} from '../../src/registry/asset-registry';
 import {createCanvasPresenter} from '../../src/renderer/canvas-presenter';
+import {previewTimingFor} from '../../src/renderer/preview-clock';
 import {createCharacterRenderer} from '../../src/renderer/character-renderer';
 import type {EngineCharacterRenderer} from '../../src/renderer/character-renderer';
 import {currentBackend, nodeEnv} from '../gpu/harness';
@@ -137,8 +139,26 @@ export interface PerfRenderer {
 /** Options of {@link createPerfRenderer}. */
 export interface PerfRendererOptions {
   readonly settings: RenderSettings;
-  /** Palette LUT worker override (default: the renderer's bundled worker). */
+  /**
+   * Palette LUT worker factory (default: {@link bundledPaletteLutWorker}, as the editor injects
+   * it, REQ-GEN-014); `null` builds LUTs on the main thread.
+   */
   readonly paletteLutWorker?: (() => PaletteLutWorker) | null;
+}
+
+/**
+ * The engine's palette LUT worker, started the way a host does (REQ-GEN-014: the engine never
+ * constructs a `Worker` itself, so without this factory the renderer builds LUTs on the main
+ * thread and AC-PIX-021.2 cannot hold).
+ */
+export function bundledPaletteLutWorker(): PaletteLutWorker {
+  return createPaletteLutWorker({
+    createWorker: () =>
+      new Worker(
+        new URL('../../src/pipeline/palette-lut.worker.ts', import.meta.url),
+        {type: 'module'},
+      ),
+  });
 }
 
 /**
@@ -168,9 +188,10 @@ export async function createPerfRenderer(
     slots,
     forceWebGL: currentBackend() === 'webgl2',
     settings: options.settings,
-    ...(options.paletteLutWorker === undefined
-      ? {}
-      : {paletteLutWorker: options.paletteLutWorker}),
+    paletteLutWorker:
+      options.paletteLutWorker === undefined
+        ? bundledPaletteLutWorker
+        : options.paletteLutWorker,
     pipelineFactory: args => {
       const made = createPixelPipeline({
         renderer: args.renderer as unknown as THREE.WebGPURenderer,
@@ -365,4 +386,78 @@ export async function writePerfReport(
 /** Whether budgets fail the test (`CSG_PERF_GATE=1`). */
 export async function perfGate(): Promise<boolean> {
   return (await nodeEnv()).perfGate;
+}
+
+/**
+ * Plays `clipId` continuously through the renderer's own animation loop for `durationMs` (after
+ * a 1 s warm-up that compiles the pipelines) and returns the intervals between drawn preview
+ * frames, the CPU time of each draw and the number of draws (AC-PIX-032.1).
+ */
+export async function runPreviewLoop(
+  p: PerfRenderer,
+  clipId: string,
+  durationMs: number,
+): Promise<{intervals: number[]; drawCpu: number[]; frames: number}> {
+  const r = p.renderer;
+  const played = await r.playClip(clipId);
+  if (!played.ok) throw new Error(played.error.message);
+  // Continuous playback: a new pose every frame (the worst case for the preview).
+  r.setPreviewTiming(
+    previewTimingFor(
+      {frameCount: 8, fps: 8, loop: true},
+      r.assembly.clipDurationSec ?? 1,
+      false,
+    ),
+  );
+  // Warm up (first frames compile pipelines), then measure.
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  resetTimers(p.timers);
+  const drawTimes: number[] = [];
+  const pipeline = r as unknown as {pipelineStats: {frames: number}};
+  let lastFrames = pipeline.pipelineStats.frames;
+  const start = performance.now();
+  await new Promise<void>(resolve => {
+    const tick = (now: number) => {
+      const frames = pipeline.pipelineStats.frames;
+      if (frames !== lastFrames) {
+        drawTimes.push(now);
+        lastFrames = frames;
+      }
+      if (performance.now() - start >= durationMs) resolve();
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  r.pause();
+  const intervals: number[] = [];
+  for (let i = 1; i < drawTimes.length; i++) {
+    intervals.push((drawTimes[i] ?? 0) - (drawTimes[i - 1] ?? 0));
+  }
+  return {
+    intervals,
+    drawCpu: [...p.timers.renderSamples],
+    frames: p.timers.renderCalls,
+  };
+}
+
+/** Draw + wait for the GPU, back to back: the serial cost of one preview frame (`n` samples). */
+export async function serialFrameCost(
+  p: PerfRenderer,
+  n: number,
+): Promise<number[]> {
+  const r = p.renderer;
+  const duration = r.assembly.clipDurationSec ?? 1;
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t0 = performance.now();
+    r.seek(((i * duration) / n) % duration); // draws once
+    await gpuIdle(r.renderer);
+    out.push(performance.now() - t0);
+  }
+  return out;
+}
+
+/** Median (nearest rank, lower middle) of samples; NaN for none. */
+export function median(samples: readonly number[]): number {
+  return percentile(samples, 50);
 }

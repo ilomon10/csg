@@ -20,7 +20,7 @@ function restT(i: number, group: string): Vec3 {
 }
 
 /** Small valid rig with skeleton groups `fixture-a` and `fixture-b`. */
-export function makeTestRig(): RigDefinition {
+export function makeTestRig(soleOffsetA?: number): RigDefinition {
   return {
     id: 'test-rig',
     bones: BONES,
@@ -61,6 +61,9 @@ export function makeTestRig(): RigDefinition {
     defaultSkeletonGroup: 'fixture-a',
     skeletonGroups: ['fixture-a', 'fixture-b'].map(id => ({
       id,
+      ...(id === 'fixture-a' && soleOffsetA !== undefined
+        ? {soleOffsetM: soleOffsetA}
+        : {}),
       restPose: Object.fromEntries(
         BONES.map((b, i) => [
           b,
@@ -87,6 +90,8 @@ export interface GlbOptions {
   influences?: number;
   /** Value written to the `_REGION` attribute (u8) of every vertex; omit for no attribute. */
   region?: number;
+  /** Added to the Y of every vertex (sole offset tests, REQ-AST-030). */
+  yOffset?: number;
   /** No skin (static prop). */
   noSkin?: boolean;
   /** Add an animation targeting the joints (clip file, no skin). */
@@ -147,7 +152,10 @@ export async function makeGlb(options: GlbOptions = {}): Promise<Uint8Array> {
   const verts = tris * 3;
   const pos = new Float32Array(verts * 3);
   for (let v = 0; v < verts; v++)
-    pos.set([v % 7, Math.floor(v / 7) % 5, v % 3], v * 3);
+    pos.set(
+      [v % 7, (Math.floor(v / 7) % 5) + (options.yOffset ?? 0), v % 3],
+      v * 3,
+    );
   const prim = doc
     .createPrimitive()
     .setAttribute(
@@ -252,6 +260,8 @@ export async function writeTestPack(
   packId: string,
   parts: TestPart[],
   clips: string[] = [],
+  /** `soleOffsetM` stored on group `fixture-a` of the rig and its manifest copy. */
+  soleOffsetA?: number,
 ): Promise<{
   repo: TestRepo;
   manifest: Record<string, unknown>;
@@ -262,7 +272,7 @@ export async function writeTestPack(
     configsDir: join(root, 'tools/packs'),
     rigsDir: join(root, 'rigs'),
   };
-  const rig = makeTestRig();
+  const rig = makeTestRig(soleOffsetA);
   mkdirSync(repo.rigsDir, {recursive: true});
   writeFileSync(join(repo.rigsDir, 'test-rig.json'), JSON.stringify(rig));
   const packDir = join(repo.packsDir, packId);

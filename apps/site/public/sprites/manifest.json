@@ -310,6 +310,22 @@
       }
     },
     {
+      "file": "og/docs/anatomy/body-shapes.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Body shapes",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
       "file": "og/docs/anatomy/chibi-and-readability.png",
       "width": 1200,
       "height": 630,
@@ -334,7 +350,23 @@
       "assets": [],
       "placeholder": true,
       "kind": "og",
-      "description": "Docs OG card: Anatomy sliders",
+      "description": "Docs OG card: Anatomy",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/anatomy/styles-and-species.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Styles and species",
       "renderSettings": {
         "renderer": "site-placeholder-sdf",
         "font": "builtin-5x7-bitmap",
@@ -678,6 +710,38 @@
       }
     },
     {
+      "file": "og/docs/getting-started/easy-workspace.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Easy workspace",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/getting-started/home-screen.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Home screen",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
       "file": "og/docs/getting-started.png",
       "width": 1200,
       "height": 630,
@@ -719,6 +783,38 @@
       "placeholder": true,
       "kind": "og",
       "description": "Docs OG card: Keyboard shortcuts",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/getting-started/new-character-wizard.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: New-character wizard",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/getting-started/pro-workspace.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Pro workspace",
       "renderSettings": {
         "renderer": "site-placeholder-sdf",
         "font": "builtin-5x7-bitmap",
@@ -815,6 +911,22 @@
       "placeholder": true,
       "kind": "og",
       "description": "Docs OG card: Render settings overview",
+      "renderSettings": {
+        "renderer": "site-placeholder-sdf",
+        "font": "builtin-5x7-bitmap",
+        "cell": 64
+      }
+    },
+    {
+      "file": "og/docs/render-settings/look-presets.png",
+      "width": 1200,
+      "height": 630,
+      "appVersion": "0.0.0-placeholder",
+      "backend": "webgl2",
+      "assets": [],
+      "placeholder": true,
+      "kind": "og",
+      "description": "Docs OG card: Look presets",
       "renderSettings": {
         "renderer": "site-placeholder-sdf",
         "font": "builtin-5x7-bitmap",

@@ -1,4 +1,11 @@
-import {Matrix4, Vector3} from 'three';
+import {
+  BufferGeometry,
+  Matrix4,
+  MeshBasicMaterial,
+  Skeleton,
+  SkinnedMesh,
+  Vector3,
+} from 'three';
 import {describe, expect, it} from 'vitest';
 import {defaultAnatomy} from '@csg/parts-schema';
 import type {AnatomyParams, RigDefinition} from '@csg/parts-schema';
@@ -6,8 +13,10 @@ import type {AnatomyBinding} from '../contracts/anatomy';
 import type {BodySkeleton} from '../contracts/composition';
 import {restWorldMatrices} from '../rig';
 import {
+  anatomySkinScales,
   applyAnatomy,
   applyAnatomyToPose,
+  applyAnatomyToSkins,
   computeGroundOffset,
   createAnatomyBinding,
   resetBodyToRest,
@@ -31,11 +40,36 @@ function params(over: Partial<AnatomyParams> = {}): AnatomyParams {
   return {...defaultAnatomy(), ...over};
 }
 
+/** The binding and values the bones were last posed with (skin scales of {@link skinWorld}). */
+let posed: {binding: AnatomyBinding; p: AnatomyParams} | null = null;
+
+/** `applyAnatomyToPose`, remembering the values for {@link skinWorld}. */
+function applyPose(binding: AnatomyBinding, p: AnatomyParams) {
+  applyAnatomyToPose(binding, p);
+  posed = {binding, p};
+}
+
 /** Bind pose with anatomy applied; returns world matrices via three. */
 function pose(body: BodySkeleton, binding: AnatomyBinding, p: AnatomyParams) {
   resetBodyToRest(binding);
-  applyAnatomyToPose(binding, p);
+  applyPose(binding, p);
   body.root.updateMatrixWorld(true);
+}
+
+/**
+ * The world matrix that skins a joint's geometry: the bone's world matrix
+ * times its own-frame anatomy skin scale (what `applyAnatomyToSkins` folds
+ * into the inverse bind matrices).
+ */
+function skinWorld(body: BodySkeleton, name: string): Matrix4 {
+  const m = (body.bones.get(name)?.matrixWorld as Matrix4).clone();
+  const s =
+    posed === null
+      ? undefined
+      : anatomySkinScales(posed.binding, posed.p).get(name);
+  return s === undefined
+    ? m
+    : m.multiply(new Matrix4().makeScale(s.x, s.y, s.z));
 }
 
 function worldPos(body: BodySkeleton, name: string): Vector3 {
@@ -44,15 +78,14 @@ function worldPos(body: BodySkeleton, name: string): Vector3 {
   );
 }
 
-/** World scale (column lengths) of a bone. */
+/** World scale (column lengths) of the geometry skinned to a joint. */
 function worldScale(body: BodySkeleton, name: string): Vector3 {
-  return new Vector3().setFromMatrixScale(
-    body.bones.get(name)?.matrixWorld as Matrix4,
-  );
+  return new Vector3().setFromMatrixScale(skinWorld(body, name));
 }
 
+/** World axes (unit) of the geometry skinned to a joint. */
 function axes(body: BodySkeleton, name: string): Vector3[] {
-  const e = (body.bones.get(name)?.matrixWorld as Matrix4).elements;
+  const e = skinWorld(body, name).elements;
   return [0, 4, 8].map(o => new Vector3(e[o], e[o + 1], e[o + 2]).normalize());
 }
 
@@ -115,11 +148,11 @@ describe('AC-ANA-003.1: length compensation', () => {
         worldPos(body, 'upperarm_l'),
       );
       expect(d / rest0).toBeCloseTo(1.2, 4);
-      // The hand is not in armLength: its world scale is unchanged. Exact on the
-      // identity rest of fixture-a; fixture-b's rotated arm bones (Rz 10 deg) leave
-      // a small residual shear, because Bone.scale is diagonal (see applyAnatomy).
+      // The hand is not in armLength: its world scale is unchanged, also under
+      // fixture-b's rotated arm bones (Rz 10 deg): segment-scale compensation
+      // never lets a joint's own scale reach a child's frame.
       const handScale = worldScale(body, 'hand_l');
-      const tol = group === 'fixture-a' ? 4 : 1;
+      const tol = 9;
       for (const k of ['x', 'y', 'z'] as const) {
         expect(handScale[k]).toBeCloseTo(1, tol);
       }
@@ -191,6 +224,96 @@ describe('AC-ANA-003.2: torsoWidth compensation', () => {
   });
 });
 
+describe('AC-ANA-003.4: no shear at any rest or animated rotation (segment-scale compensation)', () => {
+  const chibi = params({
+    height: 0.85,
+    head: 1.8,
+    torsoWidth: 1.1,
+    shoulders: 0.9,
+    armLength: 0.75,
+    legLength: 0.7,
+    hands: 1.4,
+    feet: 1.4,
+    limbThickness: 1.4,
+  });
+
+  it.each(['fixture-a', 'fixture-b'])(
+    'chibi with knees bent 90 deg and feet turned 70 deg: every joint is orthogonal and the feet are uniform (%s)',
+    group => {
+      const {body, binding} = bind(rig, group);
+      resetBodyToRest(binding);
+      // Animated rotations far from the rest (the Quaternius foot is rotated
+      // 70 deg from its calf at rest; a walk bends the knee about 90 deg).
+      for (const side of ['l', 'r']) {
+        body.bones.get(`calf_${side}`)?.rotateX(Math.PI / 2);
+        body.bones.get(`foot_${side}`)?.rotateX((70 * Math.PI) / 180);
+        body.bones.get(`upperarm_${side}`)?.rotateZ(Math.PI / 3);
+      }
+      applyPose(binding, chibi);
+      body.root.updateMatrixWorld(true);
+      for (const j of body.rest.joints) {
+        const [x, y, z] = axes(body, j.name) as [Vector3, Vector3, Vector3];
+        expect({
+          j: j.name,
+          d: Math.max(
+            Math.abs(x.dot(y)),
+            Math.abs(x.dot(z)),
+            Math.abs(y.dot(z)),
+          ),
+        }).toEqual({j: j.name, d: expect.closeTo(0, 9)});
+      }
+      for (const n of ['foot_l', 'foot_r', 'ball_l', 'ball_r']) {
+        if (!body.bones.has(n)) continue;
+        expect(worldScale(body, n).toArray()).toEqual(
+          [1, 1, 1].map(() => expect.closeTo(0.85 * 1.4, 9)),
+        );
+      }
+      for (const n of ['calf_l', 'thigh_r']) {
+        expect(worldScale(body, n).toArray()).toEqual(
+          [0.85 * 1.4, 0.85 * 0.7, 0.85 * 1.4].map(v => expect.closeTo(v, 9)),
+        );
+      }
+    },
+  );
+});
+
+describe("AC-ANA-003.3, AC-ANA-003.4: skin scales go into each mesh's own inverse bind matrices", () => {
+  it('writes S(skin) * B^-1 per joint, keeps shared source matrices, and restores them exactly at default', () => {
+    const {body, binding} = bind(rig);
+    const bones = body.rest.joints.map(j => body.bones.get(j.name)!);
+    const source = bones.map(b => b.matrixWorld.clone().invert());
+    const sourceCopy = source.map(m => m.clone());
+    const mesh = new SkinnedMesh(new BufferGeometry(), new MeshBasicMaterial());
+    // Same Matrix4 objects as the "registry" source, as attachSkinnedPart does.
+    mesh.bind(new Skeleton(bones, [...source]), new Matrix4());
+    body.root.add(mesh);
+    const p = params({legLength: 0.7, limbThickness: 1.4, torsoWidth: 1.1});
+    applyAnatomyToSkins(binding, p, body.root);
+    const skins = anatomySkinScales(binding, p);
+    bones.forEach((b, i) => {
+      const s = skins.get(b.name) as Vector3;
+      const expected = new Matrix4()
+        .makeScale(s.x, s.y, s.z)
+        .multiply(sourceCopy[i] as Matrix4);
+      // Signed zeros aside (+0 normalizes them), the same products.
+      expect(mesh.skeleton.boneInverses[i]?.elements.map(v => v + 0)).toEqual(
+        expected.elements.map(v => v + 0),
+      );
+      expect(source[i]?.equals(sourceCopy[i] as Matrix4)).toBe(true);
+    });
+    expect(skins.get('calf_l')?.toArray()).toEqual([1.4, 0.7, 1.4]);
+    expect(skins.get('foot_l')?.toArray()).toEqual([1, 1, 1]);
+    applyAnatomyToSkins(binding, params(), body.root);
+    bones.forEach((_, i) => {
+      expect(mesh.skeleton.boneInverses[i]?.elements).toEqual(
+        sourceCopy[i]?.elements,
+      );
+    });
+    mesh.geometry.dispose();
+    (mesh.material as MeshBasicMaterial).dispose();
+  });
+});
+
 describe('AC-ANA-003.3: limbThickness compensation', () => {
   it('limb vertices move 1.5x away from the bone axis; hand and foot stay at scale 1', () => {
     const {body, binding} = bind(rig);
@@ -210,8 +333,9 @@ describe('AC-ANA-003.3: limbThickness compensation', () => {
       Math.hypot(v.x - origin.x, v.z - origin.z); // bone axis is world Y
     const before = vertices.map(v => axisDist(v, worldPos(body, 'upperarm_l')));
     pose(body, binding, params({limbThickness: 1.5}));
+    expect(bone).toBeDefined();
     const skin = new Matrix4().multiplyMatrices(
-      bone?.matrixWorld as Matrix4,
+      skinWorld(body, 'upperarm_l'),
       inverseBind,
     );
     vertices.forEach((v, i) => {
@@ -255,7 +379,7 @@ describe('AC-ANA-004.1: propagating head', () => {
     const neckM = body.bones.get('neck_01')?.matrixWorld.clone() as Matrix4;
     pose(body, binding, params({head: 1.8}));
     const skin = new Matrix4().multiplyMatrices(
-      body.bones.get('Head')?.matrixWorld as Matrix4,
+      skinWorld(body, 'Head'),
       inverseBind,
     );
     const grown = hair.map(v => v.clone().applyMatrix4(skin));
@@ -348,12 +472,13 @@ describe('AC-ANA-009.1: clip translation follows the length factor', () => {
     const {body, binding} = bind(rig);
     resetBodyToRest(binding);
     body.bones.get('upperarm_l')?.scale.set(1, 2, 1);
-    applyAnatomyToPose(binding, params({armLength: 1.2}));
-    expect(body.bones.get('upperarm_l')?.scale.toArray()).toEqual([
-      1,
-      2 * 1.2,
-      1,
-    ]);
+    applyPose(binding, params({armLength: 1.2}));
+    body.root.updateMatrixWorld(true);
+    // The clip scale stays on the bone; the anatomy factor skins its geometry.
+    expect(body.bones.get('upperarm_l')?.scale.toArray()).toEqual([1, 2, 1]);
+    expect(worldScale(body, 'upperarm_l').toArray()).toEqual(
+      [1, 2 * 1.2, 1].map(v => expect.closeTo(v, 9)),
+    );
   });
 });
 
@@ -512,6 +637,7 @@ describe('REQ-ANM-008 / REQ-ANA-011: anatomy evaluation allocates nothing per fr
       resetBodyToRest(binding);
       if (pelvis !== undefined) pelvis.position.y += (i % 7) * 0.001;
       applyAnatomyToPose(binding, p);
+      applyAnatomyToSkins(binding, p, body.root);
       computeGroundOffset(binding, p);
       socketPropScale(binding, p, 'hand_r');
     }, 100_000);

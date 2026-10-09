@@ -1,0 +1,198 @@
+import {commandTitle} from '../src/shared/i18n/i18n';
+import {
+  formatChord,
+  isSingleKey,
+  parseChord,
+} from '../src/shared/shortcuts/chords';
+import {DEFAULT_SHORTCUTS} from '../src/shared/shortcuts/registry';
+import type {ShortcutDef, ShortcutScope} from '../src/shared/shortcuts/types';
+
+/** Path of the generated page, relative to the repository root. */
+export const SHORTCUTS_DOC_PATH =
+  'docs/guide/getting-started/keyboard-shortcuts.md';
+
+interface ScopeSection {
+  readonly scope: ShortcutScope;
+  readonly heading: string;
+  readonly intro?: string;
+  readonly outro?: string;
+}
+
+/** Order and wording of the scopes. Scopes with no registry rows are skipped. */
+const SECTIONS: readonly ScopeSection[] = [
+  {
+    scope: 'global',
+    heading: 'Everywhere',
+    outro:
+      'The inspector tabs are numbered in this order: 1 Parts, 2 Colors, 3 Anatomy, 4 Render, 5 Animation.',
+  },
+  {scope: 'wizard', heading: 'Wizard'},
+  {
+    scope: 'library',
+    heading: 'Part library',
+    intro: 'These work while the part library has focus.',
+  },
+  {
+    scope: 'inspector',
+    heading: 'Inspector',
+    intro: 'These work while the inspector has focus.',
+  },
+  {
+    scope: 'viewport',
+    heading: 'Viewport',
+    intro: 'These work while the viewport has focus.',
+  },
+  {
+    scope: 'timeline',
+    heading: 'Timeline',
+    intro: 'These work while the timeline has focus.',
+  },
+  {
+    scope: 'graph',
+    heading: 'Shader graph canvas',
+    intro:
+      'These arrive with the shader graph editor in a later release. They work while the graph canvas has focus.',
+    outro: `In any other case, \`Tab\` moves focus as usual, so you can always leave the canvas with \`Tab\` or \`F6\`.
+
+Move focus between nodes with the arrow keys. Press \`Enter\` to enter the focused node, and \`Tab\` or \`Shift+Tab\` to move between its sockets and controls. Press \`Escape\` to leave the node.
+
+Mouse gestures on the canvas: hold \`Space\` and drag, or drag with the middle button, to pan (a quick tap of \`Space\` opens the node search instead). Zoom with \`Ctrl / Cmd\` and the mouse wheel. Hold \`Alt\` while dragging a node to place it without snapping.`,
+  },
+  {
+    scope: 'prop-fitting',
+    heading: 'Fitting a prop',
+    intro:
+      'These arrive with prop fitting in the upload wizard, in a later release.',
+  },
+  {
+    scope: 'modal',
+    heading: 'Dialogs and overlays',
+  },
+];
+
+const WHEN_NOTES: Readonly<Record<string, string>> = {
+  'slot-focused': 'With a slot in the part library focused',
+  tap: 'A quick tap, not a hold',
+  'group-enter-or-exit':
+    'Enters a selected group; leaves a group when nothing is selected inside it',
+  'inside-group-idle': 'Inside a group, with nothing selected',
+  'socket-focused': 'With a socket focused',
+};
+
+/** `Mod` shown as `Ctrl / Cmd`, the notation of the guide. */
+function neutral(chord: string): string {
+  const parsed = parseChord(chord);
+  const text = formatChord(parsed, 'other');
+  return parsed.mod ? text.replace(/^Ctrl/, 'Ctrl / Cmd') : text;
+}
+
+const code = (text: string): string => `\`${text}\``;
+
+function row(defs: readonly ShortcutDef[]): string {
+  const first = defs[0];
+  if (!first) throw new Error('empty row');
+  const keys = [...new Set(defs.flatMap(def => def.keys))];
+  const notes: string[] = [];
+  if (keys.some(key => isSingleKey(parseChord(key)))) {
+    notes.push('Single key');
+  }
+  if (defs.some(def => def.allowInInput)) notes.push('Works in text fields');
+  for (const def of defs) {
+    if (def.when !== undefined) {
+      notes.push(WHEN_NOTES[def.when] ?? def.when);
+    }
+    if (def.shadows !== undefined) {
+      notes.push(`Replaces "${commandTitle(def.shadows)}"`);
+    }
+  }
+  const neutralKeys = keys.map(key => code(neutral(key))).join(' or ');
+  const macKeys = keys
+    .map(key => code(formatChord(parseChord(key), 'mac')))
+    .join(' or ');
+  return `| ${commandTitle(first.commandId)} | ${neutralKeys} | ${macKeys} | ${[...new Set(notes)].join('; ')} |`;
+}
+
+/** Commands bound in every region scope; listed once, under Everywhere. */
+const REGION_WIDE = new Set(['app.help']);
+
+function table(scope: ShortcutScope): string | null {
+  const byCommand = new Map<string, ShortcutDef[]>();
+  for (const def of DEFAULT_SHORTCUTS) {
+    const regionWide = REGION_WIDE.has(def.commandId);
+    if (regionWide ? scope !== 'global' : def.scope !== scope) continue;
+    byCommand.set(def.commandId, [
+      ...(byCommand.get(def.commandId) ?? []),
+      def,
+    ]);
+  }
+  if (byCommand.size === 0) return null;
+  return [
+    '| Action | Keys | macOS | Notes |',
+    '| ------ | ---- | ----- | ----- |',
+    ...[...byCommand.values()].map(row),
+  ].join('\n');
+}
+
+const HEADER = `---
+title: Keyboard shortcuts
+description: Every default keyboard shortcut in the editor, grouped by where it works, with notes on single-key shortcuts, text fields and browser conflicts.
+---
+
+<!-- GENERATED by \`pnpm docs:shortcuts\` from apps/web/src/shared/shortcuts/registry.ts (REQ-UX-021, D12). Do not edit by hand: change the registry or apps/web/scripts/shortcuts-doc.ts, then regenerate. -->`;
+
+const EASY_AND_HOME = `## Home screen and Easy workspace
+
+These belong to the controls themselves, not to the shortcut registry. They work when the control has focus.
+
+| Action | Keys |
+| ------ | ---- |
+| Move through the avatar strip on the home screen | Left and Right arrows; Home and End for the first and last character |
+| Run the main action for the selected character (Edit or Start from this preset) | Enter, with the avatar strip focused |
+| Turn the Easy preview one 45-degree step | Left and Right arrows, with the preview focused |
+| Move between tiles | Arrow keys; Home and End for the first and last tile |
+| Choose a tile | Enter or Space |
+| Move through a color swatch row, checking each swatch | Arrow keys |`;
+
+const FOOTER = `> [!IMPORTANT]
+> Some shortcuts replace browser shortcuts while the editor is focused. These include \`Ctrl / Cmd+E\`, \`Ctrl / Cmd+J\`, \`Ctrl / Cmd+D\`, \`Ctrl / Cmd+G\` and \`Ctrl / Cmd+O\`. The editor never uses reserved browser shortcuts such as \`Ctrl+T\`, \`Ctrl+W\`, \`Ctrl+R\`, \`Ctrl+N\` or browser zoom.
+
+<!-- spec: REQ-UX-011 -->
+<!-- spec: REQ-UX-012 -->
+<!-- spec: REQ-UX-014 -->
+<!-- spec: REQ-UX-015 -->
+<!-- spec: REQ-UX-016 -->
+<!-- spec: REQ-UX-018 -->
+<!-- spec: REQ-UX-020 -->
+<!-- spec: REQ-UX-021 -->
+`;
+
+/** Renders the keyboard shortcuts page from the registry. Pure and deterministic. */
+export function renderShortcutsDoc(): string {
+  const inInput = [
+    ...new Set(
+      DEFAULT_SHORTCUTS.filter(def => def.allowInInput).flatMap(def =>
+        def.keys.map(key => code(neutral(key))),
+      ),
+    ),
+  ];
+  const last = inInput.pop();
+  const inInputText = `${inInput.join(', ')} and ${last}`;
+  const parts = [
+    HEADER,
+    '# Keyboard shortcuts',
+    "In this guide, `Ctrl / Cmd` means `Ctrl` on Windows and Linux, and `⌘` (Command) on macOS. `Alt` means Option on macOS. The macOS column shows the same shortcuts in macOS notation, for example `⇧⌘Z`. The shortcut help (`?` or `F1`) shows each shortcut in your platform's notation.",
+    'Most shortcuts work only in the region they belong to, such as the viewport or the timeline. Press `F6` to move focus between regions. Shortcuts that work everywhere are listed first.',
+    `> [!NOTE]\n> Single-key shortcuts such as \`R\`, \`V\` and \`M\` work only while their region has focus, and are marked "Single key" below. Turn them off with the **Single-key shortcuts** setting if they get in the way. Shortcuts do not fire while you type in a text field, except ${inInputText}.`,
+  ];
+  for (const section of SECTIONS) {
+    const body = table(section.scope);
+    if (body === null) continue;
+    parts.push(`## ${section.heading}`);
+    if (section.intro) parts.push(section.intro);
+    parts.push(body);
+    if (section.outro) parts.push(section.outro);
+    if (section.scope === 'wizard') parts.push(EASY_AND_HOME);
+  }
+  parts.push(FOOTER.trimEnd());
+  return `${parts.join('\n\n')}\n`;
+}

@@ -276,6 +276,44 @@ describe('split', () => {
     });
   });
 
+  it('AC-AST-010.5: a .gltf whose images[0].uri names a missing file warns AST_SOURCE_IMAGE_MISSING naming the URI and the output has no reference to that image', async () => {
+    const {json, resources} = await new NodeIO().writeJSON(await sourceDoc());
+    const images = json.images ?? [];
+    expect(images.length).toBeGreaterThan(0);
+    const missing = 'missing-texture.png';
+    images[0] = {...images[0], uri: missing};
+    const dir = join(srcRoot(), 'Vendor Pack[Standard]');
+    for (const [uri, bytes] of Object.entries(resources)) {
+      // Every resource except images (buffers stay next to the .gltf).
+      if (!images.some(i => i.uri === uri)) put(dir, uri, bytes);
+    }
+    for (const img of images.slice(1)) {
+      if (img.uri !== undefined && resources[img.uri] !== undefined) {
+        put(dir, img.uri, resources[img.uri]!);
+      }
+    }
+    put(dir, 'src.gltf', JSON.stringify(json));
+    const p = pack();
+    for (const part of p.config.parts) part.match.file = 'src.gltf';
+    for (const clip of p.config.clips) clip.match.file = 'src.gltf';
+    const warnings: Array<{code: string; message: string}> = [];
+    const items = await splitPack(p, {srcRoot: srcRoot(), warnings});
+    const hit = warnings.filter(w => w.code === 'AST_SOURCE_IMAGE_MISSING');
+    expect(hit.length).toBeGreaterThan(0);
+    expect(hit[0]?.message).toContain(missing);
+    for (const item of items) {
+      expect(
+        item.doc
+          .getRoot()
+          .listTextures()
+          .some(t => t.getURI() === missing),
+      ).toBe(false);
+    }
+    // The first part (Shirt_A) used the missing image: its output has no texture at all.
+    const shirt = items.find(i => i.id === 'shirt');
+    expect(shirt?.doc.getRoot().listTextures()).toHaveLength(0);
+  });
+
   it('AC-AST-002.1 .fbx fails with AST_SOURCE_FORMAT naming the file and recipe', async () => {
     const p = pack();
     p.config.parts[0]!.match.file = 'model.fbx';
@@ -373,7 +411,7 @@ describe('config and CLI', () => {
     expect(o).toMatchObject({packs: ['a', 'b'], src: '/s', out: '/o'});
     expect(() => parseArgs(['--bogus'])).toThrow(/AST_USAGE|unknown/);
   });
-  it('runBuild runs config -> sources -> split on a temp repo', async () => {
+  it('AC-AST-013.3: a pack whose rig has no rig JSON exits 2 with AST_RIG_MISSING naming the rig and the expected path; otherwise runBuild runs config -> sources -> split on a temp repo', async () => {
     const root = tmp;
     const p = pack();
     put(root, 'tools/packs/p/pack.config.json', JSON.stringify(p.config));
@@ -400,5 +438,9 @@ describe('config and CLI', () => {
     // The full pipeline needs the rig file; the temp repo has none (stages are tested separately).
     const err = await runBuild(parseArgs([], root)).catch(e => e);
     expect(err).toMatchObject({code: 'AST_RIG_MISSING', exitCode: 2});
+    expect(err.message).toContain('fixture-ue5-22');
+    expect(err.message).toContain(
+      'packages/parts-schema/rigs/fixture-ue5-22.json',
+    );
   });
 });

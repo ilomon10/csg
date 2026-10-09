@@ -1,0 +1,18 @@
+{
+  "format": "sprite-body-shape-preset",
+  "version": 1,
+  "id": "tall",
+  "label": "ux.shape.tall",
+  "order": 50,
+  "factors": {
+    "height": 1.1,
+    "head": 1,
+    "torsoWidth": 0.97,
+    "shoulders": 1,
+    "armLength": 1.04,
+    "legLength": 1.08,
+    "hands": 1,
+    "feet": 1,
+    "limbThickness": 1
+  }
+}

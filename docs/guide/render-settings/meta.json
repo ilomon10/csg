@@ -2,6 +2,7 @@
   "title": "Render settings",
   "pages": [
     "index",
+    "look-presets",
     "camera-styles",
     "directions",
     "resolution",

@@ -9,7 +9,7 @@ import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {format, resolveConfig} from 'prettier';
 import {defaultAnatomy, TINT_SLOTS} from '@csg/parts-schema';
-import type {PartEntry} from '@csg/parts-schema';
+import type {PartEntry, RigDefinition} from '@csg/parts-schema';
 import {
   FIXTURE_RIG_ID,
   GROUP_A,
@@ -37,6 +37,8 @@ export const MAX_TOTAL_BYTES = 300 * 1024;
 export type FixtureFiles = Map<string, Uint8Array | string>;
 
 const PACK_ID = 'fixture-pack';
+/** Sole offset of group `fixture-a` in the rig variant `fixture-ue5-22-sole` (metres). */
+export const SOLE_OFFSET_M = 0.02;
 const LICENSE = {
   license: 'CC0-1.0',
   author: 'character-sprite-generator contributors',
@@ -74,6 +76,15 @@ export async function buildFixtures(): Promise<FixtureFiles> {
   const rig = buildRigDefinition('y');
   const rigX = buildRigDefinition('x');
   const rigJson = await json(rig);
+  // Variant with a measured sole offset on group `fixture-a` (AC-ANA-008.4, AC-ANA-008.5). The
+  // plain rig keeps no `soleOffsetM`, which means 0 (REQ-ANA-008).
+  const rigSole: RigDefinition = {
+    ...rig,
+    skeletonGroups: rig.skeletonGroups.map(group =>
+      group.id === GROUP_A ? {...group, soleOffsetM: SOLE_OFFSET_M} : group,
+    ),
+  };
+  const rigSoleJson = await json(rigSole);
   const rigXJson = await json(rigX);
 
   const docs = {
@@ -220,9 +231,11 @@ export async function buildFixtures(): Promise<FixtureFiles> {
   );
   const character = {
     format: 'sprite-character',
-    version: 1,
+    version: 2,
     name: 'Fixture character',
     seed: 1,
+    style: 'realistic',
+    species: 'human',
     body: {ref: `builtin:${PACK_ID}/fixture-body`},
     parts: {
       torso: {ref: `builtin:${PACK_ID}/fixture-shirt`},
@@ -233,6 +246,7 @@ export async function buildFixtures(): Promise<FixtureFiles> {
     tints,
   };
   const manifestJson = await json(manifest);
+  const manifestSoleJson = await json({...manifest, rigs: [rigSole]});
   const clipsJson = await json(clips);
   const characterJson = await json(character);
 
@@ -240,6 +254,8 @@ export async function buildFixtures(): Promise<FixtureFiles> {
   const e = (p: string) => `${ENGINE_DIR}/${p}`;
   out.set(e('rigs/fixture-ue5-22.json'), rigJson);
   out.set(e('rigs/fixture-ue5-22-x.json'), rigXJson);
+  out.set(e('rigs/fixture-ue5-22-sole.json'), rigSoleJson);
+  out.set(e('variants/manifest-sole.json'), manifestSoleJson);
   out.set(e('pack/manifest.json'), manifestJson);
   out.set(e('pack/clips.json'), clipsJson);
   out.set(e('pack/parts/fixture-body.glb'), bytes.body);
@@ -255,6 +271,8 @@ export async function buildFixtures(): Promise<FixtureFiles> {
   const s = (p: string) => `${SCHEMA_DIR}/${p}`;
   out.set(s('rigs/fixture-ue5-22.json'), rigJson);
   out.set(s('rigs/fixture-ue5-22-x.json'), rigXJson);
+  out.set(s('rigs/fixture-ue5-22-sole.json'), rigSoleJson);
+  out.set(s('manifest-sole.valid.json'), manifestSoleJson);
   out.set(s('manifest.valid.json'), manifestJson);
   out.set(s('clips.valid.json'), clipsJson);
   out.set(s('character.valid.json'), characterJson);

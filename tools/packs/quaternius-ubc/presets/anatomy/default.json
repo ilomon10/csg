@@ -1,0 +1,17 @@
+{
+  "format": "sprite-anatomy-preset",
+  "version": 1,
+  "id": "default",
+  "label": "Default",
+  "values": {
+    "height": 1,
+    "head": 1,
+    "torsoWidth": 1,
+    "shoulders": 1,
+    "armLength": 1,
+    "legLength": 1,
+    "hands": 1,
+    "feet": 1,
+    "limbThickness": 1
+  }
+}

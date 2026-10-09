@@ -4,11 +4,18 @@
  * the policy exists, and the CSP (`trusted-types csg-worker-url`) allows no other policy name,
  * no `default` policy and no second `csg-worker-url`.
  */
+import exportWorkerUrl from '@csg/engine/export.worker?worker&url';
 import paletteWorkerUrl from '@csg/engine/palette-lut.worker?worker&url';
 import {createWorkerUrlValidator} from './worker-url-policy';
 
 /** The module-worker URLs of this build (REQ-GEN-014 (e)); nothing is added at runtime. */
-export const WORKER_URL_ALLOWLIST: readonly string[] = [paletteWorkerUrl];
+export const WORKER_URL_ALLOWLIST: readonly string[] = [
+  paletteWorkerUrl,
+  exportWorkerUrl,
+];
+
+/** The export worker's URL (spec 005 REQ-EXP-023). */
+export const EXPORT_WORKER_URL: string = exportWorkerUrl;
 
 /** The palette LUT worker's URL (spec 003 REQ-PIX-021). */
 export const PALETTE_WORKER_URL: string = paletteWorkerUrl;

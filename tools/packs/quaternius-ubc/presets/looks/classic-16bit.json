@@ -1,0 +1,41 @@
+{
+  "format": "sprite-look-preset",
+  "version": 1,
+  "id": "classic-16bit",
+  "name": "Classic 16-bit",
+  "description": "The default look: 3-band toon shading, rim light and a 1 px black outline, no palette.",
+  "thumbnail": "thumbnails/looks/classic-16bit.webp",
+  "materialGraph": "builtin:material-toon",
+  "postGraph": "builtin:post-default",
+  "params": {},
+  "palette": {
+    "id": "none"
+  },
+  "render": {
+    "toon": {
+      "bands": 3,
+      "rim": {
+        "enabled": true,
+        "strength": 0.5
+      }
+    },
+    "outline": {
+      "outer": {
+        "enabled": true,
+        "widthPx": 1
+      },
+      "inner": {
+        "enabled": true
+      },
+      "colorMode": "black"
+    },
+    "palette": {
+      "id": "none",
+      "metric": "oklab",
+      "dither": {
+        "mode": "none",
+        "strength": 0.5
+      }
+    }
+  }
+}

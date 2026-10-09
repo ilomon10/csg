@@ -7,8 +7,7 @@ description: Choose 1, 2, 4 or 8 facing directions for your sprites, the label e
 
 A direction is one way the character faces. The editor turns the character to each direction in turn and renders every animation frame for it. The character itself turns. The camera does not move.
 
-> [!NOTE]
-> **Planned.** The direction controls are planned with the Render tab. The labels and rules on this page are the ones the pipeline uses.
+Set the number of directions in the **Render** tab of the Pro workspace. The labels and rules on this page are the ones the pipeline uses.
 
 ## Choose how many
 

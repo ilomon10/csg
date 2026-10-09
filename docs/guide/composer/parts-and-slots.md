@@ -1,6 +1,6 @@
 ---
 title: Parts and slots
-description: The fifteen slots a character can hold, how parts fill them, how parts hide body regions, and why some parts do not fit a body.
+description: The fifteen slots a character can hold, how parts fill them, how parts hide body regions, and why some parts do not fit a body or a style.
 ---
 
 # Parts and slots
@@ -29,11 +29,15 @@ A character has fifteen slots. Each slot holds at most one part. Only the body s
 
 ## Equip and clear a part
 
-- Click a part tile in the picker to equip it. The new part replaces the old one in that slot.
+- Choose a part tile to equip it. The new part replaces the old one in that slot.
 - To clear a slot, select it and choose **Clear**, or press `Delete`.
 - The body slot cannot be cleared. Its clear control is disabled.
 
 Keyboard users can move through the part grid with the arrow keys, equip with `Enter`, and clear the focused slot with `Delete`.
+
+## Search and filter
+
+In Pro, the part library has a search box. It matches the part name and its tags as you type, and it works with the slot filter. Filters by source, pack and license are planned for a later release.
 
 ## Mix parts from different packs
 
@@ -51,23 +55,26 @@ A part can hide regions of the body underneath it, so the body does not poke thr
 
 ## Parts that do not fit
 
-A part fits a body when all of these are true:
+A part fits a character when all of these are true:
 
 - Skinned parts (clothes and hair that bend with the skeleton) use the same skeleton as the body.
 - The part lists the body, or lists no bodies.
 - The part's body type matches the body, or it lists no body types.
+- The part lists the character's style, or lists no styles.
+- The part lists the character's species, or lists no species.
 
 Incompatible parts are hidden from the picker. Turn on **Show incompatible** to see them. They appear greyed out, each with a text reason such as "Fits Superhero bodies only".
 
-If you change the body and some equipped parts no longer fit, those parts are removed. A notice lists them, for example "Removed 1 part that does not fit this body: Chestplate". One undo restores the old body and the removed parts.
+If you change the body, the style or the species and some equipped parts no longer fit, those parts are removed. A notice lists them, for example "Removed 1 part that does not fit this body: Chestplate". One undo restores the old choice and the removed parts.
 
-> [!NOTE]
-> **Planned.** Searching and filtering large part lists by name, tag or license is planned for a later release.
-
-<!-- TODO(screenshot): picker with Show incompatible on, one greyed part showing its reason -->
+<!-- TODO(screenshot): Pro part library with Show incompatible on, one greyed part showing its reason -->
 
 <!-- spec: REQ-CMP-002 -->
 <!-- spec: REQ-CMP-007 -->
 <!-- spec: REQ-CMP-008 -->
+<!-- spec: REQ-CMP-009 -->
 <!-- spec: REQ-CMP-010 -->
 <!-- spec: REQ-CMP-011 -->
+<!-- spec: REQ-CMP-030 -->
+<!-- spec: REQ-CMP-032 -->
+<!-- spec: REQ-CMP-048 -->

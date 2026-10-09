@@ -28,11 +28,14 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - run: pnpm docs:shortcuts --check
       - run: pnpm typecheck
+      # Build before test: tools/web-build.test.ts checks the built apps/web/dist (bundle size,
+      # lazy engine chunk, no test hosts) and FAILS in CI when dist is missing.
+      - run: pnpm build
       - run: pnpm test
       - run: pnpm spec:check
       - run: pnpm spec:immutability
-      - run: pnpm build
 
   site:
     runs-on: ubuntu-latest

@@ -13,5 +13,6 @@ export * from './animation';
 export * from './renderer';
 export * from './pipeline';
 export * from './sampler';
+export * from './export';
 export * from './rig';
 export * from './retarget';

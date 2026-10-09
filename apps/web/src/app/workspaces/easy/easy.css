@@ -1,0 +1,149 @@
+/* Easy workspace (spec 014 REQ-UX-056..068). Tokens come from shared/ui/tokens.css. */
+.ez {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 55fr) minmax(0, 45fr);
+  grid-template-rows: minmax(0, 1fr) 64px;
+  grid-template-areas:
+    'preview customize'
+    'bar bar';
+}
+.ez-preview {
+  grid-area: preview;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel-sunk);
+}
+.ez-customize {
+  grid-area: customize;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+}
+.ez-customize:focus-visible {
+  outline-offset: -3px;
+}
+.ez-tabs {
+  flex: none;
+  padding: 0 8px;
+}
+.ez-tabs .csg-tab {
+  min-width: 56px;
+}
+.ez-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ez-panel:focus-visible {
+  outline-offset: -3px;
+}
+.ez-panel__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  animation: ez-in var(--dur-fast) var(--ease);
+}
+@keyframes ez-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.ez-group {
+  margin-top: 18px;
+}
+.ez-group:first-child {
+  margin-top: 0;
+}
+.ez-group__title {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ez-swatches {
+  flex: none;
+  padding: 12px 16px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+.ez-chip {
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--edge);
+  border-radius: 50%;
+}
+.ez-hint {
+  margin: 0;
+  color: var(--muted);
+}
+.ez-hint--center {
+  padding: 12px 16px;
+  text-align: center;
+}
+.ez-status {
+  margin: 24px;
+  color: var(--muted);
+}
+.ez-bar {
+  grid-area: bar;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+.ez-bar__grow {
+  flex: 1;
+}
+.ez-bar:focus-visible {
+  outline-offset: -3px;
+}
+.ez--view-only {
+  display: flex;
+  flex-direction: column;
+}
+.ez--view-only .ez-preview {
+  flex: 1;
+}
+/* Preview above the panel at 768 to 1023 px, 40 to 50 % of the height (REQ-UX-068). */
+@media (width < 1024px) {
+  .ez:not(.ez--view-only) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 45%) minmax(0, 1fr) 64px;
+    grid-template-areas:
+      'preview'
+      'customize'
+      'bar';
+  }
+  .ez-customize {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  /* Every target at least 44 x 44 CSS px (REQ-UX-068). */
+  .ez .csg-btn,
+  .ez .csg-seg__btn,
+  .ez .csg-swatch,
+  .ez .csg-tab,
+  .ez .csg-tile {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ez-panel__scroll {
+    animation: none;
+  }
+}

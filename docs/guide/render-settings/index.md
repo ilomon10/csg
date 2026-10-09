@@ -7,8 +7,7 @@ description: Where the Render tab sets the camera, directions, size, lighting, t
 
 The **Render** tab controls how your character becomes pixels. The settings here also apply to the export.
 
-> [!NOTE]
-> **Planned.** The Render tab is not in the editor yet. The defaults on these pages are the look the pixel pipeline renders today. The controls for changing them come in a later release.
+The settings are changed in the **Render** tab of the Pro workspace. The defaults on these pages are the values the pixel pipeline starts from.
 
 <!-- TODO(screenshot): Render tab with the camera, directions and resolution sections visible -->
 
@@ -48,13 +47,9 @@ Every pixel in the export is either fully visible or fully transparent. The **al
 
 The preview is designed to show exactly the frame that the export will contain, at the same size and with the same colors. You do not need to export to check a change.
 
-> [!NOTE]
-> **Planned.** The Pixel view switch is planned with the Render tab.
-
 ## Look presets
 
-> [!NOTE]
-> **Planned.** Built-in looks that change the lighting, outline, palette and dithering in one step are planned: Classic 16-bit (the default look), GameBoy 4-color, NES-like and Hi-bit. See [Shader graph](../shader-graph/index.md) for how looks are built.
+Four built-in looks set the lighting, outline, palette and dithering in one step: Classic 16-bit (the default), GameBoy 4-color, NES-like and Hi-bit. See [Look presets](./look-presets.md).
 
 <!-- spec: REQ-PIX-003 -->
 <!-- spec: REQ-PIX-037 -->
