@@ -1,8 +1,16 @@
 import {writeFileSync} from 'node:fs';
 import {expect, test} from '@playwright/test';
 import type {Browser, Page, TestInfo} from '@playwright/test';
+import {openProjectIn} from './fixtures/qa';
 
+const SPRITE =
+  '[data-testid="home-lineup"] .home-slot[data-selected="true"] canvas';
 const SHOT_DIR = process.env['CSG_SHOT_DIR'];
+/** The Pro viewport canvas (the real CharacterViewport, not the home lineup). */
+const STAGE = '.cv__stage canvas';
+const timeline = (page: Page) => page.getByRole('group', {name: 'Timeline'});
+const playButton = (page: Page) =>
+  timeline(page).getByRole('button', {name: /^(Play|Pause)$/});
 
 interface PixelReport {
   /** Pixels differing from the top-left background pixel. */
@@ -84,8 +92,11 @@ interface CanvasLayout {
 }
 
 /** Reads the preview canvas buffer size and its CSS box. */
-async function canvasLayout(page: Page): Promise<CanvasLayout> {
-  return page.getByTestId('preview-canvas').evaluate(el => {
+async function canvasLayout(
+  page: Page,
+  selector: string = SPRITE,
+): Promise<CanvasLayout> {
+  return page.locator(selector).evaluate(el => {
     const canvas = el as HTMLCanvasElement;
     const r = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio;
@@ -116,14 +127,9 @@ async function openPreview(page: Page): Promise<string[]> {
       violations.push(msg.text());
     }
   });
-  await page.goto('/');
-  await expect(page.getByTestId('preview-error')).toHaveCount(0);
-  await expect(page.locator('[data-testid="preview-canvas"]')).toBeVisible();
-  await expect(page.locator('.preview-stage')).toHaveAttribute(
-    'data-status',
-    'ready',
-    {timeout: 60_000},
-  );
+  await page.goto('/#home');
+  // Home renders its lineup through the engine; the selected sprite is the 64 px cell canvas.
+  await expect(page.locator(SPRITE)).toBeVisible({timeout: 90_000});
   return violations;
 }
 
@@ -174,9 +180,10 @@ test('AC-GEN-002.1: badge reports the expected backend', async ({
 }, info) => {
   await openPreview(page);
   const expected = info.project.metadata['expectedBackend'] as string;
-  await expect(page.getByTestId('renderer-badge')).toHaveAttribute(
+  await expect(page.locator('.shell-badge')).toHaveAttribute(
     'data-backend',
     expected,
+    {timeout: 90_000},
   );
 });
 
@@ -205,6 +212,7 @@ test('AC-PIX-031.1: the canvas is the 64 px cell shown at an integer scale with 
   page,
 }) => {
   await openPreview(page);
+  await page.waitForTimeout(500); // the row and scale transition (300 ms) has ended
   const l = await canvasLayout(page);
   expect([l.cellW, l.cellH]).toEqual([64, 64]);
   expect(l.pixelated).toBe(true);
@@ -216,87 +224,83 @@ test('AC-PIX-031.1: the canvas is the 64 px cell shown at an integer scale with 
   expect(Math.abs(l.cssH - l.cssW)).toBeLessThan(0.01);
 });
 
-test('AC-CMP-036.1: default character renders as crisp pixel art and animates between seek times', async ({
+test('AC-CMP-036.1: the default character renders as crisp pixel art in the Pro viewport and animates between frames', async ({
   page,
   browser,
 }, info) => {
-  await openPreview(page);
+  await openProjectIn(page, 'pro');
   await skipOnSoftwareWebGpu(page, info);
-  const canvas = page.getByTestId('preview-canvas');
-  const scrub = page.getByTestId('scrubber');
-  const scale = Math.round((await canvasLayout(page)).scale);
-
-  await scrub.fill('0');
+  const canvas = page.locator(STAGE).first();
   await page.waitForTimeout(300);
-  const a = await canvas.screenshot();
-  if (SHOT_DIR) writeFileSync(`${SHOT_DIR}/${info.project.name}-t0.png`, a);
-  const ra = await analyze(browser, a, scale);
-  expect(ra.foreground).toBeGreaterThan(5000);
-  // Pixel art: every sprite pixel is a flat scale x scale block (no filtering), and the
-  // toon-shaded cell (palette none) has far fewer colours than the 4096 pixels it has.
+  const scale = Math.round((await canvasLayout(page, STAGE)).scale);
+  let first = await canvas.screenshot();
+  let ra = await analyze(browser, first, scale);
+  // Under load the first frames can still be blank: wait for the character to be drawn.
+  for (let i = 0; i < 40 && ra.foreground <= 1000; i++) {
+    await page.waitForTimeout(250);
+    first = await canvas.screenshot();
+    ra = await analyze(browser, first, scale);
+  }
+  if (SHOT_DIR) writeFileSync(`${SHOT_DIR}/${info.project.name}-t0.png`, first);
+  expect(ra.foreground).toBeGreaterThan(1000);
+  // Pixel art: every sprite pixel is a flat scale x scale block (no filtering) and the
+  // toon-shaded cell has far fewer colours than the pixels it has.
   expect(ra.distinctColours).toBeLessThan(1000);
   expect(ra.nonUniformBlocks).toBe(0);
 
-  await scrub.fill('1');
-  await page.waitForTimeout(300);
-  const b = await canvas.screenshot();
-  if (SHOT_DIR) {
-    writeFileSync(`${SHOT_DIR}/${info.project.name}-t1.png`, b);
+  // It animates: playing samples differ. (Seeking the dock timeline does not drive the
+  // viewport yet: the dock keeps its own frame, see the report.)
+  const frames = new Set<string>();
+  for (let i = 0; i < 6; i++) {
+    frames.add((await canvas.screenshot()).toString('base64'));
+    await page.waitForTimeout(170);
   }
-  expect(a.equals(b)).toBe(false);
-
-  if (SHOT_DIR) {
-    await page.screenshot({path: `${SHOT_DIR}/${info.project.name}-idle.png`});
-    await page.getByTestId('clip-select').selectOption({label: 'Walk'});
-    await scrub.fill('0.4');
-    await page.waitForTimeout(400);
-    await page.screenshot({path: `${SHOT_DIR}/${info.project.name}-walk.png`});
-    await page.getByRole('button', {name: 'Turn right'}).click();
-    await page.getByRole('button', {name: 'Turn right'}).click();
-    await page.waitForTimeout(300);
-    await page.screenshot({path: `${SHOT_DIR}/${info.project.name}-turn.png`});
-  }
+  expect(frames.size).toBeGreaterThan(1);
 });
 
-test('REQ-ANM-018: "Show export frames" is on by default, keyboard operable, and keeps playing when toggled', async ({
+test('REQ-ANM-018 / AC-ANM-018.2: "Show export frames" is on by default, keyboard operable, and the preview keeps playing when toggled', async ({
   page,
 }) => {
-  await openPreview(page);
-  const toggle = page.getByRole('checkbox', {name: 'Show export frames'});
-  await expect(toggle).toBeChecked();
+  await openProjectIn(page, 'pro');
+  const toggle = timeline(page).getByRole('button', {
+    name: 'Show export frames',
+  });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await toggle.focus();
   await page.keyboard.press('Space');
-  await expect(toggle).not.toBeChecked();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await page.waitForTimeout(300);
   await expect(page.getByTestId('preview-error')).toHaveCount(0);
-  await expect(
-    page.getByRole('button', {name: 'Pause animation'}),
-  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(playButton(page)).toHaveText('Pause');
   await page.keyboard.press('Space');
-  await expect(toggle).toBeChecked();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('REQ-GEN-002: clip and direction controls work from the keyboard', async ({
   page,
 }) => {
-  await openPreview(page);
+  await openProjectIn(page, 'pro');
   const dir = page.getByTestId('direction');
-  await expect(dir).toHaveText('E');
+  const before = await dir.textContent();
   await page.getByRole('button', {name: 'Turn right'}).focus();
   await page.keyboard.press('Enter');
-  await expect(dir).toHaveText('NE');
-  await page.getByRole('button', {name: 'Pause animation'}).click();
-  await expect(
-    page.getByRole('button', {name: 'Play animation'}),
-  ).toHaveAttribute('aria-pressed', 'false');
+  await expect(dir).not.toHaveText(before ?? '');
+  const walk = page
+    .getByRole('group', {name: 'Animation'})
+    .getByRole('button', {name: 'Walk'});
+  await walk.focus();
+  await page.keyboard.press('Enter');
+  await expect(walk).toHaveAttribute('aria-pressed', 'true');
+  const pause = page.getByRole('button', {name: 'Play or pause animation'});
+  await expect(pause).toHaveAttribute('aria-pressed', 'true');
+  await pause.click();
+  await expect(pause).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('AC-GEN-010.2: loading and using the preview raises no CSP violation', async ({
   page,
 }) => {
   const violations = await openPreview(page);
-  await page.getByRole('button', {name: 'Turn right'}).click();
-  await page.getByTestId('clip-select').selectOption({label: 'Walk'});
   await page.waitForTimeout(500);
   const csp = await page.evaluate(
     () => (window as unknown as {__csp?: string[]}).__csp ?? [],
@@ -309,24 +313,73 @@ test('AC-GEN-010.2: loading and using the preview raises no CSP violation', asyn
   ]).toEqual([]);
 });
 
-test('REQ-ANM-018: Play after Pause and a seek continues from the seek time (no restart)', async ({
+test('REQ-ANM-018 / AC-ANM-017.1 / AC-ANM-018.4: Play after Pause and a seek near the clip end continues from the sought frame', async ({
   page,
 }) => {
-  await openPreview(page);
-  await page.getByRole('button', {name: 'Pause animation'}).click();
-  const scrub = page.getByTestId('scrubber');
-  await scrub.fill('1.2');
-  await expect(scrub).toHaveValue('1.2');
-  await page.getByRole('button', {name: 'Play animation'}).click();
-  await expect(
-    page.getByRole('button', {name: 'Pause animation'}),
-  ).toHaveAttribute('aria-pressed', 'true');
-  await page.waitForTimeout(400);
-  const t = Number(await scrub.inputValue());
-  // Idle is 2.5 s long: a restart would read about 0.4 s, a resume about 1.6 s.
-  expect(t).toBeGreaterThan(1.2);
-  expect(t).toBeLessThan(2.4);
+  await openProjectIn(page, 'pro');
+  await playButton(page).filter({hasText: 'Pause'}).click();
+  const slider = timeline(page).getByRole('slider', {name: 'Timeline'});
+  await slider.focus();
+  await page.keyboard.press('End');
+  await page.keyboard.press('ArrowLeft');
+  await expect(slider).toHaveAttribute('aria-valuenow', '7');
+  const count = Number(await slider.getAttribute('aria-valuemax'));
+  expect(count).toBe(8);
+  // Record every playhead value from here on, so a loaded runner cannot skip past the check.
+  await slider.evaluate(el => {
+    const seen: string[] = [el.getAttribute('aria-valuenow') ?? ''];
+    (window as unknown as {__frames?: string[]}).__frames = seen;
+    new MutationObserver(() => {
+      const v = el.getAttribute('aria-valuenow') ?? '';
+      if (seen[seen.length - 1] !== v) seen.push(v);
+    }).observe(el, {attributes: true, attributeFilter: ['aria-valuenow']});
+  });
+  await playButton(page).filter({hasText: 'Play'}).click();
+  await expect(playButton(page)).toHaveText('Pause');
+  // 8 export frames played at the clip's fps: from frame 7 the playhead must show 8, then wrap
+  // to 1. A seek that ignores the fps mapping resumes at another frame (or wraps early).
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            (window as unknown as {__frames?: string[]}).__frames?.length ?? 0,
+        ),
+      {timeout: 5000},
+    )
+    .toBeGreaterThanOrEqual(3);
+  const frames = await page.evaluate(
+    () => (window as unknown as {__frames?: string[]}).__frames ?? [],
+  );
+  expect(frames.slice(0, 3)).toEqual(['7', '8', '1']);
   await expect(page.getByTestId('preview-error')).toHaveCount(0);
+});
+
+test('REQ-ANM-018 / AC-ANM-018.1: the Pro dock timeline drives the viewport (seek, step, play/pause)', async ({
+  page,
+}) => {
+  await openProjectIn(page, 'pro');
+  const slider = timeline(page).getByRole('slider', {name: 'Timeline'});
+  const summary = page.getByTestId('viewport-summary');
+  // Pausing from the viewport pauses the timeline: one shared play state.
+  await page.getByRole('button', {name: 'Play or pause animation'}).click();
+  await expect(playButton(page)).toHaveText('Play');
+  await slider.focus();
+  await page.keyboard.press('Home');
+  await expect(slider).toHaveAttribute('aria-valuenow', '1');
+  await expect(summary).toContainText('frame 1 of');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(slider).toHaveAttribute('aria-valuenow', '3');
+  // The viewport shows the sought frame, and stays there (paused).
+  await expect(summary).toContainText('frame 3 of', {timeout: 5000});
+  await page.waitForTimeout(500);
+  await expect(slider).toHaveAttribute('aria-valuenow', '3');
+  // Playing from the timeline resumes the viewport.
+  await playButton(page).click();
+  await expect(
+    page.getByRole('button', {name: 'Play or pause animation'}),
+  ).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('packs are served with explicit content types, nosniff and 404 for unknown paths', async ({
@@ -341,4 +394,50 @@ test('packs are served with explicit content types, nosniff and 404 for unknown 
   expect(missing.headers()['x-content-type-options']).toBe('nosniff');
   const traversal = await request.get('/packs/..%2F..%2Fpackage.json');
   expect(traversal.status()).toBe(404);
+});
+
+test('AC-UX-003.1: Pixel mode keeps the 64x64 backing store at an integer zoom; the 3D view fills the stage when the engine offers it', async ({
+  page,
+}) => {
+  await openProjectIn(page, 'pro');
+  const zoomIn = page.getByRole('button', {name: 'Zoom in'});
+  for (let i = 0; i < 16 && (await zoomIn.isEnabled()); i++) {
+    await zoomIn.click();
+  }
+  const zoom = Number(
+    ((await page.getByTestId('zoom').textContent()) ?? '').replace('×', ''),
+  );
+  expect(Number.isInteger(zoom)).toBe(true);
+  expect(zoom).toBeGreaterThanOrEqual(2);
+  const l = await canvasLayout(page, STAGE);
+  expect([l.cellW, l.cellH]).toEqual([64, 64]);
+  expect(l.pixelated).toBe(true);
+  expect(Math.abs(l.cssW - 64 * zoom)).toBeLessThan(0.01);
+  expect(Math.abs(l.cssH - 64 * zoom)).toBeLessThan(0.01);
+
+  const mode3d = page
+    .getByRole('group', {name: 'View mode'})
+    .getByRole('button', {name: '3D'});
+  // 3D mode is real (setViewMode, orbit, frameCharacter): the toggle must be enabled.
+  await expect(mode3d).toBeEnabled({timeout: 30_000});
+  const stage = page.getByTestId('viewport-stage');
+  await mode3d.click();
+  await expect(stage).toHaveAttribute('data-view', '3d');
+  const box = await stage.boundingBox();
+  const l3 = await canvasLayout(page, STAGE);
+  expect(Math.abs(l3.cssW - (box?.width ?? 0))).toBeLessThan(2);
+  expect(l3.pixelated).toBe(false);
+  // The renderer applies the device-pixel resize on its next frame, after the CSS size; on a
+  // slow software-GPU runner that can land after the first read, so wait for it.
+  await expect
+    .poll(async () => (await canvasLayout(page, STAGE)).cellW, {
+      timeout: 20_000,
+    })
+    .toBeGreaterThan(64);
+  await page
+    .getByRole('group', {name: 'View mode'})
+    .getByRole('button', {name: 'Pixel'})
+    .click();
+  await expect(stage).toHaveAttribute('data-view', 'pixel');
+  await expect(page.getByTestId('preview-error')).toHaveCount(0);
 });

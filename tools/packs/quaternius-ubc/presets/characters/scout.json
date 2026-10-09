@@ -1,0 +1,62 @@
+{
+  "format": "sprite-character-preset",
+  "version": 1,
+  "id": "scout",
+  "name": "Scout",
+  "character": {
+    "format": "sprite-character",
+    "version": 2,
+    "name": "Scout",
+    "seed": 105,
+    "style": "realistic",
+    "species": "human",
+    "body": {
+      "ref": "builtin:quaternius-ubc/superhero-f"
+    },
+    "parts": {
+      "headwear": {
+        "ref": "builtin:quaternius-outfits/female-ranger-hood"
+      },
+      "eyebrows": {
+        "ref": "builtin:quaternius-ubc/eyebrows-female"
+      },
+      "torso": {
+        "ref": "builtin:quaternius-outfits/female-ranger-torso"
+      },
+      "arms": {
+        "ref": "builtin:quaternius-outfits/female-ranger-arms"
+      },
+      "legs": {
+        "ref": "builtin:quaternius-outfits/female-ranger-legs"
+      },
+      "feet": {
+        "ref": "builtin:quaternius-outfits/female-ranger-boots"
+      },
+      "accessory": {
+        "ref": "builtin:quaternius-outfits/female-ranger-pauldrons"
+      }
+    },
+    "anatomy": {
+      "height": 1,
+      "head": 1,
+      "torsoWidth": 1,
+      "shoulders": 1,
+      "armLength": 1,
+      "legLength": 1,
+      "hands": 1,
+      "feet": 1,
+      "limbThickness": 1
+    },
+    "morphs": {},
+    "tints": {
+      "skin": "#9a6440",
+      "hair": "#7a4a26",
+      "eyes": "#ffffff",
+      "primary": "#2f6b3c",
+      "secondary": "#ffffff",
+      "metal": "#ffffff",
+      "leather": "#ffffff"
+    }
+  },
+  "camera": "side"
+}

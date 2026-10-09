@@ -6,15 +6,29 @@ const FORBIDDEN_KEYS: ReadonlySet<string> = new Set([
   'prototype',
 ]);
 
+/** Most nodes {@link findForbiddenKey} visits before it gives up (untrusted structured clones). */
+export const MAX_JSON_NODES = 200_000;
+/** Deepest nesting {@link findForbiddenKey} accepts. */
+export const MAX_JSON_DEPTH = 64;
+
 /**
  * Finds the first object key named `__proto__`, `constructor` or `prototype` at any depth
  * (REQ-GEN-011). Only keys count; string values are never inspected. Iterative, so deep
  * nesting cannot overflow the stack.
  *
- * @returns the dotted path of the offending key, or `null` when the value is clean.
+ * Also guards structured-clone data (REQ-GEN-013): valid documents are trees, so an object
+ * reached twice (a cycle or a DAG), nesting deeper than {@link MAX_JSON_DEPTH} or more than
+ * {@link MAX_JSON_NODES} nodes is rejected with the pseudo path `<shared-reference>`,
+ * `<too-deep>` or `<too-large>`.
+ *
+ * @returns the dotted path of the offending key (or a pseudo path), or `null` when clean.
  */
 export function findForbiddenKey(value: unknown): string | null {
-  const stack: Array<{node: unknown; path: string}> = [{node: value, path: ''}];
+  const stack: Array<{node: unknown; path: string; depth: number}> = [
+    {node: value, path: '', depth: 0},
+  ];
+  const seen = new WeakSet<object>();
+  let visited = 0;
   while (stack.length > 0) {
     const item = stack.pop();
     if (
@@ -23,11 +37,19 @@ export function findForbiddenKey(value: unknown): string | null {
       item.node === null
     )
       continue;
+    if (seen.has(item.node)) return '<shared-reference>';
+    seen.add(item.node);
+    if (++visited > MAX_JSON_NODES) return '<too-large>';
+    if (item.depth > MAX_JSON_DEPTH) return '<too-deep>';
     const join = (key: string) =>
       item.path === '' ? key : `${item.path}.${key}`;
     if (Array.isArray(item.node)) {
       item.node.forEach((child, index) =>
-        stack.push({node: child, path: join(String(index))}),
+        stack.push({
+          node: child,
+          path: join(String(index)),
+          depth: item.depth + 1,
+        }),
       );
       continue;
     }
@@ -36,6 +58,7 @@ export function findForbiddenKey(value: unknown): string | null {
       stack.push({
         node: (item.node as Record<string, unknown>)[key],
         path: join(key),
+        depth: item.depth + 1,
       });
     }
   }
@@ -62,7 +85,9 @@ export function parseJson(text: string): SchemaResult<unknown> {
   if (forbidden !== null) {
     const issue: SchemaIssue = {
       path: forbidden,
-      message: `forbidden key "${forbidden.split('.').pop()}"`,
+      message: forbidden.startsWith('<')
+        ? `invalid structure ${forbidden}`
+        : `forbidden key "${forbidden.split('.').pop()}"`,
     };
     return {ok: false, issues: [issue]};
   }

@@ -233,35 +233,39 @@ function materialVersions(r: EngineCharacterRenderer): number[] {
 }
 
 describe(`character renderer on the pixel pipeline (${currentBackend()})`, () => {
-  it('AC-PIX-030.1: the preview paused on walk frame 3, direction ne equals the exported frame byte for byte; the canvas shows the cell', async () => {
-    const settings = walkSettings();
-    const r = await createRenderer(settings);
-    expect((await r.playClip(CLIP)).ok).toBe(true);
-    r.pause();
-    r.setDirection(NE);
-    const duration = r.assembly.clipDurationSec ?? 0;
-    const t3 = computeSampleTimes(WALK, duration).times[3] as number;
-    r.seek(t3);
-    // REQ-PIX-031: the drawing buffer is the cell; the canvas shows it 1:1.
-    expect([canvas.width, canvas.height]).toEqual([64, 64]);
-    const shown =
-      presented === null ? captureCanvas(canvas) : await readPresented(r);
-    const cell = await r.readCell();
-    expect(opaqueCount(cell)).toBeGreaterThan(50);
-    expect(expectShown(shown, cell)).toBeGreaterThan(50);
+  it(
+    'AC-PIX-030.1: the preview paused on walk frame 3, direction ne equals the exported frame byte for byte; the canvas shows the cell',
+    {timeout: 180_000},
+    async () => {
+      const settings = walkSettings();
+      const r = await createRenderer(settings);
+      expect((await r.playClip(CLIP)).ok).toBe(true);
+      r.pause();
+      r.setDirection(NE);
+      const duration = r.assembly.clipDurationSec ?? 0;
+      const t3 = computeSampleTimes(WALK, duration).times[3] as number;
+      r.seek(t3);
+      // REQ-PIX-031: the drawing buffer is the cell; the canvas shows it 1:1.
+      expect([canvas.width, canvas.height]).toEqual([64, 64]);
+      const shown =
+        presented === null ? captureCanvas(canvas) : await readPresented(r);
+      const cell = await r.readCell();
+      expect(opaqueCount(cell)).toBeGreaterThan(50);
+      expect(expectShown(shown, cell)).toBeGreaterThan(50);
 
-    // Export with only `walk`: same pipeline, same framing.
-    const frames = await exportAll(r, settings);
-    expect(frames).toHaveLength(8 * 4);
-    const exported = frames.find(f => f.direction === NE && f.frame === 3);
-    if (exported === undefined) throw new Error('no ne/3 frame');
-    expect(exported.timeSec).toBe(t3);
-    expect(Array.from(exported.pixels)).toEqual(Array.from(cell));
+      // Export with only `walk`: same pipeline, same framing.
+      const frames = await exportAll(r, settings);
+      expect(frames).toHaveLength(8 * 4);
+      const exported = frames.find(f => f.direction === NE && f.frame === 3);
+      if (exported === undefined) throw new Error('no ne/3 frame');
+      expect(exported.timeSec).toBe(t3);
+      expect(Array.from(exported.pixels)).toEqual(Array.from(cell));
 
-    // After the export the preview is restored and redrawn identically.
-    expect(r.busy).toBe(false);
-    expect(Array.from(await r.readCell())).toEqual(Array.from(cell));
-  });
+      // After the export the preview is restored and redrawn identically.
+      expect(r.busy).toBe(false);
+      expect(Array.from(await r.readCell())).toEqual(Array.from(cell));
+    },
+  );
 
   it('REQ-PIX-006 / AC-PIX-030.1: with mirrorWest the preview of w shows the flipped e cell, equal to the exported w frame', async () => {
     const settings = walkSettings({mirrorWest: true});

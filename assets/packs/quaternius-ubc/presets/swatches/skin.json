@@ -1,0 +1,54 @@
+{
+  "format": "sprite-swatch-set",
+  "version": 1,
+  "id": "skin",
+  "channels": [
+    "skin"
+  ],
+  "swatches": [
+    {
+      "hex": "#ffffff",
+      "nameKey": "ux.swatch.skin.natural"
+    },
+    {
+      "hex": "#f5dcc8",
+      "nameKey": "ux.swatch.skin.ivory"
+    },
+    {
+      "hex": "#efc9a8",
+      "nameKey": "ux.swatch.skin.fair"
+    },
+    {
+      "hex": "#e3b48c",
+      "nameKey": "ux.swatch.skin.light-beige"
+    },
+    {
+      "hex": "#d29c72",
+      "nameKey": "ux.swatch.skin.sand"
+    },
+    {
+      "hex": "#c68a5c",
+      "nameKey": "ux.swatch.skin.golden"
+    },
+    {
+      "hex": "#b07a52",
+      "nameKey": "ux.swatch.skin.olive"
+    },
+    {
+      "hex": "#9a6440",
+      "nameKey": "ux.swatch.skin.caramel"
+    },
+    {
+      "hex": "#7f4f31",
+      "nameKey": "ux.swatch.skin.bronze"
+    },
+    {
+      "hex": "#623b25",
+      "nameKey": "ux.swatch.skin.umber"
+    },
+    {
+      "hex": "#442a1d",
+      "nameKey": "ux.swatch.skin.espresso"
+    }
+  ]
+}

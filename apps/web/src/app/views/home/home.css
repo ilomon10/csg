@@ -1,0 +1,371 @@
+/* Home view (spec 014 REQ-UX-071 to 088). Colors, fonts and motion come from shared/ui tokens. */
+.home {
+  --floor-h: clamp(96px, 24%, 150px);
+  --floor-y: calc(var(--floor-h) * 0.4);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+.home-header {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 3;
+}
+
+/* ---------- stage ---------- */
+.home-stage {
+  --floor-y: calc(var(--floor-h, 120px) * 0.4);
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  /* clip, not hidden: a clipped box can never be scrolled by focus or scrollIntoView. */
+  overflow: clip;
+  background:
+    radial-gradient(
+      120% 70% at 50% 108%,
+      color-mix(in srgb, var(--accent) 14%, transparent) 0,
+      transparent 60%
+    ),
+    linear-gradient(var(--panel-sunk), var(--bg) 70%);
+}
+.home-floor {
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--floor-h, 120px);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--text) 6%, transparent) 0 2px,
+      transparent 2px 48px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--text) 6%, transparent) 0 2px,
+      transparent 2px 32px
+    ),
+    var(--panel);
+  border-top: 2px solid var(--line);
+}
+.home-spot {
+  position: absolute;
+  top: 0;
+  bottom: var(--floor-y);
+  left: 50%;
+  width: min(440px, 90vw);
+  transform: translateX(-50%);
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 12%, transparent) 55%,
+    color-mix(in srgb, var(--accent) 20%, transparent)
+  );
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+}
+.home-pool {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--floor-y) - 16px);
+  width: min(420px, 86vw);
+  height: 44px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--accent) 30%, transparent),
+    transparent
+  );
+  pointer-events: none;
+}
+.home-row {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  transition: transform var(--dur) var(--ease);
+  will-change: transform;
+}
+.home-slot {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  cursor: pointer;
+}
+.home-fig {
+  position: absolute;
+  left: 50%;
+  bottom: var(--floor-y);
+  width: 64px;
+  height: 64px;
+  margin-left: -32px;
+  transform-origin: 50% 100%;
+  transform: scale(var(--s, 2));
+  opacity: var(--o, 1);
+  transition:
+    transform var(--dur) var(--ease),
+    opacity var(--dur) var(--ease);
+}
+.home-sprite,
+.home-avatar,
+.home-avatar-pending,
+.home-skeleton {
+  display: block;
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+}
+.home-skeleton {
+  fill: var(--edge);
+  opacity: 0.55;
+}
+.home-slot[data-selected='true'] .home-fig {
+  filter: drop-shadow(0 0 0 transparent);
+}
+.home-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--floor-y) - 6px);
+  width: calc(22px * var(--s, 2));
+  height: calc(6px * var(--s, 2));
+  margin-left: calc(-11px * var(--s, 2));
+  border-radius: 50%;
+  background: rgb(0 0 0 / 45%);
+  opacity: var(--o, 1);
+  transition:
+    width var(--dur) var(--ease),
+    height var(--dur) var(--ease),
+    margin var(--dur) var(--ease),
+    opacity var(--dur) var(--ease);
+}
+.home-tag {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--floor-y) + 64px * var(--s, 2) + 12px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.2;
+  padding: 3px 10px 4px;
+  background: var(--overlay);
+  border: 2px solid var(--edge);
+  color: var(--text);
+  text-align: center;
+  clip-path: polygon(
+    0 3px,
+    3px 3px,
+    3px 0,
+    calc(100% - 3px) 0,
+    calc(100% - 3px) 3px,
+    100% 3px,
+    100% calc(100% - 3px),
+    calc(100% - 3px) calc(100% - 3px),
+    calc(100% - 3px) 100%,
+    3px 100%,
+    3px calc(100% - 3px),
+    0 calc(100% - 3px)
+  );
+  transition: bottom var(--dur) var(--ease);
+}
+.home-tag small {
+  display: block;
+  font: 600 10px var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.home-slot[data-selected='true'] .home-tag {
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.home-stage--empty {
+  display: grid;
+  place-items: center;
+}
+.home-empty-lineup {
+  position: relative;
+  margin: 0;
+  color: var(--muted);
+}
+
+/* ---------- details, empty text ---------- */
+.home-details {
+  flex: none;
+  min-height: 22px;
+  margin: 0;
+  padding: 6px 16px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--bg);
+  border-top: 2px solid var(--line);
+}
+.home-empty {
+  flex: none;
+  margin: 0;
+  padding: 2px 16px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* ---------- strip ---------- */
+.home-strip {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 8px 20px 4px;
+  background: var(--bg);
+  min-width: 0;
+}
+.home-tiles {
+  flex: none;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+.home-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 80px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: 600 12px var(--font-ui);
+  cursor: pointer;
+}
+.home-tile__art {
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  background: var(--panel-2);
+  border: 2px dashed var(--edge);
+  color: var(--accent-fg);
+  transition: transform var(--dur-fast) var(--ease);
+}
+.home-tile:hover:not(:disabled) .home-tile__art {
+  transform: translateY(-3px);
+}
+.home-tile:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.home-tile .csg-icon {
+  width: 32px;
+  height: 32px;
+  stroke-width: 3;
+}
+.home-tile__label {
+  color: var(--text);
+}
+.home-avatars {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 12px;
+  padding: 8px 10px 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.home-option {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 80px;
+  min-height: 80px;
+  color: var(--muted);
+  font: 600 12px var(--font-ui);
+  cursor: pointer;
+}
+.home-option:focus-visible {
+  outline: none;
+}
+.home-option__art {
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  background: var(--panel-2);
+  border: 2px solid var(--edge);
+  transition: transform var(--dur-fast) var(--ease);
+}
+.home-option:hover .home-option__art {
+  transform: translateY(-3px);
+}
+.home-option__label {
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.home-option[aria-selected='true'] .home-option__art {
+  border-color: var(--accent-fg);
+  background: var(--tile-selected);
+  outline: 3px solid var(--accent-fg);
+  outline-offset: 3px;
+}
+.home-option:focus-visible .home-option__art {
+  box-shadow:
+    0 0 0 3px var(--bg),
+    0 0 0 6px var(--focus);
+}
+.home-option__pin {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  background: var(--accent-fg);
+}
+.home-option .home-skeleton {
+  width: 48px;
+  height: 48px;
+}
+
+/* ---------- actions ---------- */
+.home-actions {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 18px;
+  background: var(--bg);
+}
+.home-actions .csg-menuwrap {
+  display: inline-flex;
+}
+
+/* ---------- dialogs ---------- */
+.home-field {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+.home-input {
+  height: 36px;
+  padding: 0 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-btn);
+  font: inherit;
+}
+.home-dialog-text {
+  margin: 0;
+}

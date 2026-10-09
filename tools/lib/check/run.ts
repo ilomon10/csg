@@ -39,6 +39,11 @@ import {
 import type {LicensePack} from './licenses-md.js';
 import {findOrphans} from './orphans.js';
 import {checkManifestFresh} from './stale.js';
+import {checkPackPresets, checkPresetReferences} from './presets.js';
+import type {PackPresets} from './presets.js';
+import {checkSoleOffsets} from './sole.js';
+import {checkThumbnails} from './thumbnails.js';
+import {THUMBNAIL_INDEX_PATH} from '../thumbnails/index-file.js';
 import type {CheckIssue, CheckReport} from './types.js';
 
 /** Where `assets:check` reads from. All paths absolute. */
@@ -351,6 +356,7 @@ async function readPack(
   packId: string,
   report: CheckIssue[],
   glbBytes: {total: number},
+  presetsOut: PackPresets[],
 ): Promise<LicensePack | null> {
   const packDir = resolve(opts.packsDir, packId);
   const ctx: PackContext = {
@@ -472,7 +478,20 @@ async function readPack(
     await checkClips(ctx, clips, rig ?? embedded, rigId, referenced, glbBytes);
   }
 
-  // Thumbnails (warning only).
+  presetsOut.push({
+    ...(await checkPackPresets({
+      packId,
+      packDir,
+      configsDir: opts.configsDir,
+      referenced,
+      add: i => report.push(i),
+    })),
+    parts: manifest.parts,
+  });
+
+  // Thumbnails (warning only). The generated thumbnail index is referenced when present.
+  if (existsSync(join(packDir, THUMBNAIL_INDEX_PATH)))
+    referenced.add(THUMBNAIL_INDEX_PATH);
   for (const part of manifest.parts) {
     const thumb = part.thumbnail;
     if (thumb === undefined || !existsSync(join(packDir, thumb))) {
@@ -552,6 +571,8 @@ export async function runAssetCheck(opts: CheckOptions): Promise<CheckReport> {
   const glbBytes = {total: 0};
   const packs: string[] = [];
   const licensePacks: LicensePack[] = [];
+  const presetPacks: PackPresets[] = [];
+  const rigIds = new Set<string>();
   let dirs: string[] = [];
   if (existsSync(opts.packsDir)) {
     dirs = (await readdir(opts.packsDir, {withFileTypes: true}))
@@ -580,9 +601,28 @@ export async function runAssetCheck(opts: CheckOptions): Promise<CheckReport> {
       continue;
     }
     packs.push(packId);
-    const lp = await readPack(opts, packId, issues, glbBytes);
+    const lp = await readPack(opts, packId, issues, glbBytes, presetPacks);
     if (lp) licensePacks.push(lp);
   }
+
+  // Cross-pack rules: preset references (REQ-UX-103) and sole offsets (REQ-AST-032).
+  const partsByRef = new Map<string, PartEntry>();
+  for (const pack of presetPacks) {
+    for (const part of pack.parts) {
+      partsByRef.set(`builtin:${pack.packId}/${part.id}`, part);
+      if (part.rig !== undefined) rigIds.add(part.rig);
+    }
+  }
+  checkPresetReferences(presetPacks, partsByRef, i => issues.push(i));
+  // Stale or invalid thumbnails (REQ-AST-015, REQ-AST-039; warnings).
+  issues.push(...(await checkThumbnails(opts.packsDir)));
+  issues.push(
+    ...(await checkSoleOffsets({
+      packsDir: opts.packsDir,
+      rigsDir: opts.rigsDir,
+      rigIds,
+    })),
+  );
 
   const defaultSizes = await measureDefaultSet(opts.packsDir, licensePacks);
   if (defaultSizes) issues.push(...checkDefaultSetSize(defaultSizes));

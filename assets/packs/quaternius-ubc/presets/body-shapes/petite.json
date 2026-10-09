@@ -1,0 +1,18 @@
+{
+  "format": "sprite-body-shape-preset",
+  "version": 1,
+  "id": "petite",
+  "label": "ux.shape.petite",
+  "order": 60,
+  "factors": {
+    "height": 0.9,
+    "head": 1,
+    "torsoWidth": 0.94,
+    "shoulders": 0.92,
+    "armLength": 1,
+    "legLength": 1,
+    "hands": 0.92,
+    "feet": 0.92,
+    "limbThickness": 0.92
+  }
+}

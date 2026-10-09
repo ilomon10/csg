@@ -1,0 +1,18 @@
+{
+  "format": "sprite-body-shape-preset",
+  "version": 1,
+  "id": "stocky",
+  "label": "ux.shape.stocky",
+  "order": 40,
+  "factors": {
+    "height": 0.95,
+    "head": 1,
+    "torsoWidth": 1.2,
+    "shoulders": 1.1,
+    "armLength": 1,
+    "legLength": 0.95,
+    "hands": 1.05,
+    "feet": 1.05,
+    "limbThickness": 1.25
+  }
+}

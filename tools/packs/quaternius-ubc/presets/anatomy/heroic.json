@@ -1,0 +1,17 @@
+{
+  "format": "sprite-anatomy-preset",
+  "version": 1,
+  "id": "heroic",
+  "label": "Heroic",
+  "values": {
+    "height": 1.05,
+    "head": 0.9,
+    "torsoWidth": 1.1,
+    "shoulders": 1.25,
+    "armLength": 1.0,
+    "legLength": 1.1,
+    "hands": 1.1,
+    "feet": 1.05,
+    "limbThickness": 1.15
+  }
+}

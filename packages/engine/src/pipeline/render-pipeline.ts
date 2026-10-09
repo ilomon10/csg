@@ -50,7 +50,11 @@ import {applyCameraFraming, createPixelCamera} from './camera';
 import type {CameraPlacement, Vec3Tuple} from './camera';
 import {buildPaletteLut} from './palette-lut';
 import {normalizeReadback} from './readback';
-import {activePaletteColors, diffRenderSettings} from './settings-binder';
+import {
+  activePaletteColors,
+  diffRenderSettings,
+  postStructureKey,
+} from './settings-binder';
 import type {RenderSettingsDiff, SettingsBinder} from './settings-binder';
 import {createStageContext} from './stage-context';
 import type {StageContext} from './stage-context';
@@ -106,9 +110,21 @@ export interface PixelPipelineOptions {
   readonly buildPaletteLut?: PaletteLutBuilder;
 }
 
+/**
+ * Compiled post chains a pipeline keeps, least recently used evicted first
+ * (REQ-PIX-034, AC-PIX-034.2): switching back to one of the last few post
+ * structures (look presets, dither modes) reuses its compiled chain instead of
+ * building and compiling it again.
+ */
+export const POST_CHAIN_CACHE_SIZE = 4;
+
 /** Counters for tests and diagnostics (AC-PIX-014.2, AC-PIX-034.1). */
 export interface PixelPipelineStats {
-  /** Post-node compilations requested (first build included). */
+  /**
+   * Post-node builds (first build included). A structural change back to a
+   * chain still in the cache ({@link POST_CHAIN_CACHE_SIZE}) reuses it and
+   * does not count.
+   */
   readonly rebuilds: number;
   /** Frames rendered with {@link PixelPipeline.render}. */
   readonly frames: number;
@@ -320,7 +336,10 @@ export class PixelPipeline {
 
   private readonly mode: 'preview' | 'export';
   private readonly lutBuilder: PaletteLutBuilder;
-  private readonly post: RenderPipeline;
+  /** The active post chain (an entry of {@link postChains}). */
+  private post: RenderPipeline;
+  /** Compiled post chains by {@link postStructureKey}; insertion order = LRU order. */
+  private readonly postChains = new Map<string, RenderPipeline>();
   private readonly sceneTextures: Readonly<Record<SceneMrtKey, TextureNode>>;
   private current: RenderSettings | undefined;
   private currentFraming: Framing | undefined;
@@ -374,6 +393,7 @@ export class PixelPipeline {
     }
     this.sceneTextures = textures;
 
+    // Placeholder until the first settings build the real chain (never cached).
     this.post = new RenderPipeline(this.renderer);
     this.post.outputColorTransform = false;
     // WebGL2 readback waits on a fence polled once per rAF in three r186;
@@ -557,7 +577,9 @@ export class PixelPipeline {
     this.disposed = true;
     this.lutGeneration++;
     this.fenceWait?.dispose();
-    this.post.dispose();
+    if (!this.isCachedPost(this.post)) this.post.dispose();
+    for (const chain of this.postChains.values()) chain.dispose();
+    this.postChains.clear();
     this.scenePass.dispose();
     this.cellTarget.dispose();
   }
@@ -578,9 +600,33 @@ export class PixelPipeline {
     this.scenePass.setSize(width, height);
   }
 
+  private isCachedPost(chain: RenderPipeline): boolean {
+    for (const cached of this.postChains.values()) {
+      if (cached === chain) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Makes the post chain of the current settings active: a cached chain of
+   * the same structure when there is one (no build, no compile), else a new
+   * one, cached with LRU eviction ({@link POST_CHAIN_CACHE_SIZE}). Shared
+   * uniforms and the LUT texture live in the binder, so a reused chain reads
+   * the current values.
+   */
   private rebuildPost(): void {
     const settings = this.current;
     if (settings === undefined) return;
+    const key = postStructureKey(settings);
+    const cached = this.postChains.get(key);
+    if (cached !== undefined) {
+      this.postChains.delete(key);
+      this.postChains.set(key, cached);
+      this.usePost(cached);
+      return;
+    }
+    const chain = new RenderPipeline(this.renderer);
+    chain.outputColorTransform = false;
     const ctx = createStageContext({
       binder: this.binder,
       target: 'post',
@@ -597,10 +643,26 @@ export class PixelPipeline {
         ).g,
       },
     });
-    this.post.outputNode = buildDefaultPostChain(ctx, settings)
+    chain.outputNode = buildDefaultPostChain(ctx, settings)
       .output as Node<'vec4'>;
-    this.post.needsUpdate = true;
+    chain.needsUpdate = true;
     this.rebuildCount++;
+    this.postChains.set(key, chain);
+    this.usePost(chain);
+    while (this.postChains.size > POST_CHAIN_CACHE_SIZE) {
+      const oldest = this.postChains.keys().next().value;
+      if (oldest === undefined) break;
+      const evicted = this.postChains.get(oldest);
+      this.postChains.delete(oldest);
+      if (evicted !== undefined && evicted !== this.post) evicted.dispose();
+    }
+  }
+
+  /** Activates `chain`; disposes the uncached placeholder it replaces. */
+  private usePost(chain: RenderPipeline): void {
+    const previous = this.post;
+    this.post = chain;
+    if (previous !== chain && !this.isCachedPost(previous)) previous.dispose();
   }
 
   private assertLive(): void {

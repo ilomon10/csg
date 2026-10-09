@@ -1,0 +1,50 @@
+{
+  "format": "sprite-character",
+  "version": 1,
+  "name": "New character",
+  "seed": 0,
+  "body": {
+    "ref": "builtin:quaternius-ubc/superhero-m"
+  },
+  "parts": {
+    "hair": {
+      "ref": "builtin:quaternius-ubc/hair-simple-parted"
+    },
+    "eyebrows": {
+      "ref": "builtin:quaternius-ubc/eyebrows-regular"
+    },
+    "torso": {
+      "ref": "builtin:quaternius-outfits/male-ranger-torso"
+    },
+    "arms": {
+      "ref": "builtin:quaternius-outfits/male-ranger-arms"
+    },
+    "legs": {
+      "ref": "builtin:quaternius-outfits/male-ranger-legs"
+    },
+    "feet": {
+      "ref": "builtin:quaternius-outfits/male-ranger-boots"
+    }
+  },
+  "anatomy": {
+    "height": 1,
+    "head": 1,
+    "torsoWidth": 1,
+    "shoulders": 1,
+    "armLength": 1,
+    "legLength": 1,
+    "hands": 1,
+    "feet": 1,
+    "limbThickness": 1
+  },
+  "morphs": {},
+  "tints": {
+    "skin": "#ffffff",
+    "hair": "#7a4a26",
+    "eyes": "#ffffff",
+    "primary": "#ffffff",
+    "secondary": "#ffffff",
+    "metal": "#ffffff",
+    "leather": "#ffffff"
+  }
+}

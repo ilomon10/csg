@@ -92,6 +92,10 @@ build each character on one group and **retarget clips at runtime** onto it.
 - Bad: **residual shear on bones with rotated rests** when anatomy scales them: anatomy's
   diagonal-scale child compensation leaves about 0.5–0.7 % shear (accepted for M1, spec 002).
   This is an anatomy limitation that the per-group rests make visible, not a retarget error.
+  *(Update M3: resolved. The shear was far larger than estimated on the real rig (the foot is
+  rotated 70° from the calf), so anatomy now uses segment-scale compensation: the compensated
+  factors scale each joint's skin through its inverse bind matrices and never reach a child's
+  frame; see architecture §7.)*
 - Bad: **retargeted clips interpolate linearly.** `tracksToClip` builds linear tracks, so STEP keys
   in a source clip become interpolated after retargeting; cubic-spline tracks cannot be
   retargeted and fail as `ANM_CLIP_LOAD_FAILED` (`reason: 'parse'`). Clips of the character's own

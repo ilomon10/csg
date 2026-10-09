@@ -1,0 +1,58 @@
+{
+  "format": "sprite-swatch-set",
+  "version": 1,
+  "id": "hair",
+  "channels": [
+    "hair"
+  ],
+  "swatches": [
+    {
+      "hex": "#7a4a26",
+      "nameKey": "ux.swatch.hair.chestnut-brown"
+    },
+    {
+      "hex": "#8a3b1e",
+      "nameKey": "ux.swatch.hair.auburn"
+    },
+    {
+      "hex": "#b4521e",
+      "nameKey": "ux.swatch.hair.ginger"
+    },
+    {
+      "hex": "#d8a84a",
+      "nameKey": "ux.swatch.hair.golden-blond"
+    },
+    {
+      "hex": "#e8dcc0",
+      "nameKey": "ux.swatch.hair.platinum"
+    },
+    {
+      "hex": "#a9a9ae",
+      "nameKey": "ux.swatch.hair.silver-grey"
+    },
+    {
+      "hex": "#6b5a4a",
+      "nameKey": "ux.swatch.hair.ash-brown"
+    },
+    {
+      "hex": "#3b2416",
+      "nameKey": "ux.swatch.hair.dark-brown"
+    },
+    {
+      "hex": "#1b1714",
+      "nameKey": "ux.swatch.hair.jet-black"
+    },
+    {
+      "hex": "#1f2a52",
+      "nameKey": "ux.swatch.hair.midnight-blue"
+    },
+    {
+      "hex": "#d9708f",
+      "nameKey": "ux.swatch.hair.rose-pink"
+    },
+    {
+      "hex": "#2e6b46",
+      "nameKey": "ux.swatch.hair.forest-green"
+    }
+  ]
+}

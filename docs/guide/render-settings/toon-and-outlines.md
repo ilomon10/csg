@@ -7,8 +7,7 @@ description: Set the key light, toon shading bands, rim light and outlines to ge
 
 Toon shading turns smooth 3D lighting into a few flat bands of color. Outlines add an edge around the silhouette and between parts. Together they make a sprite read clearly at small sizes.
 
-> [!NOTE]
-> **Planned.** These controls are planned with the Render tab. The values on this page are the default look the pipeline renders today.
+Set these in the **Render** tab of the Pro workspace. The values on this page are the defaults the pipeline starts from.
 
 <!-- TODO(screenshot): the same sphere with 2 bands, 3 bands and 4 bands, with the outline on -->
 

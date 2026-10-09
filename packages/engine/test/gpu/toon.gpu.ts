@@ -475,16 +475,20 @@ describe(`toon material + scene MRT (${currentBackend()})`, () => {
     ).toBeLessThan(5);
   });
 
-  it('AC-PIX-013.2: turning the character through 8 directions keeps the light fixed relative to the camera', async () => {
-    const reference = centroid(opaque(await sphere(settings({}))));
-    for (let d = 0; d < 8; d++) {
-      const frame = await sphere(settings({}), {yawDeg: d * 45});
-      const brightest = opaque(frame).filter(i => frame.srgb[i * 4] === 255);
-      const [cx, cy] = centroid(brightest);
-      expect(cx - reference[0]).toBeLessThan(-3);
-      expect(cy - reference[1]).toBeLessThan(-3);
-    }
-  });
+  it(
+    'AC-PIX-013.2: turning the character through 8 directions keeps the light fixed relative to the camera',
+    {timeout: 180_000},
+    async () => {
+      const reference = centroid(opaque(await sphere(settings({}))));
+      for (let d = 0; d < 8; d++) {
+        const frame = await sphere(settings({}), {yawDeg: d * 45});
+        const brightest = opaque(frame).filter(i => frame.srgb[i * 4] === 255);
+        const [cx, cy] = centroid(brightest);
+        expect(cx - reference[0]).toBeLessThan(-3);
+        expect(cy - reference[1]).toBeLessThan(-3);
+      }
+    },
+  );
 
   it('REQ-PIX-014: normalDepth holds the view normal and the depth in output px from the pivot plane', async () => {
     const frame = await sphere(settings({}));

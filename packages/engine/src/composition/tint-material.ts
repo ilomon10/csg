@@ -31,6 +31,7 @@ import type {HexColor, PartEntry, TintSlot} from '@csg/parts-schema';
 import type {
   ApplyTintMaterial,
   CreateTintUniforms,
+  MaterialLinker,
   RegionMask,
   TintUniforms,
   UniformRef,
@@ -223,6 +224,16 @@ export const createTintUniforms: CreateTintUniforms = initial => {
   for (const slot of TINT_SLOTS) out[slot] = uniform(new Color(initial[slot]));
   return out;
 };
+
+/**
+ * Creates one tint color uniform (a per-part override, REQ-CMP-015).
+ *
+ * @param hex - Initial `#rrggbb` color (sRGB).
+ * @returns The uniform node.
+ */
+export function createTintUniform(hex: HexColor): UniformNode<'color', Color> {
+  return uniform(new Color(hex));
+}
 
 /**
  * Sets one tint slot in place (REQ-CMP-013).
@@ -518,4 +529,163 @@ export function restoreMaterials(scene: Object3D): void {
     STATE.delete(object);
     setMeshMaterial(object, state.original);
   });
+}
+
+/** Options of {@link createPartMaterials}. */
+export interface PartMaterialsOptions {
+  /** The part entry's `tintSlots` (material name to tint slot and mode). */
+  readonly tintSlots: PartEntry['tintSlots'];
+  /** One color uniform per tint slot: shared character tints or per-part overrides. */
+  readonly uniforms: TintUniforms;
+  /** Region mask uniform, read by meshes that carry `regionId` (bodies). */
+  readonly mask?: RegionMask;
+  /** Pixel-pipeline binding (toon materials); omitted = the unlit M1 materials. */
+  readonly material?: TintMaterialOptions;
+}
+
+/**
+ * Materials of one part owned by one character assembly (M3-05): built from
+ * the part's original (registry) materials, given to the meshes that
+ * {@link MaterialLinker.link} receives, never assigned to the registry scene.
+ * Two assemblies (two renderers) on one registry therefore keep their own
+ * tints, masks and toon bindings, and the cached part scenes stay unmodified.
+ */
+export interface PartMaterials extends MaterialLinker {
+  /**
+   * Rebuilds every material (new uniforms, a new toon binding or a different
+   * set of overridden tint slots) and reassigns it to the linked clones; the
+   * previous materials are disposed.
+   *
+   * @param next - Changed options; omitted fields keep their value.
+   */
+  rebuild(next: Partial<Omit<PartMaterialsOptions, 'tintSlots'>>): void;
+  /** Number of materials currently built (tests, diagnostics). */
+  readonly materialCount: number;
+  /**
+   * Disposes the materials it built and releases their textures; linked
+   * clones get their source mesh's original material back.
+   */
+  dispose(): void;
+}
+
+/** Built materials of one source mesh and the clones that show them. */
+interface SourceMaterials {
+  material: Material | Material[];
+  created: Material[];
+  textures: TextureUse[];
+  readonly clones: Set<Mesh>;
+}
+
+/**
+ * Creates the materials of one part for one assembly (see {@link PartMaterials}).
+ * Each source mesh of `part.scene` gets materials built lazily on first
+ * {@link MaterialLinker.link}, with the same tint, hide and toon semantics as
+ * {@link applyTintMaterial} (REQ-CMP-011/013/014, spec 003). The source
+ * materials are read, never replaced.
+ *
+ * @param part - Loaded part (its scene is read only).
+ * @param options - Tint mapping, uniforms, mask and toon binding.
+ * @returns The part's material set.
+ */
+export function createPartMaterials(
+  part: Parameters<ApplyTintMaterial>[0],
+  options: PartMaterialsOptions,
+): PartMaterials {
+  const byName = new Map<string, TintMapping>();
+  for (const mapping of options.tintSlots)
+    byName.set(mapping.material, mapping);
+  let uniforms = options.uniforms;
+  let mask = options.mask;
+  let material = options.material;
+  const sources = new Map<Mesh, SourceMaterials>();
+  let disposed = false;
+
+  /** The registry material of a source mesh (the original even if M1 code re-tinted it). */
+  const originalOf = (source: Mesh): Material | Material[] =>
+    STATE.get(source)?.original ?? source.material;
+
+  const build = (source: Mesh, state: SourceMaterials): void => {
+    const maskNode =
+      mask !== undefined && hasRegionId(source.geometry)
+        ? maskNodeOf(mask)
+        : undefined;
+    const uses: TextureUse[] = [];
+    const one = (m: Material): Material =>
+      material === undefined
+        ? buildMaterial(m, byName.get(m.name), uniforms, maskNode, uses)
+        : buildToonMaterial(
+            m,
+            byName.get(m.name),
+            uniforms,
+            maskNode,
+            material,
+            uses,
+          );
+    const original = originalOf(source);
+    const next = Array.isArray(original) ? original.map(one) : one(original);
+    state.material = next;
+    state.created = Array.isArray(next) ? next : [next];
+    state.textures = uses;
+  };
+
+  const release = (state: SourceMaterials): void => {
+    for (const m of state.created) m.dispose();
+    for (const [map, used] of state.textures)
+      releaseMipmappedTexture(map, used);
+    state.created = [];
+    state.textures = [];
+  };
+
+  return {
+    link(source, clone) {
+      if (disposed) throw new Error('createPartMaterials: disposed');
+      let state = sources.get(source);
+      if (state === undefined) {
+        state = {
+          material: source.material,
+          created: [],
+          textures: [],
+          clones: new Set(),
+        };
+        build(source, state);
+        sources.set(source, state);
+      }
+      state.clones.add(clone);
+      clone.material = state.material;
+    },
+
+    unlink(source, clone) {
+      sources.get(source)?.clones.delete(clone);
+    },
+
+    rebuild(next) {
+      if (disposed) return;
+      if (next.uniforms !== undefined) uniforms = next.uniforms;
+      if ('mask' in next) mask = next.mask;
+      if ('material' in next) material = next.material;
+      for (const [source, state] of sources) {
+        release(state);
+        build(source, state);
+        for (const clone of state.clones) clone.material = state.material;
+      }
+    },
+
+    get materialCount() {
+      let n = 0;
+      for (const state of sources.values()) n += state.created.length;
+      return n;
+    },
+
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (const [source, state] of sources) {
+        release(state);
+        const original = originalOf(source);
+        for (const clone of state.clones) clone.material = original;
+        state.clones.clear();
+      }
+      sources.clear();
+    },
+  };
 }

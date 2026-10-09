@@ -1,0 +1,59 @@
+{
+  "format": "sprite-look-preset",
+  "version": 1,
+  "id": "gameboy-4",
+  "name": "GameBoy 4-color",
+  "description": "Four green shades with 4x4 Bayer dither and a 1 px dark outline.",
+  "thumbnail": "thumbnails/looks/gameboy-4.webp",
+  "materialGraph": "builtin:material-toon",
+  "postGraph": "builtin:post-default",
+  "params": {},
+  "palette": {
+    "id": "custom",
+    "colors": [
+      "#081820",
+      "#346856",
+      "#88c070",
+      "#e0f8d0"
+    ]
+  },
+  "paletteSource": {
+    "name": "Nintendo GameBoy (bgb)",
+    "author": "bgb emulator default palette (no author named on the source page)",
+    "sourceUrl": "https://lospec.com/palette-list/nintendo-gameboy-bgb",
+    "license": "color list, no license stated by source"
+  },
+  "render": {
+    "toon": {
+      "bands": 4,
+      "rim": {
+        "enabled": false,
+        "strength": 0.5
+      }
+    },
+    "outline": {
+      "outer": {
+        "enabled": true,
+        "widthPx": 1
+      },
+      "inner": {
+        "enabled": false
+      },
+      "colorMode": "black"
+    },
+    "palette": {
+      "id": "custom",
+      "colors": [
+        "#081820",
+        "#346856",
+        "#88c070",
+        "#e0f8d0"
+      ],
+      "metric": "oklab",
+      "dither": {
+        "mode": "bayer4",
+        "strength": 0.5
+      }
+    }
+  }
+}

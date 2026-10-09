@@ -14,11 +14,16 @@ import type {
   ClipManifest,
   PartEntry,
   PartManifest,
+  RigDefinition,
+  StyleDefinition,
 } from '@csg/parts-schema';
 import {createGlbLoader} from '../loaders/glb-loader';
 import {createTestFetch} from '../loaders/test-glb';
 import {createAssetRegistry} from '../registry/asset-registry';
-import type {EngineAssetRegistry} from '../registry/asset-registry';
+import type {
+  AssetRegistryTestOptions,
+  EngineAssetRegistry,
+} from '../registry/asset-registry';
 import type {AssemblyRegistry} from './character-assembly';
 import {readFixtureBytes} from './test-fixtures';
 
@@ -43,12 +48,21 @@ function readJson(path: string): unknown {
  * - `fixture-body-b`: the fixture body whose `characterSkeletonGroup` is `fixture-b`
  *   (stands in for the female/male body switch: a different character skeleton group);
  * - `fixture-body-primary`: the fixture body with its `Body` material mapped to `primary`;
- * - `fixture-missing`: a torso whose file is not served (load failure).
+ * - `fixture-missing`: a torso whose file is not served (load failure);
+ * - `fixture-robe`: the shirt with `alsoOccupies: ['legs']` (REQ-CMP-007);
+ * - `fixture-trousers`: the shirt file as a `legs` part (REQ-CMP-007);
+ * - `fixture-cape`: the shirt file as a `back` part mapped to `primary` (REQ-CMP-015);
+ * - `fixture-helmet`: the shirt file as `headwear` hiding `hair` (REQ-CMP-012);
+ * - `fixture-hair`: the shirt file as a `hair` part;
+ * - `fixture-stick-hat`: a `headwear` part with `styles: ['stickman']` (REQ-CMP-048 rule d);
+ * - `fixture-animal-ears`: a `headwear` part with `species: ['animal']` (rule e);
+ * - `fixture-hat`: the sword file as a static `headwear` part on socket `head` (AC-ANA-007.3/.4).
  */
 export function testPartManifest(): PartManifest {
   const manifest = partManifestSchema.parse(readJson('pack/manifest.json'));
   const body = manifest.parts.find(p => p.id === 'fixture-body') as PartEntry;
   const shirt = manifest.parts.find(p => p.id === 'fixture-shirt') as PartEntry;
+  const sword = manifest.parts.find(p => p.id === 'fixture-sword') as PartEntry;
   return {
     ...manifest,
     parts: [
@@ -60,8 +74,45 @@ export function testPartManifest(): PartManifest {
         tintSlots: [{material: 'Body', slot: 'primary', mode: 'multiply'}],
       },
       {...shirt, id: 'fixture-missing', file: 'parts/not-served.glb'},
+      {...shirt, id: 'fixture-robe', alsoOccupies: ['legs']},
+      {...shirt, id: 'fixture-trousers', slot: 'legs', hides: []},
+      {...shirt, id: 'fixture-cape', slot: 'back', hides: []},
+      {...shirt, id: 'fixture-helmet', slot: 'headwear', hides: ['hair']},
+      {...shirt, id: 'fixture-hair', slot: 'hair', hides: []},
+      {
+        ...shirt,
+        id: 'fixture-stick-hat',
+        slot: 'headwear',
+        hides: ['hair'],
+        styles: ['stickman'],
+      },
+      {
+        ...shirt,
+        id: 'fixture-animal-ears',
+        slot: 'headwear',
+        hides: [],
+        species: ['animal'],
+      },
+      {
+        ...sword,
+        id: 'fixture-hat',
+        slot: 'headwear',
+        socket: {
+          bone: 'head',
+          offset: {
+            position: [0, 0, 0],
+            rotationDeg: [0, 0, 0],
+            scale: [1, 1, 1],
+          },
+        },
+      },
     ],
   };
+}
+
+/** A style data file (`presets/styles/<style>.json`) with no anatomy preset and no exclusions. */
+export function testStyle(style: StyleDefinition['style']): StyleDefinition {
+  return {format: 'sprite-style', version: 1, style, excludedClips: []};
 }
 
 /**
@@ -93,9 +144,21 @@ export interface TestRegistry extends AssemblyRegistry {
   readonly resolveClipCalls: string[];
 }
 
+/** Options of {@link createTestRegistry}. */
+export interface TestRegistryOptions extends AssetRegistryTestOptions {
+  /** Replaces the manifest's embedded rig (e.g. the `soleOffsetM` variant). */
+  readonly rig?: RigDefinition;
+  /** Style data files to register (omitted: style gating off, `registerStyles` never called). */
+  readonly styles?: readonly StyleDefinition[];
+}
+
 /** Creates a registry over the fixture pack (served from memory) that counts resolve calls. */
-export function createTestRegistry(): TestRegistry {
-  const parts = testPartManifest();
+export function createTestRegistry(
+  options: TestRegistryOptions = {},
+): TestRegistry {
+  const base = testPartManifest();
+  const parts =
+    options.rig === undefined ? base : {...base, rigs: [options.rig]};
   const clips = testClipManifest();
   const files = new Map<string, ArrayBuffer>();
   for (const entry of [...parts.parts, ...clips.clips]) {
@@ -107,9 +170,13 @@ export function createTestRegistry(): TestRegistry {
   }
   const inner = createAssetRegistry({
     loader: createGlbLoader({fetch: createTestFetch(files).fetch}),
+    ...(options.supportedStyleCombos === undefined
+      ? {}
+      : {supportedStyleCombos: options.supportedStyleCombos}),
   });
   inner.registerPack(parts, TEST_BASE);
   inner.registerClips(clips, TEST_BASE);
+  if (options.styles !== undefined) inner.registerStyles(options.styles);
   const resolveCalls: string[] = [];
   const resolveClipCalls: string[] = [];
   return {
@@ -125,5 +192,6 @@ export function createTestRegistry(): TestRegistry {
       return inner.resolveClip(r);
     },
     clipEntry: r => inner.clipEntry(r),
+    availableStyleCombos: () => inner.availableStyleCombos(),
   };
 }

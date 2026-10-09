@@ -82,3 +82,10 @@ describe('slot registry', () => {
     ]);
   });
 });
+
+describe('SLOT_REGISTRY', () => {
+  it('REQ-CMP-001: the bundled registry is parsed and lists the 15 v1 slots in order', async () => {
+    const {SLOT_REGISTRY, V1_SLOT_IDS} = await import('./slots');
+    expect(SLOT_REGISTRY.slots.map(slot => slot.id)).toEqual([...V1_SLOT_IDS]);
+  });
+});

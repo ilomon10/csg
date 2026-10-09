@@ -27,6 +27,7 @@
  * While one runs the preview loop is stopped and `draw()` is a no-op; on exit
  * the settings, the preview clip, the framing and the loop are restored.
  */
+import {Vector3} from 'three';
 import type {OrthographicCamera, RenderTarget, Scene} from 'three';
 import type {WebGPURenderer} from 'three/webgpu';
 import {
@@ -39,6 +40,8 @@ import type {
   CharacterSpec,
   DirectionLabel,
   ClipRef,
+  CharacterSpecies,
+  CharacterStyle,
   SlotRegistry,
 } from '@csg/parts-schema';
 import {computeSampleTimes} from '../animation/sample-times';
@@ -60,11 +63,15 @@ import type {
   RenderFramesOptions,
   RenderSettings,
 } from '../contracts/pipeline';
+import type {RenderPair} from '../catalog/resolve-render-pair';
 import type {
   CharacterRenderer,
+  EngineNotice,
   PreviewResize,
   RendererBackend,
   RendererOptions,
+  StyleUnsupportedNotice,
+  ViewMode,
 } from '../contracts/renderer';
 import {computeFraming, cameraElevationDeg} from '../pipeline/framing';
 import {stageYawRad} from '../pipeline/directions';
@@ -88,13 +95,22 @@ import {
   prepareFrames as samplePrepare,
   renderFrames as sampleRender,
 } from '../sampler/frame-sampler';
-import {createUnionBounds} from '../sampler/union-bounds';
+import {collectStageCorners, createUnionBounds} from '../sampler/union-bounds';
 import {createRendererBackend} from './backend';
 import type {InitializableRenderer, RendererFactory} from './backend';
 import {createCanvasPresenter} from './canvas-presenter';
+import {watchDeviceLoss} from './device-loss';
 import type {PreviewPresenter} from './canvas-presenter';
-import {previewTimeAt, previewTimingFor} from './preview-clock';
+import {
+  previewElapsedFor,
+  previewTimeAt,
+  previewTimingFor,
+} from './preview-clock';
 import type {PreviewTiming} from './preview-clock';
+import {DEFAULT_ORBIT_STATE, frameBox, orbitBy} from './orbit-camera';
+import type {OrbitState} from './orbit-camera';
+import {createOrbitView} from './orbit-view';
+import type {OrbitView} from './orbit-view';
 import {previewLayout} from './preview-layout';
 import {createPreviewScene} from './preview-scene';
 import type {PreviewScene} from './preview-scene';
@@ -162,6 +178,18 @@ export type PresenterFactory<R extends PreviewRenderer> = (
   pipeline: RendererPipeline,
 ) => PreviewPresenter;
 
+/** The 3D view calls the renderer makes (`OrbitView` fits). */
+export type RendererOrbitView = Pick<OrbitView, 'render' | 'dispose'>;
+
+/**
+ * Creates the 3D view on first use (tests inject one that draws into a
+ * target; default {@link createOrbitView} on the canvas).
+ */
+export type OrbitViewFactory<R extends PreviewRenderer> = (
+  renderer: R,
+  scene: Scene,
+) => RendererOrbitView;
+
 /** Options of {@link createCharacterRenderer}. */
 export interface CharacterRendererOptions<
   R extends PreviewRenderer = WebGPURenderer,
@@ -179,6 +207,8 @@ export interface CharacterRendererOptions<
   readonly pipelineFactory?: PipelineFactory<R>;
   /** Presenter factory (tests); default `createCanvasPresenter`. */
   readonly presenterFactory?: PresenterFactory<R>;
+  /** 3D view factory (tests); default `createOrbitView` on the canvas. */
+  readonly orbitViewFactory?: OrbitViewFactory<R>;
   /**
    * Starts the palette LUT worker (AC-PIX-021.2), supplied by the host
    * (REQ-GEN-014: the engine never constructs a `Worker` itself), e.g.
@@ -196,7 +226,11 @@ export interface CharacterRendererOptions<
    * ({@link PIX_PALETTE_LUT_FAILED}, REQ-GEN-016; the previous settings stay
    * active); when restoring the preview after an export fails; and when a
    * preview frame throws ({@link PIX_PREVIEW_FAILED}: the loop stops and
-   * playback pauses). Never called after `dispose()`.
+   * playback pauses). Once with `PIX_DEVICE_LOST` when the GPU device (WebGPU)
+   * or WebGL2 context is lost (REQ-PIX-036, REQ-UX-046): the renderer is then
+   * inert (draws and ticks are no-ops, exports fail with `PIX_DEVICE_LOST`)
+   * until disposed, and the caller recreates it. Never called after
+   * `dispose()`.
    */
   readonly onError?: (error: EngineError) => void;
 }
@@ -262,7 +296,7 @@ export interface EngineCharacterRenderer<
    * the last `seek()` time (REQ-ANM-018).
    *
    * @returns `false` when there is nothing to resume (no clip played yet, or
-   *   disposed); `true` when the loop runs (or will, once an exclusive
+   *   disposed, or the device is lost); `true` when the loop runs (or will, once an exclusive
    *   operation ends).
    */
   resume(): boolean;
@@ -286,6 +320,16 @@ export interface EngineCharacterRenderer<
   draw(): void;
   /** Reads the preview cell (tight RGBA8, top-left origin, REQ-PIX-029). */
   readCell(): Promise<Uint8ClampedArray>;
+  /**
+   * The 3D view's orbit state (REQ-UX-003): yaw, pitch, target, distance.
+   * Kept across mode switches; changed only by `orbit` and `frameCharacter`.
+   */
+  readonly orbitState: OrbitState;
+  /**
+   * The pair the character renders with (REQ-CMP-043), `null` before the
+   * first character.
+   */
+  readonly renderPair: RenderPair | null;
 }
 
 /**
@@ -301,6 +345,95 @@ export const PIX_PALETTE_LUT_FAILED = 'PIX_PALETTE_LUT_FAILED';
  * (REQ-PIX-039, AC-PIX-039.1/.2).
  */
 export const PIX_PREVIEW_FAILED = 'PIX_PREVIEW_FAILED';
+
+/**
+ * Error and notice code of an unavailable (style, species) pair: a notice in
+ * the preview (REQ-CMP-043), an error of `prepareFrames` / `renderFrames`
+ * (REQ-CMP-044).
+ */
+export const CMP_STYLE_UNSUPPORTED = 'CMP_STYLE_UNSUPPORTED';
+
+const STYLE_LABELS: Readonly<Record<CharacterStyle, string>> = {
+  realistic: 'Realistic',
+  chibi: 'Chibi',
+  stickman: 'Stickman',
+  voxel: 'Voxel',
+};
+
+const SPECIES_LABELS: Readonly<Record<CharacterSpecies, string>> = {
+  human: 'Human',
+  animal: 'Animal',
+  monster: 'Monster',
+};
+
+/**
+ * Labels of the stored values a fallback replaced and of their replacements
+ * (REQ-CMP-043): only the values that changed, style first.
+ */
+function pairLabels(
+  stored: {style: CharacterStyle; species: CharacterSpecies},
+  pair: RenderPair,
+): {label: string; fallbackLabel: string} {
+  const from: string[] = [];
+  const to: string[] = [];
+  if (stored.style !== pair.style) {
+    from.push(STYLE_LABELS[stored.style]);
+    to.push(STYLE_LABELS[pair.style]);
+  }
+  if (stored.species !== pair.species) {
+    from.push(SPECIES_LABELS[stored.species]);
+    to.push(SPECIES_LABELS[pair.species]);
+  }
+  return {label: from.join(' '), fallbackLabel: to.join(' ')};
+}
+
+/**
+ * The `CMP_STYLE_UNSUPPORTED` notice of a fallback (REQ-CMP-043): "<label> is
+ * coming soon. Showing <fallback label> for now."
+ *
+ * @param stored The stored style and species.
+ * @param pair The rendered pair (`fallback: true`).
+ * @returns The notice.
+ */
+export function styleUnsupportedNotice(
+  stored: {style: CharacterStyle; species: CharacterSpecies},
+  pair: RenderPair,
+): StyleUnsupportedNotice {
+  const {label, fallbackLabel} = pairLabels(stored, pair);
+  return {
+    code: 'CMP_STYLE_UNSUPPORTED',
+    message: `${label} is coming soon. Showing ${fallbackLabel} for now.`,
+    style: stored.style,
+    species: stored.species,
+    fallback: {style: pair.style, species: pair.species},
+    label,
+    fallbackLabel,
+  };
+}
+
+/**
+ * The export refusal of an unavailable pair (REQ-CMP-044): "<label> is coming
+ * soon. Choose a supported style to export."
+ *
+ * @param stored The stored style and species.
+ * @param pair The rendered (fallback) pair.
+ * @returns The `CMP_STYLE_UNSUPPORTED` error.
+ */
+export function styleUnsupportedError(
+  stored: {style: CharacterStyle; species: CharacterSpecies},
+  pair: RenderPair,
+): EngineError {
+  const {label} = pairLabels(stored, pair);
+  return {
+    code: CMP_STYLE_UNSUPPORTED,
+    message: `${label} is coming soon. Choose a supported style to export.`,
+    details: {
+      style: stored.style,
+      species: stored.species,
+      fallback: {style: pair.style, species: pair.species},
+    },
+  };
+}
 
 /** An `EngineError` for a thrown value; keeps the code of an `EngineError`-like value. */
 function toEngineError(error: unknown, code: string): EngineError {
@@ -399,6 +532,29 @@ export async function createCharacterRenderer<
   const renderer = created.value.renderer;
   const backend: RendererBackend = created.value.backend;
 
+  // Device loss (REQ-PIX-036, REQ-UX-046). Watched from creation on; a loss
+  // before the renderer is assembled is latched and reported once it is.
+  let lostError: EngineError | null = null;
+  let onDeviceLost: (() => void) | null = null;
+  const stopWatchingLoss = watchDeviceLoss({
+    rendererBackend: renderer.backend,
+    backend,
+    canvas,
+    onLost: error => {
+      lostError = error;
+      onDeviceLost?.();
+    },
+  });
+  /** Disposes the renderer; on a lost device a failing dispose is swallowed. */
+  const disposeRenderer = (): void => {
+    stopWatchingLoss();
+    try {
+      renderer.dispose();
+    } catch (error) {
+      if (lostError === null) throw error;
+    }
+  };
+
   const preview = createPreviewScene(
     settings.resolution.width,
     settings.resolution.height,
@@ -432,7 +588,7 @@ export async function createCharacterRenderer<
   if (!madePipeline.ok) {
     lut.dispose();
     binder.dispose();
-    renderer.dispose();
+    disposeRenderer();
     return madePipeline;
   }
   const pipeline = madePipeline.value;
@@ -448,7 +604,7 @@ export async function createCharacterRenderer<
     pipeline.dispose();
     lut.dispose();
     binder.dispose();
-    renderer.dispose();
+    disposeRenderer();
     return {ok: false, error: toEngineError(error, PIX_PALETTE_LUT_FAILED)};
   }
 
@@ -488,6 +644,14 @@ export async function createCharacterRenderer<
   /** Whether the frame target is configured for the preview (vs an export). */
   let previewBound = false;
   let viewport = {cssW: 1, cssH: 1, dpr: 1};
+  // ---- 3D view (REQ-UX-003) and notices (REQ-CMP-043) ----
+  let viewMode: ViewMode = 'pixel';
+  let orbitState: OrbitState = DEFAULT_ORBIT_STATE;
+  /** The 3D view frames the character on its first draw, and on `frameCharacter`. */
+  let frameRequested = true;
+  let orbitView: RendererOrbitView | null = null;
+  const notices: EngineNotice[] = [];
+  const corner = new Vector3();
   let layout = previewLayout(
     settings.resolution.width,
     settings.resolution.height,
@@ -522,7 +686,7 @@ export async function createCharacterRenderer<
   };
 
   const startLoop = (): void => {
-    if (disposed || loopRunning || busyDepth > 0) return;
+    if (disposed || lostError !== null || loopRunning || busyDepth > 0) return;
     loopRunning = true;
     startMs = null;
     renderer.setAnimationLoop(tick);
@@ -558,7 +722,7 @@ export async function createCharacterRenderer<
    * (exclusive section only). A new failure is reported and keeps it stale.
    */
   async function resyncPipeline(): Promise<void> {
-    if (!pipelineStale || disposed) return;
+    if (!pipelineStale || disposed || lostError !== null) return;
     try {
       await pipeline.setRenderSettings(settings);
       pipelineStale = false;
@@ -576,7 +740,7 @@ export async function createCharacterRenderer<
    * operation re-applies {@link settings}.
    */
   async function restoreAfterExport(): Promise<void> {
-    if (disposed) return;
+    if (disposed || lostError !== null) return;
     try {
       await pipeline.setRenderSettings(settings);
     } catch (error) {
@@ -744,10 +908,108 @@ export async function createCharacterRenderer<
 
   const activeTiming = (): PreviewTiming => timing ?? clipTiming;
 
+  /** Device-pixel size of the viewport (the 3D view's drawing buffer). */
+  const deviceWidth = (): number =>
+    Math.max(1, Math.round(viewport.cssW * viewport.dpr));
+  const deviceHeight = (): number =>
+    Math.max(1, Math.round(viewport.cssH * viewport.dpr));
+
+  /**
+   * Frames the posed character in the 3D view: the world box of its visible
+   * meshes (skinned bounds, the same corners the export framing uses), so the
+   * result depends only on the pose (deterministic).
+   */
+  const frameOrbit = (aspect: number): void => {
+    const corners = collectStageCorners(assembly.root, preview.stage);
+    if (corners.length < 3) return;
+    const m = preview.stage.matrixWorld;
+    let minX = Infinity;
+    let minY = Infinity;
+    let minZ = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    let maxZ = -Infinity;
+    for (let i = 0; i + 2 < corners.length; i += 3) {
+      corner
+        .set(
+          corners[i] as number,
+          corners[i + 1] as number,
+          corners[i + 2] as number,
+        )
+        .applyMatrix4(m);
+      minX = Math.min(minX, corner.x);
+      minY = Math.min(minY, corner.y);
+      minZ = Math.min(minZ, corner.z);
+      maxX = Math.max(maxX, corner.x);
+      maxY = Math.max(maxY, corner.y);
+      maxZ = Math.max(maxZ, corner.z);
+    }
+    orbitState = frameBox(
+      orbitState,
+      [minX, minY, minZ],
+      [maxX, maxY, maxZ],
+      aspect,
+    );
+    frameRequested = false;
+  };
+
+  /** One 3D-view frame: the real direction (never mirrored), full resolution. */
+  const draw3d = (): void => {
+    target.pose(timeSec, direction);
+    const w = deviceWidth();
+    const h = deviceHeight();
+    if (frameRequested) frameOrbit(w / h);
+    orbitView ??= (
+      options.orbitViewFactory ??
+      ((r: R, scene: Scene) =>
+        createOrbitView(r as unknown as WebGPURenderer, scene))
+    )(renderer, preview.scene);
+    orbitView.render(orbitState, w, h, timeSec);
+  };
+
+  /** Raises or clears `CMP_STYLE_UNSUPPORTED` for the applied character (REQ-CMP-043). */
+  const updateNotices = (spec: CharacterSpec): void => {
+    const pair = assembly.renderPair;
+    const next =
+      pair !== null && pair.fallback
+        ? styleUnsupportedNotice(spec, pair)
+        : null;
+    const index = notices.findIndex(n => n.code === CMP_STYLE_UNSUPPORTED);
+    const current = index < 0 ? undefined : notices[index];
+    if (current !== undefined && current.message === next?.message) return;
+    if (current !== undefined) {
+      notices.splice(index, 1);
+      if (!disposed) options.onNotice?.(current, false);
+    }
+    if (next !== null) {
+      notices.push(next);
+      if (!disposed) options.onNotice?.(next, true);
+    }
+  };
+
+  /** The export refusal while the stored pair is unavailable (REQ-CMP-044), or `null`. */
+  const styleBlock = (): EngineError | null => {
+    const pair = assembly.renderPair;
+    const spec = assembly.spec;
+    return pair !== null && pair.fallback && spec !== null
+      ? styleUnsupportedError(spec, pair)
+      : null;
+  };
+
   const draw = (): void => {
-    if (disposed || busyDepth > 0 || pipelineStale || framing === undefined)
+    if (
+      disposed ||
+      lostError !== null ||
+      busyDepth > 0 ||
+      pipelineStale ||
+      framing === undefined
+    )
       return;
     if (!previewBound) bindPreview();
+    if (viewMode === '3d') {
+      draw3d();
+      return;
+    }
     target.pose(timeSec, shownIndex[direction] ?? direction);
     // Node-frame time = the drawn clip time, never the wall clock (L1).
     pipeline.render(timeSec);
@@ -760,6 +1022,7 @@ export async function createCharacterRenderer<
    * (`resume()` restarts it) and is reported once as {@link PIX_PREVIEW_FAILED}.
    */
   function tick(nowMs: number): void {
+    if (disposed || lostError !== null) return;
     try {
       if (startMs === null) startMs = nowMs - elapsedSec * 1000;
       elapsedSec = (nowMs - startMs) / 1000;
@@ -862,12 +1125,26 @@ export async function createCharacterRenderer<
     get paletteLutStats() {
       return {...lut.stats};
     },
+    get notices() {
+      return notices.slice();
+    },
+    get viewMode() {
+      return viewMode;
+    },
+    get orbitState() {
+      return orbitState;
+    },
+    get renderPair() {
+      return assembly.renderPair;
+    },
 
     setCharacter(spec: CharacterSpec) {
       return exclusive(async () => {
         if (disposed) return {ok: false, error: DISPOSED_ERROR};
         const result = await assembly.setCharacter(spec);
         if (!result.ok || disposed) return result;
+        // Before the redraw at the end of this exclusive call (AC-CMP-043.3).
+        updateNotices(spec);
         // Parts and anatomy change the bounds.
         framingDirty = true;
         const framed = await reframeIfDirty();
@@ -883,7 +1160,7 @@ export async function createCharacterRenderer<
     playClip,
 
     resume(): boolean {
-      if (disposed || previewClip === null) return false;
+      if (disposed || lostError !== null || previewClip === null) return false;
       playing = true;
       startLoop();
       return true;
@@ -896,7 +1173,9 @@ export async function createCharacterRenderer<
 
     seek(t: number): void {
       timeSec = t;
-      elapsedSec = t;
+      // Invert the playback mapping, so resume() continues from this frame
+      // whatever the fps is relative to N / D (REQ-ANM-018).
+      elapsedSec = previewElapsedFor(activeTiming(), t);
       startMs = null;
       draw();
     },
@@ -1012,6 +1291,8 @@ export async function createCharacterRenderer<
       }
       return exclusive(async () => {
         if (disposed) return {ok: false, error: DISPOSED_ERROR};
+        const blocked = styleBlock();
+        if (blocked !== null) return {ok: false, error: blocked};
         unbindPreview();
         try {
           return await samplePrepare(target, s, prepareOptions);
@@ -1040,8 +1321,12 @@ export async function createCharacterRenderer<
         busyDepth++;
         stopLoop();
         try {
+          // REQ-CMP-044: also when `prepared` predates a character change.
+          const blocked = disposed ? null : styleBlock();
+          if (blocked !== null) throw new FrameSamplerError(blocked);
           try {
             if (disposed) throw new FrameSamplerError(DISPOSED_ERROR);
+            if (lostError !== null) throw new FrameSamplerError(lostError);
             await resyncPipeline();
             unbindPreview();
             // The export settings first (REQ-PIX-001: the frames have their size).
@@ -1052,7 +1337,21 @@ export async function createCharacterRenderer<
                 toEngineError(error, PIX_PALETTE_LUT_FAILED),
               );
             }
-            yield* sampleRender(target, prepared, renderOptions);
+            // A loss mid-export fails it; no partial result (AC-PIX-036.2).
+            // A readback on the lost device may fail on its own: report the loss.
+            try {
+              for await (const frame of sampleRender(
+                target,
+                prepared,
+                renderOptions,
+              )) {
+                if (lostError !== null) break;
+                yield frame;
+              }
+            } catch (error) {
+              if (lostError === null) throw error;
+            }
+            if (lostError !== null) throw new FrameSamplerError(lostError);
           } finally {
             await restoreAfterExport();
           }
@@ -1076,12 +1375,36 @@ export async function createCharacterRenderer<
         viewportCssH,
         dpr,
       );
+      // The 3D view's drawing buffer follows the viewport.
+      if (viewMode === '3d' && !loopRunning) draw();
       return layout;
+    },
+
+    setViewMode(mode: ViewMode): void {
+      if (mode !== 'pixel' && mode !== '3d') {
+        throw new Error(`setViewMode: unknown mode "${String(mode)}"`);
+      }
+      if (disposed || mode === viewMode) return;
+      viewMode = mode;
+      if (!loopRunning) draw();
+    },
+
+    orbit(dYawDeg: number, dPitchDeg: number): void {
+      orbitState = orbitBy(orbitState, dYawDeg, dPitchDeg);
+      if (viewMode === '3d' && !loopRunning) draw();
+    },
+
+    frameCharacter(): void {
+      frameRequested = true;
+      if (viewMode === '3d' && !loopRunning) draw();
     },
 
     draw,
 
     readCell(): Promise<Uint8ClampedArray> {
+      if (lostError !== null) {
+        return Promise.reject(new FrameSamplerError(lostError));
+      }
       return pipeline.read();
     },
 
@@ -1090,14 +1413,47 @@ export async function createCharacterRenderer<
       disposed = true;
       playing = false;
       stopLoop();
+      notices.length = 0;
       assembly.dispose();
       preview.stage.clear();
-      presenter.dispose();
-      pipeline.dispose();
-      lut.dispose();
-      binder.dispose();
-      renderer.dispose();
+      orbitView?.dispose();
+      orbitView = null;
+      // No report for the disposal's own loss (`destroyed`, `loseContext`).
+      stopWatchingLoss();
+      if (lostError === null) {
+        presenter.dispose();
+        pipeline.dispose();
+        lut.dispose();
+        binder.dispose();
+        renderer.dispose();
+        return;
+      }
+      // On a lost device GPU frees may throw; free what can be freed.
+      for (const free of [
+        () => presenter.dispose(),
+        () => pipeline.dispose(),
+        () => lut.dispose(),
+        () => binder.dispose(),
+        () => renderer.dispose(),
+      ]) {
+        try {
+          free();
+        } catch {
+          // The device is gone; its resources went with it.
+        }
+      }
     },
   };
+
+  /** Makes the renderer inert and reports the loss once (REQ-UX-046). */
+  const handleDeviceLost = (): void => {
+    if (disposed || lostError === null) return;
+    onDeviceLost = null;
+    playing = false;
+    stopLoop();
+    options.onError?.(lostError);
+  };
+  onDeviceLost = handleDeviceLost;
+  if (lostError !== null) handleDeviceLost();
   return {ok: true, value: self};
 }

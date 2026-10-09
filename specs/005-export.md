@@ -95,14 +95,14 @@ Everything is rendered once at 1× (the cell resolution). Larger scales are made
 
 **REQ-EXP-010 [P1]** WHERE metadata is `aseprite-json` THE SYSTEM SHALL write an Aseprite-compatible JSON file in the array form (`frames` as an array) per sheet and scale, with `frame`, `rotated: false`, `trimmed: false`, `spriteSourceSize`, `sourceSize` and `duration` (ms) per frame, and `meta` with `app`, `version`, `image`, `format: "RGBA8888"`, `size`, `scale` and one `frameTags` entry per (clip, direction).
 
-- **AC-EXP-010.1** Given a fixture export, When the JSON is loaded by Phaser 3's `load.aseprite` + `anims.createFromAseprite` in a headless test, Then one animation per (clip, direction) is created with the right frame count.
+- **AC-EXP-010.1** Given a fixture export, When the JSON is loaded by Phaser 3's `load.aseprite` + `anims.createFromAseprite` in a headless test, Then one animation per (clip, direction) is created with the right frame count. *(Note 2026-10-09 (PM): verification is deferred to the engine-preset work (REQ-EXP-029), because it needs Phaser 3 as a test dependency. Until then the AC-EXP-011.x schema validation covers the format (AC-EXP-011.1 itself waits on `exportManifestSchema`; see its note), with AC-EXP-010.2 to .4 covering the Aseprite JSON fields they name. Meaning unchanged.)*
 - **AC-EXP-010.2** Given clip fps 12, Then every frame's `duration` is `round(1000 / 12) = 83`.
 - **AC-EXP-010.3** Given a non-looping clip, Then its tag has `"direction": "forward"` and the manifest records `loop: false`. Given a looping clip, Then the tag direction is also `"forward"` (looping is a playback choice in the engine) and the manifest records `loop: true`.
 - **AC-EXP-010.4** Given an animation with `pingPong: true` and `bakePingPong: false` (spec 004 REQ-ANM-010), Then its tags have `"direction": "pingpong"` and the manifest records `direction: 'pingpong'`. Given `bakePingPong: true`, Then the baked frames are written in sequence and the tag direction is `"forward"`.
 
 **REQ-EXP-011 [P1]** WHERE metadata is `json` or `aseprite-json` THE SYSTEM SHALL write our own manifest `<base>.manifest.json` following the `SpriteExportManifest` contract (Data & contracts). It records app version, three.js version, backend, a SHA-256 of the canonical ProjectDocument, cell size, pivot, scales, and per frame its clip, direction label, frame index, sheet file and rectangle.
 
-- **AC-EXP-011.1** Given a fixture export, When the manifest is validated against its Zod schema, Then it passes, and `frames.length` equals the number of rendered frames.
+- **AC-EXP-011.1** Given a fixture export, When the manifest is validated against its Zod schema, Then it passes, and `frames.length` equals the number of rendered frames. *(Note added 2026-10-09 (M3 PM decision): the AC stands, but its schema does not exist yet. The M3 build defines `SpriteExportManifest` only as a TypeScript interface in `packages/engine/src/export/types.ts`; the Zod schema `exportManifestSchema` (with its inferred type replacing that interface) is to be added to `@csg/parts-schema`. Owner: asset-pipeline-engineer; tracked for M3 QA. Until it lands, this AC has no passing test.)*
 - **AC-EXP-011.2** Given the manifest and the ProjectDocument used, When `sha256(canonicalJson(project))` is recomputed, Then it equals `manifest.source.projectSha256`.
 
 **REQ-EXP-012 [P1]** THE SYSTEM SHALL name frames `<label>_<dir>_<frame>`, with the frame index zero-padded to 3 digits, and tags `<label>_<dir>` (e.g. `walk_ne_004`, `walk_ne`), using the animation `label` (spec 004) and the direction labels from spec 003 `DIRECTION_ORDER`. Because labels contain no `_`, the parts of a name split unambiguously at `_`.
@@ -162,6 +162,7 @@ Everything is rendered once at 1× (the cell resolution). Larger scales are made
 **REQ-EXP-022 [P1]** THE SYSTEM SHALL list attribution-required assets in a separate "Attribution required" block at the top of `CREDITS.txt`, with one ready-to-paste line each: `"<title>" by <author> (<license>) <sourceUrl>`.
 
 - **AC-EXP-022.1** Given one CC-BY-4.0 upload, Then the block contains exactly its line, and CC0 assets are not in the block.
+- **AC-EXP-022.2** Given an export whose assets all have `attributionRequired: false` (for example only the bundled CC0 packs), When `CREDITS.txt` is built, Then the "Attribution required" block is still present and holds exactly one line, `(none)`: the text between the line `== Attribution required ==` and the next empty line is `(none)`, and the `== All assets ==` section still lists every asset. *(Added 2026-10-09 (M3 PM decision), recording the M3 implementation in `packages/engine/src/export/credits.ts`.)*
 
 ### Progress, cancel, limits
 
@@ -283,8 +284,13 @@ export interface ExportProgress {
 }
 
 export interface SpriteSheetExport {
-  /** Sorted by name. The UI zips them per REQ-EXP-017. */
+  /** Sorted by name (code-unit order). Every file is also inside `zip`. */
   files: Array<{ name: string; mime: string; bytes: Uint8Array }>;
+  /** Added 2026-10-09 (M3). `<base>.zip` (REQ-EXP-016, REQ-EXP-017). */
+  zipName: string;
+  /** Added 2026-10-09 (M3). The packaged ZIP of every file in `files`, written by the exporter
+   *  per REQ-EXP-018; this is the single download of REQ-EXP-017. */
+  zip: Uint8Array;
   warnings: Array<{
     code:
       | 'LICENSE_UNKNOWN' | 'LICENSE_NON_COMMERCIAL' | 'LICENSE_SHARE_ALIKE'
@@ -325,6 +331,8 @@ export interface SpriteExportManifest {
   warnings: SpriteSheetExport['warnings'];
 }
 ```
+
+*(Amended 2026-10-09 (M3 PM decision), recording the M3 build.)* The exporter, not the UI, packages the ZIP: `SpriteSheetExport` carries `zip` and `zipName` alongside `files` (`packages/engine/src/export/types.ts`). When the export runs in the worker (REQ-EXP-023), the reply transfers only the ZIP bytes; its `files` list carries `{ name, mime, size }` per file instead of `bytes` (`ExportWorkerResult` in `packages/engine/src/export/worker-protocol.ts`). `SpriteExportManifest` is a TypeScript interface for now; its Zod schema is pending (note under AC-EXP-011.1). Architecture §3.6 is to be synced.
 
 **File names** (`<base>` from REQ-EXP-016, `@<s>x` suffix only for s > 1)
 
@@ -393,6 +401,22 @@ LICENSE_UNKNOWN: user:9a2e…
 ```
 
 The `WARNINGS` section appears only when warnings exist. No dates or times appear in the file.
+
+*(Amended 2026-10-09 (M3 PM decision), AC-EXP-022.2.)* When no asset requires attribution, the "Attribution required" block holds the single line `(none)`:
+
+```
+Credits for knight (exported with Character Sprite Generator 0.1.0)
+
+== Attribution required ==
+(none)
+
+== All assets ==
+builtin:quaternius-ubc/body-regular-m
+  Title: Regular Male | License: CC0-1.0 | Author: Quaternius
+  Source: https://quaternius.itch.io/universal-base-characters | Attribution required: no
+```
+
+An asset without a source URL prints `Source: n/a` in the "All assets" section, and its "Attribution required" line ends after the closing parenthesis of the license.
 
 **Error codes:** `EXP_FRAME_SIZE_MISMATCH`, `EXP_INVALID_SETTINGS`, `EXP_TOO_LARGE`, `EXP_CANCELLED`, `EXP_DUPLICATE_TAG`, `EXP_DOWNLOAD_FAILED`; warnings as listed in `SpriteSheetExport`.
 

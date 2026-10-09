@@ -3,6 +3,9 @@
 #
 #   scripts/golden-env/run.sh test:gpu          # gate: compare with committed goldens
 #   CSG_GOLDEN_REASON="why" scripts/golden-env/run.sh goldens:update   # rewrite changed goldens
+#   scripts/golden-env/run.sh assets:thumbnails:render   # thumbnail render step (REQ-AST-015);
+#                                                        # use `pnpm assets:thumbnails`, which plans,
+#                                                        # calls this and installs the results
 #
 # Inside, this is `pnpm <script>` (see root package.json).
 # The image tag must equal the exact @playwright/test version (apps/web/package.json); bumping
@@ -13,7 +16,7 @@ IMAGE_TAG="mcr.microsoft.com/playwright:v1.64.0-noble"
 IMAGE_DIGEST="sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f"
 IMAGE="${IMAGE_TAG}@${IMAGE_DIGEST}"
 
-script="${1:?usage: run.sh <test:gpu|goldens:update|test:perf>}"
+script="${1:?usage: run.sh <test:gpu|goldens:update|test:perf|assets:thumbnails:render>}"
 # pnpm is not in the image (and corepack cannot install it as a non-root user offline), so the root
 # package.json scripts are mirrored here with the same variables. Keep in sync.
 vitest="node node_modules/vitest/vitest.mjs run"
@@ -24,6 +27,10 @@ case "$script" in
   # software-rendered browsers do not compete for the CPU.
   test:perf)
     cmd="CSG_GPU=1 CSG_PERF=1 $vitest --project gpu-webgpu && CSG_GPU=1 CSG_PERF=1 $vitest --project gpu-webgl2"
+    ;;
+  # Spec 011 REQ-AST-015: WebGL2 (`forceWebGL`) thumbnail render of test-results/thumbnails/jobs.json.
+  assets:thumbnails:render)
+    cmd="$vitest --config packages/engine/test/gpu/thumbnails/vitest.thumbnails.config.ts"
     ;;
   *) echo "unsupported script: $script" >&2; exit 2 ;;
 esac

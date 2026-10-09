@@ -3,7 +3,11 @@
   "pages": [
     "index",
     "system-requirements",
+    "home-screen",
+    "new-character-wizard",
     "interface-tour",
+    "easy-workspace",
+    "pro-workspace",
     "keyboard-shortcuts"
   ]
 }

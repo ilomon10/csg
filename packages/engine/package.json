@@ -6,8 +6,10 @@
   "exports": {
     ".": "./src/index.ts",
     "./palette-lut.worker": "./src/pipeline/palette-lut.worker.ts",
+    "./export.worker": "./src/export/export.worker.ts",
     "./rig": "./src/rig/index.ts",
-    "./retarget": "./src/retarget/index.ts"
+    "./retarget": "./src/retarget/index.ts",
+    "./catalog": "./src/catalog/index.ts"
   },
   "scripts": {
     "build": "tsc -b"
@@ -15,6 +17,7 @@
   "dependencies": {
     "@csg/parts-schema": "workspace:*",
     "@csg/shader-graph": "workspace:*",
+    "fflate": "0.8.3",
     "three": "0.186.1"
   },
   "devDependencies": {

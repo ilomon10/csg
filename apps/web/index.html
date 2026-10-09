@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -8,6 +8,29 @@
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Character Sprite Generator</title>
+    <!-- Theme and reduce-motion before first paint: external, so the CSP needs no inline script. -->
+    <script src="/theme-boot.js"></script>
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/src/shared/ui/fonts/figtree-latin-500-normal.woff2"
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/src/shared/ui/fonts/figtree-latin-600-normal.woff2"
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/src/shared/ui/fonts/pixelify-sans-latin-600-normal.woff2"
+    />
   </head>
   <body>
     <div id="root"></div>

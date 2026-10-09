@@ -2,7 +2,7 @@
  * Composition contracts (spec 001 REQ-CMP-*, spec 002 REQ-ANA-007, spec 011
  * REQ-AST-028). Type-only.
  */
-import type {Bone, Color, Object3D, Skeleton} from 'three';
+import type {Bone, Color, Mesh, Object3D, Skeleton} from 'three';
 import type {
   AssetRef,
   BodyRegion,
@@ -48,10 +48,32 @@ export interface AttachedPart {
   dispose(): void;
 }
 
+/**
+ * Gives the meshes an attach function clones from a registry-owned part scene
+ * their material. The default links each clone to its source mesh
+ * (`linkMaterial`, M1). A character assembly passes its own linker, so every
+ * assembly (and so every renderer) owns its materials and the registry's
+ * cached scenes are never re-materialed (M3-05).
+ */
+export interface MaterialLinker {
+  /** Sets `clone.material` for `source` now and after later rebuilds. */
+  link(source: Mesh, clone: Mesh): void;
+  /** Stops updating `clone`. */
+  unlink(source: Mesh, clone: Mesh): void;
+}
+
 /** Options of {@link AttachSkinnedPart}. */
 export interface AttachSkinnedOptions {
   /** Target bone name to part bone name; default identity by name. */
   readonly boneMap?: ReadonlyMap<string, string>;
+  /** Material linker for the clones; default `linkMaterial` to the source mesh. */
+  readonly materials?: MaterialLinker;
+}
+
+/** Options of {@link AttachStaticPart}. */
+export interface AttachStaticOptions {
+  /** Material linker for the clones; default `linkMaterial` to the source mesh. */
+  readonly materials?: MaterialLinker;
 }
 
 /**
@@ -73,6 +95,7 @@ export type AttachStaticPart = (
   part: LoadedPartInternal,
   body: BodySkeleton,
   socket: PartSocket,
+  options?: AttachStaticOptions,
 ) => Result<AttachedPart, EngineError>;
 
 /**

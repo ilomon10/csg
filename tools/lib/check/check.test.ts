@@ -49,10 +49,11 @@ describe('assets:check graceful and clean', () => {
       root,
       'p1',
       [
-        {id: 'body', slot: 'body', glb: {region: 3}},
+        {id: 'body', slot: 'body', glb: {region: 10, yOffset: 0.98}},
         {id: 'shirt', glb: {triangles: 4}},
       ],
       ['idle'],
+      0.02,
     );
     const report = await runAssetCheck(opts(repo));
     expect(codes(report)).toEqual([]);
@@ -288,6 +289,22 @@ describe('AC-AST-019 retired ids', () => {
     expect(codes(await runAssetCheck(opts(repo)))).toContain('AST_ID_REUSED');
   });
 
+  it('AC-AST-019.3: a retired-ids.json that is a bare array or {"parts": [...]} fails with AST_RETIRED_IDS_INVALID naming the pack', async () => {
+    for (const bad of [['shirt'], {parts: ['shirt']}]) {
+      const {repo} = await writeTestPack(root, 'p1', [{id: 'shirt'}]);
+      writeFileSync(
+        join(repo.packsDir, 'p1', 'retired-ids.json'),
+        JSON.stringify(bad),
+      );
+      const report = await runAssetCheck(opts(repo));
+      const issue = report.issues.find(
+        i => i.code === 'AST_RETIRED_IDS_INVALID',
+      );
+      expect(issue?.severity).toBe('error');
+      expect(issue?.packId).toBe('p1');
+    }
+  });
+
   it('parses the emit retired-ids.json format and rejects junk', () => {
     const ok = parseRetiredIds({
       format: 'sprite-retired-ids',
@@ -303,6 +320,18 @@ describe('AC-AST-019 retired ids', () => {
       parseRetiredIds({format: 'sprite-retired-ids', version: 1, ids: 'a'}).ok,
     ).toBe(false);
     expect(parseRetiredIds(7).ok).toBe(false);
+  });
+});
+
+describe('AC-AST-013.3 missing rig file', () => {
+  it('AC-AST-013.3: assets:check fails with AST_RIG_MISSING for a pack whose rig has no rig JSON', async () => {
+    const {repo} = await writeTestPack(root, 'p1', [{id: 'shirt'}]);
+    rmSync(join(repo.rigsDir, 'test-rig.json'));
+    const report = await runAssetCheck(opts(repo));
+    const issue = report.issues.find(i => i.code === 'AST_RIG_MISSING');
+    expect(issue?.severity).toBe('error');
+    expect(issue?.packId).toBe('p1');
+    expect(issue?.message).toContain('test-rig.json');
   });
 });
 

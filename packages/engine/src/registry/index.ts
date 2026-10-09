@@ -8,6 +8,7 @@ export type {
   ClipEntryView,
   Compatibility,
   CompatibilityCheck,
+  CharacterKind,
   CharacterSkeletonGroupOf,
   IncompatibleReason,
   LoadedClip,
@@ -15,9 +16,14 @@ export type {
   LoadedPartInternal,
   PartEntryView,
   RestPoseOf,
+  StyleCombo,
 } from '../contracts/registry';
 export {createAssetRegistry} from './asset-registry';
-export type {AssetRegistryOptions, EngineAssetRegistry} from './asset-registry';
+export type {
+  AssetRegistryOptions,
+  AssetRegistryTestOptions,
+  EngineAssetRegistry,
+} from './asset-registry';
 export {checkCompatibility} from './compatibility';
 export {parseClipManifestJson, parsePartManifestJson} from './manifest-json';
 export {characterSkeletonGroupOf, restPoseOf} from './rest-pose';

@@ -1,0 +1,312 @@
+{
+  "format": "sprite-thumbnail-index",
+  "thumbnails": [
+    {
+      "height": 128,
+      "id": "beard-full",
+      "inputs": "4dbd94e53af84c9de3528ebbbb82c3bdf1c2c859ecaff7d1114495bbe5b015d7",
+      "kind": "part",
+      "path": "thumbnails/beard-full.webp",
+      "sha256": "b4a3405f7ff99140c8279a2fc0fdef3b6036e86e6875e8f537b5d0dff176bbde",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "herbalist",
+      "inputs": "6c0a99449dc17db52de725c812339e2d3e7d7ad3061678a116941e92d76b180d",
+      "kind": "character",
+      "path": "thumbnails/characters/herbalist.webp",
+      "sha256": "341d7c7bd3d64c1d8d076196cfd1da877e75accbf9934463dd7622db49d52d6a",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "ranger",
+      "inputs": "14b0f6f757b5dbe49b56863a2d845e2de681b171f101c7c54273df51e89a6a59",
+      "kind": "character",
+      "path": "thumbnails/characters/ranger.webp",
+      "sha256": "6a97911dc58c4d355a8bf34405d809d8fd69a410fa91432f67d4d9641a7b723e",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "scout",
+      "inputs": "c9b4d3dd6ced65bbd6adcd55817d8f0f7773da69367aed58dc546119c0496862",
+      "kind": "character",
+      "path": "thumbnails/characters/scout.webp",
+      "sha256": "e462ef37cb0d124d198e6bfc711798182053e76f8c8dd57164643d3d20390039",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "villager",
+      "inputs": "425fe687bc503cacb573f36d63c62a6f082c3dd7ba9447784fe958978861c727",
+      "kind": "character",
+      "path": "thumbnails/characters/villager.webp",
+      "sha256": "3b7f49da26047c988aed9c8b8cf147879cf13696e92dc3e9996c02cf82f17619",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "wanderer",
+      "inputs": "7c4772ec538cd0273a60dab3a822c95f641847f91628f4f5ff56cc1605fb7d6e",
+      "kind": "character",
+      "path": "thumbnails/characters/wanderer.webp",
+      "sha256": "1d5a95ba2d9e859e6e09e11184f07a5c60e4bc6b21028c1e250abf88ef7c3435",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "woodcutter",
+      "inputs": "12f86358916685c3a83e24a7934e222f2c289d281b9c512f775e49f1da0490a9",
+      "kind": "character",
+      "path": "thumbnails/characters/woodcutter.webp",
+      "sha256": "3da21acac25c0848f64b473e073051af7a790acd1ef0aae56a6e6340acffd644",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "young-ranger",
+      "inputs": "3bcef284e4f9f76f7f2f0a8c9cc4c4c5ad693c96473373b09f05451966a79e09",
+      "kind": "character",
+      "path": "thumbnails/characters/young-ranger.webp",
+      "sha256": "5c6f200b080571be11128a77c9ae4ce281b83909345fa045af8b2dd483d7383a",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "young-villager",
+      "inputs": "d4ff53d6ed6be6e3650ca67cfe67732734b42d6a478206da494e45ed2c201911",
+      "kind": "character",
+      "path": "thumbnails/characters/young-villager.webp",
+      "sha256": "c55f6c45b6c2102b7f4c56a27526a710c5a777281fd18a59f266e707e6932c71",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "eyebrows-female",
+      "inputs": "2947118faf548180636ddc1e7bfb8f326b21222f6ab138666a7a3812d21dcb8c",
+      "kind": "part",
+      "path": "thumbnails/eyebrows-female.webp",
+      "sha256": "f8f5b85937b953037c0bd7b054691e27645d3f7d74d55bf070f3671dabb5d977",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "eyebrows-regular",
+      "inputs": "e603ab1d102f0abd8531ed2821e44c89def1d4186c5cb4a65d6b93f9a1849248",
+      "kind": "part",
+      "path": "thumbnails/eyebrows-regular.webp",
+      "sha256": "d3c2a664af10bbe569920ea1d76442ea12baeacc029dd343d6ea2f7f10ecfc63",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "hair-buns",
+      "inputs": "d473e70962ca13a77a3ff4680d245133069bb23a82e1a10a28e476e0d6d47ffc",
+      "kind": "part",
+      "path": "thumbnails/hair-buns.webp",
+      "sha256": "85e91373c02e158a979ff602203d20b76b4cc1b662df8d75457c5d1053265da5",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "hair-buzzed-female",
+      "inputs": "3c5f1ac7247335b2252c35623f8d77b26b1a410a58ec9cf5c29c064d3a7049df",
+      "kind": "part",
+      "path": "thumbnails/hair-buzzed-female.webp",
+      "sha256": "e98ebe5cc45970e168e7da440a520e1feca9e15907faf110a3d623e9ef50a656",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "hair-buzzed",
+      "inputs": "f848ced6ed245354af93e37bcb4ed4c04555922e9c6b31b863e7b962cd7bc0bf",
+      "kind": "part",
+      "path": "thumbnails/hair-buzzed.webp",
+      "sha256": "dec01bfd36738b941c378ef3deef2ca9d42306f3eb8be1bc73dd1fd7e1fa6065",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "hair-long",
+      "inputs": "b674b734aa5843b76b9a1ce1fda5bf5ed9d722ab10425df7c45e4fbb730f2da1",
+      "kind": "part",
+      "path": "thumbnails/hair-long.webp",
+      "sha256": "a67edb7b24870cb9493334e4884b42f509b169a118fd751a4b90e3cd246c1b43",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "hair-simple-parted",
+      "inputs": "17e7a8a41249969929bd448c650d25a84ecc37dde4988efda88ae125f055f738",
+      "kind": "part",
+      "path": "thumbnails/hair-simple-parted.webp",
+      "sha256": "bc0aeb53c61857c2819e824b7a3504f343da171054dd0ebf5cce1a18d608eb32",
+      "width": 128
+    },
+    {
+      "height": 64,
+      "id": "classic-16bit",
+      "inputs": "bbc43723119474bf0e646af99c63cb50537e90ef5dc54463e25a87ed371e24aa",
+      "kind": "look",
+      "path": "thumbnails/looks/classic-16bit.webp",
+      "sha256": "aa8bfbdd5bf434608ca62efac808ac43d8ccd11a41e4cbcbe5124a3bf321ccf5",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "gameboy-4",
+      "inputs": "9abf6e716252a9e756892cac1aee7bfc730dd3f7feead0508ecf4ea1469bd093",
+      "kind": "look",
+      "path": "thumbnails/looks/gameboy-4.webp",
+      "sha256": "72b28f760e200e6dc7caf10ebba7764dfbb3bfee4cb673d734eefdcd94254eb5",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "hi-bit",
+      "inputs": "cec24469c67f2e32f4faf3474f43d2960b581c7d604a027978544ed033af36ab",
+      "kind": "look",
+      "path": "thumbnails/looks/hi-bit.webp",
+      "sha256": "9183fe71286a182f782d67eac97591c1d476c66d4a59a9eb4ffd8e49bd11cfbe",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "nes-like",
+      "inputs": "d3bb70014ce63ecb95df18eff08b0f2c4e77f08c34f8aa4fb5845e169c3c9f80",
+      "kind": "look",
+      "path": "thumbnails/looks/nes-like.webp",
+      "sha256": "dd5c0b67a8330086d33c0ea491f5b3aa52601c76d6460859f570e0c95b969d89",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "athletic",
+      "inputs": "8b2aa90b985db07878670c547329e13523dec860ab240a3acc41901c8388484a",
+      "kind": "shape",
+      "path": "thumbnails/shapes/chibi/athletic.webp",
+      "sha256": "1c785c778552cf233c7e7ae1b958bce791e766bf7c8393bb4ca9648f53611ec8",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "average",
+      "inputs": "d37f4620954b14f1726d8128f8b758fa0eb4ddb6340e41b1438b96020cf93cba",
+      "kind": "shape",
+      "path": "thumbnails/shapes/chibi/average.webp",
+      "sha256": "8bd0475b576cd689ba185aa087410db268328be8a9a91d16c0937c215d428111",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "petite",
+      "inputs": "f710bc0eefff5155b7bdfbaeb9e866be55f758e943fd9db0ac792b70e011e86d",
+      "kind": "shape",
+      "path": "thumbnails/shapes/chibi/petite.webp",
+      "sha256": "9ab5e830a7e25d9bbaf3f95c64ba8d6a93341a7897400504008e6c37c55b968e",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "slim",
+      "inputs": "fef1d6a6e00b93d78e3723aabf82aab1259163885d7617a72379ab75b6496d4b",
+      "kind": "shape",
+      "path": "thumbnails/shapes/chibi/slim.webp",
+      "sha256": "7a524c980d5ad5f5dfd77add057c5faa0d8466d5d00db82f5045b0b131a796a7",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "stocky",
+      "inputs": "c176455761ebd43b4adc6341c3ef681b3ef75ebce5b5ae2e153c9d7a06017de3",
+      "kind": "shape",
+      "path": "thumbnails/shapes/chibi/stocky.webp",
+      "sha256": "cfec761fed546a04aea9f9f55c817a986075400eb941bef8ae6d81167b0f2171",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "tall",
+      "inputs": "5a5f1f81288a74577b2296c55a642f8305406319bb872ead5b1b4b4ee3a444f5",
+      "kind": "shape",
+      "path": "thumbnails/shapes/chibi/tall.webp",
+      "sha256": "5b9ae2588c898e7c798edef46f6ff75268a69e2140c46a7ffcb1755b03953a98",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "athletic",
+      "inputs": "f7a57175700fe9abcfa658744d467d1e087379cf86f34924f2238585ba15e275",
+      "kind": "shape",
+      "path": "thumbnails/shapes/realistic/athletic.webp",
+      "sha256": "1410ec87b7067198b34b056d5869f6badef8c364bd293e6a2330ecc5ae475bd7",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "average",
+      "inputs": "a446f2e5746f72f73e117ba7aa79d4ea8cb17513bada7759546c059654b8af2c",
+      "kind": "shape",
+      "path": "thumbnails/shapes/realistic/average.webp",
+      "sha256": "506e4a0b270a956623efdeb81ce006053b7cbdd45d733f72ebd764f9979c77a7",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "petite",
+      "inputs": "9af87fe301f240219206c1346754b35a044e88c5a74dd160775d20abb4a57c1b",
+      "kind": "shape",
+      "path": "thumbnails/shapes/realistic/petite.webp",
+      "sha256": "7cb1a7c8cdbb95383b66336e8493db9487426b4a4f491ffa9df62e7d6f48166f",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "slim",
+      "inputs": "ac95879c1217001300d385b3c04ffb59f8b5145fad28593898ddf94425dfab9f",
+      "kind": "shape",
+      "path": "thumbnails/shapes/realistic/slim.webp",
+      "sha256": "6447fac3e81ae9f2a3dc4576a85d562fd565739111a7f8a3ca94063cafd186e6",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "stocky",
+      "inputs": "a8a28315d8a273cf17062825ad12acb702bb9b55a223b07d0b7b472d5c178525",
+      "kind": "shape",
+      "path": "thumbnails/shapes/realistic/stocky.webp",
+      "sha256": "b3e2adf385d60ec851eb5fb8b8c2e7a459c16a6223e17214a8b40a6e8003805e",
+      "width": 64
+    },
+    {
+      "height": 64,
+      "id": "tall",
+      "inputs": "d9513a037a8ebe084806e28d5970cb06ef128d66c7f30b89a27083a75dc28100",
+      "kind": "shape",
+      "path": "thumbnails/shapes/realistic/tall.webp",
+      "sha256": "76c7645f24c2966e2105c29c4bc4bbd41ef6501b79ab4e5e24725b37b361ebe1",
+      "width": 64
+    },
+    {
+      "height": 128,
+      "id": "superhero-f",
+      "inputs": "f183035ee249589c271b7be57250bbafda0cab69fcf2d81ad3248e925e1bc778",
+      "kind": "part",
+      "path": "thumbnails/superhero-f.webp",
+      "sha256": "84c4534070ca173f864db6b641eb9df9d2f719dfc46bfe58f1b3f029fee2ae8b",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "superhero-m",
+      "inputs": "10b1c6ce65f9e378e869a2a53ed22d02265ecd5e4006c14ea6769d7604ea9f42",
+      "kind": "part",
+      "path": "thumbnails/superhero-m.webp",
+      "sha256": "d8586fdaef71d8c7a1aca2aaa44d75f6d1dee7820a51dd4827d1ae5c41a49f8c",
+      "width": 128
+    }
+  ],
+  "version": 1
+}

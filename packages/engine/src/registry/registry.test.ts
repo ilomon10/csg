@@ -203,6 +203,36 @@ describe('registry: compatibility (REQ-CMP-008)', () => {
     ).toEqual({ok: true});
   });
 
+  it('AC-CMP-008.4: a part restricted with bodies [superhero-m] is incompatible with superhero-f (reason body) and compatible with superhero-m', () => {
+    const m = part({id: 'superhero-m', slot: 'body', bodyType: 'superhero'});
+    const f = part({id: 'superhero-f', slot: 'body', bodyType: 'superhero'});
+    const torso = part({id: 'male-ranger-torso', bodies: ['superhero-m']});
+    expect(checkCompatibility(torso, f)).toEqual({ok: false, reason: 'body'});
+    expect(checkCompatibility(torso, m)).toEqual({ok: true});
+  });
+
+  it('AC-CMP-008.5: differing skeletonGroup on the same rig without bodies/bodyTypes restriction is compatible', () => {
+    const body = part({
+      id: 'superhero-m',
+      slot: 'body',
+      skeletonGroup: 'superhero-m',
+    });
+    const outfit = part({id: 'female-outfit', skeletonGroup: 'female'});
+    expect(checkCompatibility(outfit, body)).toEqual({ok: true});
+  });
+
+  it('AC-CMP-008.6: rig mismatch is reported before the bodies restriction', () => {
+    const outfit = part({
+      id: 'o',
+      rig: 'other-rig',
+      bodies: ['superhero-f'],
+    });
+    expect(checkCompatibility(outfit, BODY_A)).toEqual({
+      ok: false,
+      reason: 'rig',
+    });
+  });
+
   it('REQ-CMP-008/REQ-CMP-037: a fixture-b (g-b) part on a fixture-a (g-a) body stays compatible (bind pose does not affect compatibility)', () => {
     const shirt = part({id: 'shirt', skeletonGroup: 'fixture-b'});
     expect(checkCompatibility(shirt, BODY_A)).toEqual({ok: true});

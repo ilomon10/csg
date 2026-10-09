@@ -12,7 +12,10 @@
  *
  * where `base` is the world scale of the nearest non-bone ancestor of the joint
  * (the character container, outside anatomy), so anatomy scales of the joint
- * and its ancestors never leak into props that do not inherit scale.
+ * and its ancestors never leak into props that do not inherit scale, and
+ * `anatomy(joint)` is the joint's uniform anatomy world factor (the product of
+ * `height`, `head`, `hands` and `feet` over the joint and its ancestors,
+ * REQ-ANA-007 as amended in FX-CHIBI), never a parent-relative scale.
  */
 import {Euler, MathUtils, Matrix4, Quaternion, Vector3} from 'three';
 import type {Bone, Object3D} from 'three';
@@ -198,12 +201,12 @@ function nearestNonBoneAncestor(bone: Bone): Object3D | null {
 /**
  * Places one socketed prop (REQ-ANA-007): the prop takes its joint's world
  * position and orientation; its scale is the character's base scale times the
- * joint's anatomy scale (`scales.get(joint)`) only where the binding inherits
- * scale. Expects the bone's `matrixWorld` to be current. Writes the object's
+ * joint's uniform anatomy world factor (`scales.get(joint)`, from
+ * `anatomyUniformScales`) only where the binding inherits scale. Expects the bone's `matrixWorld` to be current. Writes the object's
  * local `matrix` and `matrixWorld`.
  *
  * @param object A prop wrapper registered with {@link bindSocketedProp}.
- * @param scales Anatomy scales by joint name.
+ * @param scales Uniform anatomy world factors by joint name.
  * @returns False when `object` is not a socketed prop.
  */
 export function placeSocketedProp(

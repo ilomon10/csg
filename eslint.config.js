@@ -2,6 +2,8 @@
 // docs/architecture.md section 1.2 and 4.9. Every local override below is deliberate.
 import {readdirSync} from 'node:fs';
 import {createRequire} from 'node:module';
+import {dirname, resolve, sep} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {defineConfig} from 'eslint/config';
 import {createTypeScriptImportResolver} from 'eslint-import-resolver-typescript';
 import importX from 'eslint-plugin-import-x';
@@ -44,16 +46,77 @@ const ANY_CSG = {
 const ENGINE_TOOLS_MSG =
   'Import DOM-free engine modules (@csg/engine/rig, /retarget), not the barrel.';
 
+const GLOBAL_KEY_TARGETS = new Set([
+  'window',
+  'document',
+  'globalThis',
+  'self',
+]);
+
+/**
+ * True for a receiver that sees every key press: `window`, `document`, `globalThis`, `self`,
+ * `document.body` and `document.documentElement`. Widget-local listeners on an element are not
+ * global shortcuts and stay allowed (REQ-UX-011, AC-UX-011.1).
+ */
+function isGlobalTarget(node) {
+  if (node.type === 'Identifier') return GLOBAL_KEY_TARGETS.has(node.name);
+  return (
+    node.type === 'MemberExpression' &&
+    node.object.type === 'Identifier' &&
+    node.object.name === 'document' &&
+    ['body', 'documentElement'].includes(node.property.name)
+  );
+}
+
+const PARTS_SCHEMA_SRC =
+  resolve(
+    fileURLToPath(new URL('./packages/parts-schema/src', import.meta.url)),
+  ) + sep;
+
 /** Local rules. */
 const csgPlugin = {
   rules: {
+    // Zod runs jitless: `zod-config` must be the first import of the parts-schema barrel, so
+    // everything outside the package goes through `@csg/parts-schema` and never into `src/`.
+    'no-parts-schema-deep-import': {
+      meta: {
+        type: 'problem',
+        schema: [],
+        messages: {
+          deep: 'Import from the @csg/parts-schema barrel, not its src/ files: Zod jitless relies on the barrel loading zod-config first.',
+        },
+      },
+      create: context => {
+        const check = node => {
+          const source = node.source;
+          if (source?.type !== 'Literal' || typeof source.value !== 'string') {
+            return;
+          }
+          const value = source.value;
+          const bare = /^@csg\/parts-schema\/src(\/|$)/.test(value);
+          const relative =
+            value.startsWith('.') &&
+            (resolve(dirname(context.filename), value) + sep).startsWith(
+              PARTS_SCHEMA_SRC,
+            );
+          if (bare || relative)
+            context.report({node: source, messageId: 'deep'});
+        };
+        return {
+          ImportDeclaration: check,
+          ExportAllDeclaration: check,
+          ExportNamedDeclaration: check,
+          ImportExpression: node => check({source: node.source}),
+        };
+      },
+    },
     'no-keydown-listener': {
       meta: {
-        type: 'suggestion',
+        type: 'problem',
         schema: [],
         messages: {
           keydown:
-            'Register shortcuts in src/shared/shortcuts instead of adding keydown listeners.',
+            'Register shortcuts in src/shared/shortcuts instead of adding a global keydown listener (REQ-UX-011).',
         },
       },
       create: context => ({
@@ -61,11 +124,14 @@ const csgPlugin = {
           const callee = node.callee;
           const first = node.arguments[0];
           if (
-            callee.type === 'MemberExpression' &&
-            callee.property.name === 'addEventListener' &&
-            first?.type === 'Literal' &&
-            first.value === 'keydown'
+            callee.type !== 'MemberExpression' ||
+            callee.property.name !== 'addEventListener' ||
+            first?.type !== 'Literal' ||
+            first.value !== 'keydown'
           ) {
+            return;
+          }
+          if (isGlobalTarget(callee.object)) {
             context.report({node, messageId: 'keydown'});
           }
         },
@@ -282,6 +348,32 @@ export default defineConfig([
     },
   },
   {
+    // `@csg/engine/catalog` is loaded before the engine chunk (REQ-UX-083): no three (not even
+    // types), React, DOM or other workspace package; relative imports only reach the three-free
+    // registry modules and the contract types.
+    files: ['packages/engine/src/catalog/**/*.{ts,tsx}'],
+    ignores: ['packages/engine/src/catalog/**/*.test.{ts,tsx}'],
+    rules: {
+      ...restrict(
+        THREE,
+        REACT,
+        APPS,
+        {
+          group: ['@csg/**', '!@csg/parts-schema'],
+          message: 'engine/catalog may import only @csg/parts-schema.',
+        },
+        {
+          // Any parent-relative path except the three allowed targets.
+          regex:
+            '^\\.\\./(?!(registry/(compatibility|manifest-json)|contracts/[^/]+)$)',
+          message:
+            'engine/catalog may import only registry/compatibility, registry/manifest-json and contracts/* types.',
+        },
+      ),
+      'no-restricted-globals': ['error', ...DOM_GLOBALS],
+    },
+  },
+  {
     // Rule 7: engine export/ is DOM-free and three-free (pure encoders over pixel buffers).
     files: ['packages/engine/src/export/**/*.{ts,tsx}'],
     rules: {
@@ -377,7 +469,14 @@ export default defineConfig([
     files: ['apps/web/src/**/*.{ts,tsx}'],
     ignores: ['apps/web/src/shared/shortcuts/**'],
     plugins: {csg: csgPlugin},
-    rules: {'csg/no-keydown-listener': 'warn'},
+    rules: {'csg/no-keydown-listener': 'error'},
+  },
+  {
+    // Deep imports into parts-schema/src break the Zod jitless bootstrap (see the local rule).
+    files: ['**/*.{ts,tsx,js,mjs}'],
+    ignores: ['packages/parts-schema/**'],
+    plugins: {csg: csgPlugin},
+    rules: {'csg/no-parts-schema-deep-import': 'error'},
   },
   {
     files: ['**/*.test.{ts,tsx}', 'apps/web/e2e/**'],

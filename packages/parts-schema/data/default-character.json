@@ -3,9 +3,11 @@
   "version": 1,
   "character": {
     "format": "sprite-character",
-    "version": 1,
+    "version": 2,
     "name": "New character",
     "seed": 0,
+    "style": "realistic",
+    "species": "human",
     "body": {"ref": "builtin:quaternius-ubc/superhero-m"},
     "parts": {
       "hair": {"ref": "builtin:quaternius-ubc/hair-simple-parted"},

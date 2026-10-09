@@ -1,0 +1,18 @@
+{
+  "format": "sprite-anatomy-preset",
+  "version": 1,
+  "id": "chibi",
+  "label": "Chibi",
+  "recommendedPx": [32, 64],
+  "values": {
+    "height": 0.85,
+    "head": 1.8,
+    "torsoWidth": 1.1,
+    "shoulders": 0.9,
+    "armLength": 0.75,
+    "legLength": 0.7,
+    "hands": 1.4,
+    "feet": 1.4,
+    "limbThickness": 1.4
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "format": "sprite-easy-category",
+  "version": 1,
+  "id": "colors",
+  "labelKey": "ux.easy.colors",
+  "icon": "swatches",
+  "slots": [],
+  "tintChannels": [
+    "skin",
+    "hair",
+    "eyes",
+    "primary",
+    "secondary",
+    "metal",
+    "leather"
+  ],
+  "anatomyPresets": false
+}

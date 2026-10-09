@@ -27,4 +27,18 @@ describe('AC-AST-016.1 texture budget stage', () => {
       doc.getRoot().listMaterials()[0]?.getMetallicRoughnessTexture(),
     ).not.toBeNull();
   });
+  it('AC-AST-010.4: five textures give four: the normal map is removed, base color and emissive are kept, and AST_TEXTURES_DROPPED names the part with before 5 and after 4', () => {
+    const doc = docWith(5);
+    const [warning, ...rest] = enforceTextureBudget(doc, {partId: 'boots'});
+    expect(rest).toEqual([]);
+    expect(warning?.code).toBe('AST_TEXTURES_DROPPED');
+    expect(warning?.message).toContain('boots');
+    expect(warning?.details).toMatchObject({before: 5, after: 4});
+    const mat = doc.getRoot().listMaterials()[0];
+    expect(mat?.getNormalTexture()).toBeNull();
+    expect(mat?.getBaseColorTexture()).not.toBeNull();
+    expect(mat?.getEmissiveTexture()).not.toBeNull();
+    expect(mat?.getOcclusionTexture()).not.toBeNull();
+    expect(mat?.getMetallicRoughnessTexture()).not.toBeNull();
+  });
 });

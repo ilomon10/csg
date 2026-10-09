@@ -67,7 +67,7 @@ This spec covers the clip library (data), choosing clips for export, determinist
 
 - **AC-ANM-004.1** Given `idle` and `walk` selected, When settings are serialized, Then `animations` holds two entries in selection order, each with manifest defaults for `frameCount`, `fps` and `loop`.
 - **AC-ANM-004.2** Given 32 clips selected, When the user tries to add a 33rd, Then the add control is disabled with the text "Maximum 32 animations per export".
-- **AC-ANM-004.3** Given the selection list, When the user reorders with keyboard (Alt+Up/Down) or drag, Then `animations` order changes and the change is one undo step (spec 009).
+- **AC-ANM-004.3** Given the selection list, When the user reorders with keyboard (Alt+Up/Down) or drag, Then `animations` order changes and the change is one undo step (spec 009). *(Note 2026-10-09, PM decision: Alt+Up/Down is a list-local widget key, handled inside the list widget while focus is on a list item and allowed by spec 009 AC-UX-011.1 like arrows in grids; it is not a registry chord and is listed under "List-local reordering keys" next to spec 009's Default shortcuts table, not in the table itself. Spec 006 REQ-EDT-030 (Blackboard) uses the same pattern.)*
 
 **REQ-ANM-005 [P1]** THE SYSTEM SHALL validate per-clip settings: `frameCount` integer 1–64, `fps` integer 1–60, `range` within `[0, durationSec]` with `start < end`.
 
@@ -147,6 +147,8 @@ This spec covers the clip library (data), choosing clips for export, determinist
 
 - **AC-ANM-018.1** Given "Show export frames" on and the preview paused on frame 3, When the export of that clip's frame 3 (same direction) is rendered, Then the preview canvas and the exported cell are pixel-identical at scale 1.
 - **AC-ANM-018.2** Given "Show export frames" off, When playing, Then wall-clock time drives the preview, and the export output is unchanged (P-04: wall clock only in `play()`).
+- **AC-ANM-018.3** Given "Show export frames" on and a clip selection with `pingPong` (baked or not, REQ-ANM-010) and N = 8 frames, When playing, Then the preview cycles frames `0…7` then `6…1` and repeats, matching the exported frame order. *(Added 2026-10-10 (PM): the preview shows exactly the exported frames, ping-pong included.)*
+- **AC-ANM-018.4** Given "Show export frames" on, a clip whose `fps` differs from N/D, and the preview paused, When the user seeks to frame 7 of 8 and resumes, Then playback continues 7, 8, 1 (no skipped or repeated frame). *(Added 2026-10-10 (PM).)*
 
 **REQ-ANM-019 [P1]** WHERE the user prefers reduced motion THE SYSTEM SHALL not autoplay the preview, and SHALL show the first sampled frame with a visible Play control.
 

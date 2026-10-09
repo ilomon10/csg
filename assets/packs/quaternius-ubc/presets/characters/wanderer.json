@@ -1,0 +1,62 @@
+{
+  "format": "sprite-character-preset",
+  "version": 1,
+  "id": "wanderer",
+  "name": "Wanderer",
+  "character": {
+    "format": "sprite-character",
+    "version": 2,
+    "name": "Wanderer",
+    "seed": 102,
+    "style": "realistic",
+    "species": "human",
+    "body": {
+      "ref": "builtin:quaternius-ubc/superhero-f"
+    },
+    "parts": {
+      "hair": {
+        "ref": "builtin:quaternius-ubc/hair-long"
+      },
+      "eyebrows": {
+        "ref": "builtin:quaternius-ubc/eyebrows-female"
+      },
+      "torso": {
+        "ref": "builtin:quaternius-outfits/female-ranger-torso"
+      },
+      "arms": {
+        "ref": "builtin:quaternius-outfits/female-ranger-arms"
+      },
+      "legs": {
+        "ref": "builtin:quaternius-outfits/female-ranger-legs"
+      },
+      "feet": {
+        "ref": "builtin:quaternius-outfits/female-ranger-boots"
+      },
+      "accessory": {
+        "ref": "builtin:quaternius-outfits/female-ranger-pauldrons"
+      }
+    },
+    "anatomy": {
+      "height": 1,
+      "head": 1,
+      "torsoWidth": 1,
+      "shoulders": 1,
+      "armLength": 1,
+      "legLength": 1,
+      "hands": 1,
+      "feet": 1,
+      "limbThickness": 1
+    },
+    "morphs": {},
+    "tints": {
+      "skin": "#f5dcc8",
+      "hair": "#8a3b1e",
+      "eyes": "#ffffff",
+      "primary": "#ffffff",
+      "secondary": "#ffffff",
+      "metal": "#ffffff",
+      "leather": "#ffffff"
+    }
+  },
+  "camera": "three-quarter"
+}

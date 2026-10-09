@@ -23,6 +23,15 @@ import {enforceTextureBudget} from './lib/build/textures.js';
 import {writeRegions} from './lib/build/region.js';
 import {classifySkeleton} from './lib/build/skeleton.js';
 import {BuildError} from './lib/build/types.js';
+import {computeSoleOffsets, SoleRangeError} from './lib/build/sole.js';
+import type {SoleSource} from './lib/build/sole.js';
+import {
+  listBuiltPacks,
+  readBuiltSoleSources,
+  refreshEmbeddedRigs,
+  writeRigSoleOffsets,
+} from './lib/build/sole-io.js';
+import {emitPresets} from './lib/build/presets.js';
 import type {
   BuildContext,
   BuildWarning,
@@ -77,13 +86,7 @@ export function parseArgs(
   return o;
 }
 
-/** Per-file size cap and total cap of `assets/packs` (plan §5 R1). */
-/**
- * Texture sides used for bundled output, below the REQ-AST-010 maxima (1024 / 512) to keep the
- * repo within the 30 MB budget (plan §5 R1); sprites are rendered at pixel-art resolution.
- */
-const BODY_TEXTURE_PX = 512;
-const PART_TEXTURE_PX = 256;
+/** Per-file size cap of `assets/packs` (plan §5 R1). */
 const MAX_FILE_BYTES = 3 * 1024 * 1024;
 
 async function loadRig(root: string, rigId: string): Promise<RigDefinition> {
@@ -233,6 +236,12 @@ export async function runBuildDetailed(
   };
   const lines: string[] = [];
   const stats: BuildResult['packs'] = [];
+  const pending: Array<{
+    pack: LoadedPack;
+    rig: RigDefinition;
+    parts: BuiltPartInput[];
+    clips: BuiltClipInput[];
+  }> = [];
   for (const pack of packs) {
     const [check] = await checkSources([pack], ctx.srcRoot);
     const rig = await loadRig(opts.root, pack.config.rig);
@@ -271,7 +280,6 @@ export async function runBuildDetailed(
         const isBody = item.config.slot === 'body';
         await optimizeDocument(doc, {
           kind: isBody ? 'body' : 'part',
-          maxTextureSize: isBody ? BODY_TEXTURE_PX : PART_TEXTURE_PX,
         });
         parts.push({
           id: item.id,
@@ -310,14 +318,7 @@ export async function runBuildDetailed(
         });
       }
     }
-    const emitted = await emitPack({
-      outRoot: ctx.outRoot,
-      config: pack.config,
-      rig,
-      parts,
-      clips,
-    });
-    void emitted;
+    pending.push({pack, rig, parts, clips});
     const bytes = [...parts, ...clips].reduce(
       (n, f) => n + f.bytes.byteLength,
       0,
@@ -331,6 +332,85 @@ export async function runBuildDetailed(
     lines.push(
       `${pack.packId}: source ${check?.status}, ${parts.length} parts, ${clips.length} clips, ${bytes} GLB bytes`,
     );
+  }
+
+  // REQ-AST-030: measure the sole offsets after the GLBs exist and before any manifest is
+  // written, over every built pack that uses the rig (also under --pack).
+  const builtIds = new Set(pending.map(p => p.pack.packId));
+  const rigsById = new Map<string, RigDefinition>();
+  for (const p of pending) rigsById.set(p.rig.id, p.rig);
+  const computed = new Map<
+    string,
+    {rig: RigDefinition; offsets: Map<string, number>}
+  >();
+  const measured = new Map<string, {rig: RigDefinition; changed: boolean}>();
+  for (const [rigId, rig] of [...rigsById].sort(([a], [b]) =>
+    a < b ? -1 : 1,
+  )) {
+    const sources: SoleSource[] = [];
+    for (const p of pending) {
+      if (p.rig.id !== rigId) continue;
+      const byId = new Map(p.parts.map(part => [part.id, part]));
+      for (const cfg of p.pack.config.parts) {
+        const built = byId.get(cfg.id);
+        if (built === undefined || built.kind !== 'skinned') continue;
+        if (cfg.slot !== 'body' && cfg.slot !== 'feet') continue;
+        sources.push({
+          packId: p.pack.packId,
+          entry: {
+            id: cfg.id,
+            slot: cfg.slot,
+            kind: built.kind,
+            rig: rigId,
+            skeletonGroup: built.skeletonGroup,
+            characterSkeletonGroup: cfg.characterSkeletonGroup,
+            bodyType: cfg.bodyType,
+            bodies: cfg.bodies,
+            bodyTypes: cfg.bodyTypes,
+          },
+          bytes: built.bytes,
+        });
+      }
+    }
+    sources.push(...(await readBuiltSoleSources(ctx.outRoot, rigId, builtIds)));
+    try {
+      const sole = await computeSoleOffsets(rig, sources);
+      ctx.warnings.push(...sole.warnings);
+      computed.set(rigId, {rig, offsets: sole.offsets});
+      for (const g of sole.groups) {
+        lines.push(
+          `sole offset ${rigId}/${g.groupId}: ${sole.offsets.get(g.groupId)} m`,
+        );
+      }
+    } catch (e) {
+      if (e instanceof SoleRangeError)
+        throw new BuildError('AST_SOLE_OFFSET_RANGE', e.message, 1);
+      throw e;
+    }
+  }
+  for (const [rigId, {rig, offsets}] of computed) {
+    measured.set(rigId, await writeRigSoleOffsets(opts.root, rig, offsets));
+  }
+  for (const p of pending) {
+    const rig = measured.get(p.rig.id)?.rig ?? p.rig;
+    await emitPack({
+      outRoot: ctx.outRoot,
+      config: p.pack.config,
+      rig,
+      parts: p.parts,
+      clips: p.clips,
+    });
+    await emitPresets({
+      root: opts.root,
+      outRoot: ctx.outRoot,
+      packId: p.pack.packId,
+    });
+  }
+  for (const [, {rig}] of measured) {
+    const others = (await listBuiltPacks(ctx.outRoot)).filter(
+      id => !builtIds.has(id),
+    );
+    await refreshEmbeddedRigs(ctx.outRoot, rig, others);
   }
   lines.push(...summarizeWarnings(ctx.warnings));
   return {summary: lines.join('\n'), warnings: ctx.warnings, packs: stats};

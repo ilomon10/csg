@@ -175,9 +175,10 @@ export function normalizeDocument(
     const dm = decompose(m);
     const s = Math.cbrt(Math.abs(dm.scale[0] * dm.scale[1] * dm.scale[2]));
     if (Math.max(...dm.scale.map(v => Math.abs(v - s))) > 1e-4 * s) {
+      const armature = parent && !joints.has(parent) ? parent : r;
       warnings.push({
         code: 'AST_NORMALIZE_NONUNIFORM',
-        message: `Armature of "${r.getName()}" has a non-uniform scale; the mean scale was baked.`,
+        message: `Armature "${armature.getName()}" (root joint "${r.getName()}") has a non-uniform scale; the mean scale was baked.`,
       });
     }
     rootCorrection.set(r, {m, q: dm.rotation, s});

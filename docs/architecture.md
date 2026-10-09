@@ -636,12 +636,23 @@ export interface PartSelection {
 }
 
 /** Spec 001 Data & contracts. Clip selection is NOT part of the character (see RenderSettings). */
+/** Spec 001 REQ-CMP-038/040: closed sets, never coerced. */
+export type CharacterStyle = 'realistic' | 'chibi' | 'stickman' | 'voxel';
+export type CharacterSpecies = 'human' | 'animal' | 'monster';
+/** REQ-CMP-041: -1.00..1.00 in 0.01 steps; kept on round trip, rendered from M3.5. */
+export interface BodyComposition {
+  weight: number;
+  muscle: number;
+}
+
 export interface CharacterSpec {
   format: 'sprite-character';
-  version: 1;
+  version: 2; // v1 -> v2 by CHARACTER_MIGRATIONS[1]: style 'realistic', species 'human' (REQ-CMP-039)
   name: string; // 1..64 chars
   /** uint32 seed used by randomize (mulberry32); stored so a result is reproducible. */
   seed: number;
+  style: CharacterStyle; // added in v2
+  species: CharacterSpecies; // added in v2
   /** The body part defines the skeleton. Always present (CMP_BODY_MISSING). */
   body: PartSelection;
   /** Keys are non-body SlotIds in registry order; absent key = empty slot. */
@@ -651,8 +662,18 @@ export interface CharacterSpec {
   morphs: Record<string, number>;
   /** All 7 tint slots required. */
   tints: Record<TintSlot, HexColor>;
+  composition?: BodyComposition; // added in v2; absent = {0, 0}; omitted from canonical JSON when both 0
   face?: {decal: AssetRef | null; offsetPx: [number, number]};
 }
+
+/**
+ * `canonicalCharacterJson(spec, indent = 2)`: keys `format, version, name, seed, style, species,
+ * body, parts (slot-registry order), anatomy, morphs, tints`, then `composition`, `face`.
+ * `CHARACTER_MIGRATIONS` entry N upgrades vN to vN+1 and runs on any container's `character`
+ * by its own version (REQ-CMP-049). `PartEntry` gains `styles?` and `species?` (REQ-CMP-048).
+ * `availableStyleCombos` (parts-schema) and `SUPPORTED_STYLE_COMBOS`, `resolveRenderPair`
+ * (`@csg/engine/catalog`, three-free) implement REQ-CMP-043/045.
+ */
 
 /**
  * Clip reference (spec 004). Bundled: `builtin:<packId>/<clipId>`.
@@ -699,10 +720,23 @@ export interface ProjectDocument {
   character: CharacterSpec;
   render: RenderSettings;
   export: ExportSettings;
-  /** Embedded (user-edited) graphs keyed by id; built-ins are referenced by 'builtin:' ids. */
-  graphs: Record<string, ShaderGraphDocument>;
+  /**
+   * Embedded (user-edited) graphs keyed by id; built-ins are referenced by 'builtin:' ids.
+   * Opaque in `@csg/parts-schema` until M4, which validates entries with `@csg/shader-graph`
+   * in the web layer (parts-schema may not import it).
+   */
+  graphs: Record<string, unknown>;
 }
 ```
+
+`parseProjectDocument` rejects forbidden keys, runs the wrapper migrations (`PROJECT_MIGRATIONS`,
+empty at v1), then the `character` migration chain by the character's own version (REQ-CMP-049),
+and fails with `UX_PROJECT_INVALID`, `CMP_SPEC_INVALID` or `CMP_BODY_MISSING`. Text above
+`MAX_PROJECT_JSON_BYTES` (1 MiB) is rejected. `canonicalProjectJson` (compact; character in
+canonical order, other members key-sorted) is the `projectSha256` input. Preset data files
+(`AnatomyPreset`, `BodyShapePreset`, `StyleDefinition`, `EasyCategoryDef`, `SwatchSetDef`,
+`CharacterPreset`, `LookPreset`, `presets/index.json`) have Zod schemas in `presets.ts`;
+`applyBodyShape` is the integer-arithmetic rule of REQ-ANA-023.
 
 Persistence and sharing: canonical JSON (keys in schema order, `parts` in registry order) for save
 and share (spec 001 refinement 5). Character share links use `#c=<base64url(deflate-raw(json))>`
@@ -816,9 +850,15 @@ export interface ExportSettings {
   pngColorType: 'rgba' | 'indexed';
   enginePreset: 'none' | 'godot4' | 'phaser3' | 'unity' | 'tiled';
   previews: {gif: boolean; apng: boolean; scale: 1 | 2 | 4 | 8};
+  /** Spec 012 `LightingMapSettings`; absent = no maps. */
+  maps?: LightingMapSettings;
   includeCredits: true; // always true; CREDITS.txt is mandatory
 }
 ```
+
+`parseExportSettings` fills defaults (grid-by-animation, clip-major, `scales` `[1]`,
+`aseprite-json`, `rgba`, previews off at scale 2) and fails with `EXP_INVALID_SETTINGS` and the
+failing paths (empty, duplicate or unsorted `scales`; `paddingPx < 2 * extrudePx`).
 
 `ExportContext`, `ExportProgress`, `SpriteSheetExport` and `SpriteExportManifest` are in §3.6.
 
@@ -1074,9 +1114,9 @@ export const evaluatePose: (context: PoseContext, timeSec: number) => void;
 
 M1 `CharacterRenderer` implements `backend`, `setCharacter`, `play`, `pause`, `seek`,
 `setDirection` (yaw per `DIRECTION_ORDER`, `e` = screen-right, AC-PIX-005.1) and `dispose`; the
-other members of §3.6.2 do not exist yet. Known M1 limits: tinting mutates the registry's cached
-part scenes (one renderer per registry), and per-part tint overrides, morphs and `alsoOccupies`
-are not applied (M3). Registry user-asset methods throw `not implemented (M5)`.
+other members of §3.6.2 do not exist yet. The M1 limits on tinting, per-part tint overrides and
+`alsoOccupies` are closed in M3 (§3.6.4). Morph targets are not applied yet. Registry user-asset
+methods throw `not implemented (M5)`.
 
 Engine-level lifecycle error: `ENGINE_DISPOSED` (exported from `composition/character-assembly.ts`)
 is returned as a `Result` error, never thrown, by `setCharacter`, `setClip` and `playClip` when
@@ -1147,7 +1187,7 @@ export interface RenderedFrame {
   pixels: Uint8ClampedArray;
 }
 
-/** Pure; no three.js. Runs in a worker (spec 005). Rejects with EXP_CANCELLED on abort. */
+/** M1 sketch; the M3 signature and result are in §3.6.4. Pure; no three.js. Runs in a worker (spec 005). */
 export function exportSpriteSheet(
   frames: RenderedFrame[],
   settings: ExportSettings,
@@ -1177,7 +1217,7 @@ export interface ExportProgress {
 }
 
 export interface SpriteSheetExport {
-  /** Sorted by name; names per spec 005 file-name table. The UI zips them. */
+  /** Sorted by name; names per spec 005 file-name table. M3 adds `zip` and `zipName` (§3.6.4). */
   files: Array<{name: string; mime: string; bytes: Uint8Array}>;
   warnings: Array<{
     code:
@@ -1486,6 +1526,88 @@ loop are restored. `busy` is `true` while the lock is held, and `draw()` does no
 the previous palette until the new one is ready (AC-PIX-021.2).
 
 The preview viewport in `apps/web/src/app/preview-session.ts` uses the new `resize` signature.
+
+#### 3.6.4 What M3 adds (renderer notices, view modes, per-assembly materials, styles, export)
+
+Landed with M3-05 (graphics-engineer) and M3-09 (exporter). Spec refs: 001 REQ-CMP-007, 015, 043 to 048; 009 REQ-UX-003, 039; 005 REQ-EXP-011, 017, 018, 025; 002 REQ-ANA-008. Sources: `contracts/renderer.ts`, `renderer/character-renderer.ts`, `contracts/registry.ts`, `composition/character-assembly.ts`, `anatomy/apply.ts`, `export/`.
+
+**Renderer surface.** The `CharacterRenderer` contract and `RendererOptions` gain:
+
+```ts
+type ViewMode = 'pixel' | '3d';                       // default 'pixel'
+type EngineNotice = StyleUnsupportedNotice;           // code 'CMP_STYLE_UNSUPPORTED' (the only one in M3)
+interface RendererOptions {                           // + settings?, onNotice?
+  onNotice?(notice: EngineNotice, active: boolean): void;
+}
+interface CharacterRenderer {                         // + the members below
+  readonly notices: readonly EngineNotice[];          // active notices, in raise order
+  readonly viewMode: ViewMode;
+  setViewMode(mode: ViewMode): void;                  // 'pixel': cell-sized buffer; '3d': orbit view at the viewport's device resolution
+  orbit(dYawDeg: number, dPitchDeg: number): void;    // yaw about +Y, pitch clamped to ±85 degrees; no clock
+  frameCharacter(): void;                             // target = centre of the bounds, distance fits the bounding sphere; yaw and pitch kept
+}
+// EngineCharacterRenderer (renderer/character-renderer.ts) also exposes:
+//   readonly orbitState: OrbitState;   readonly renderPair: RenderPair | null;
+```
+
+- `onNotice(n, true)` fires when a notice is raised, and `onNotice(n, false)` when it clears. Both run synchronously inside the `setCharacter` call that changes them, so a notice clears before the next frame (AC-CMP-043.3). `onNotice` is never called after `dispose()`.
+- An unavailable (style, species) pair renders with the fallback pair (`realistic`/`human` in the worst case). The stored values are not changed. The fallback is a notice, never an error (REQ-CMP-043).
+- `prepareFrames` and `renderFrames` refuse an unavailable pair with `CMP_STYLE_UNSUPPORTED` and render nothing (REQ-CMP-044). `renderFrames` throws it as a `FrameSamplerError`.
+- Orbit and frame calls draw nothing until `3d` is shown. `pixel` mode and export are unchanged.
+
+**Per-assembly materials.** `createCharacterAssembly` builds one material per attached part clone from the part's original material. The registry's cached part scenes are never re-materialed. Two renderers that share one registry keep their own tints, which closes the M1 limit in §3.6.1. Per-part tint overrides (`PartSelection.tints`, REQ-CMP-015) and `alsoOccupies` (REQ-CMP-007) are applied. Morph targets are still not applied.
+
+**Grounding (REQ-ANA-008, amended in M3-00).** Pipeline step 4 places the feet soles at y = 0:
+
+`groundOffsetY = −jointMinY(A) + soleOffsetM(G) × height × feet`
+
+`jointMinY(A)` is the lowest world Y of the feet joints on the character skeleton's rest pose, with the anatomy scales applied. `soleOffsetM(G)` is `rig.skeletonGroups[G].soleOffsetM`, and 0 when the field is absent. The computation is joint-only: no mesh vertex is read.
+
+**Styles and species.**
+
+- `EngineAssetRegistry.registerStyles(defs: StyleDefinition[])` records the style data files. `availableStyleCombos()` returns the pairs of `SUPPORTED_STYLE_COMBOS` that have content in the loaded packs (REQ-CMP-045). Until the first `registerStyles` call it returns `SUPPORTED_STYLE_COMBOS` unfiltered, and every registration resets the memo.
+- `@csg/engine/catalog` is three-free and DOM-free. It exports `SUPPORTED_STYLE_COMBOS`, `resolveRenderPair`, `checkCompatibility`, `parsePartManifestJson` and `parseClipManifestJson`.
+- `checkCompatibility` adds rule (d) `style` and rule (e) `species`, after rules (a) to (c) (REQ-CMP-048).
+
+**Export (`packages/engine/src/export/`, pure; `export.worker` is the worker entry).**
+
+```ts
+export function exportSpriteSheet(
+  frames: readonly RenderedFrame[], settings: ExportSettings, context: ExportContext,
+  options?: {signal?: AbortSignal; onProgress?: (p: ExportProgress) => void},
+): Promise<Result<SpriteSheetExport, EngineError>>;   // throws ExportError EXP_CANCELLED on abort
+export interface SpriteSheetExport {
+  files: ExportFile[];      // {name, mime, bytes}, sorted by name (code-unit order)
+  warnings: ExportWarning[]; // LICENSE_*, EXP_LARGE_TEXTURE, EXP_EMPTY_FRAMES, PIX_FRAMING_CLIPPED, ...
+  zipName: string;          // `<base>.zip` (REQ-EXP-016, 017)
+  zip: Uint8Array;          // every file of `files`, written by the in-house ZIP writer (REQ-EXP-018)
+}
+export interface ExportContext {
+  render: ExportRenderInfo; // the fields the exporter reads: resolution, directions, singleFacing, mirrorWest, animations
+  projectSha256: string; characterName: string;
+  credits: ReadonlyArray<{ref: string; kind: 'body' | 'part' | 'clip' | 'decal' | 'palette'; license: AssetLicense}>;
+  build: {appVersion: string; threeVersion: string; backend: 'webgpu' | 'webgl2'};
+  pivotPx: readonly [number, number];
+}
+```
+
+- `planExport` (`plan.ts`) and `checkExportSettings` refuse a request before rendering, with `EXP_TOO_LARGE` or `EXP_INVALID_SETTINGS`. The limits are `EXPORT_LIMITS` in `types.ts`: 8192 px per side, 4096 px large-texture warning, 4096 frames and 512 MiB (REQ-EXP-025).
+- `createExportWorkerClient({createWorker})` (`worker-client.ts`) validates every reply against `worker-protocol.ts`. The host creates the worker from `@csg/engine/export.worker`, and the engine never constructs a `Worker` itself (REQ-GEN-014).
+- The barrel `@csg/engine` re-exports `./export`. The `catalog` entry point is a subpath, not part of the barrel, so it stays free of three.js.
+
+### 3.7 M3 contract locations (planned, M3-A 2026-10-09)
+
+| Contract | Location | Spec |
+|----------|----------|------|
+| `CharacterSpec` v2, `CHARACTER_MIGRATIONS[1]`, `ExportSettings`, `ProjectDocument` v1 (`graphs` passthrough until M4), preset schemas, `applyBodyShape`, `availableStyleCombos` | `packages/parts-schema/src/` | 001 REQ-CMP-038..049, 005, 002 REQ-ANA-013/022..024, 014 |
+| `@csg/engine/catalog` (three- and DOM-free): `checkCompatibility`, manifest JSON parsing, `SUPPORTED_STYLE_COMBOS`, `resolveRenderPair` | `packages/engine/src/catalog/` | 001 REQ-CMP-008/043/045/048 |
+| Exporters (pure) and `@csg/engine/export.worker` (host-created via `csg-worker-url`) | `packages/engine/src/export/` | 005, 000 REQ-GEN-014/015 |
+| Document store, history, `CharacterTarget`, character commands | `apps/web/src/shared/document/` | 009 REQ-UX-022..024, 014 REQ-UX-051/052 |
+| Shortcut and command registry, dispatcher | `apps/web/src/shared/shortcuts/` | 009 REQ-UX-011..020 |
+| `ViewRoute` parse/format; router | `apps/web/src/shared/routing/`; `apps/web/src/app/shell/` | 009 REQ-UX-048, 014 REQ-UX-069/070 |
+| IndexedDB `csg` repositories, autosave, prefs v2, recovery, `TabMessage` | `apps/web/src/shared/persistence/` | 009 REQ-UX-025..030/045/047/050, 014 REQ-UX-082 |
+| Pre-engine catalog (manifests, presets, availability) | `apps/web/src/shared/catalog/` | 014 REQ-UX-060/083/092 |
+| `CharacterViewport`, `EngineHost` (one renderer lease), `HomeFrameService` | `apps/web/src/app/viewport/`, `apps/web/src/app/home-frames/` | 009 REQ-UX-003/039, 014 REQ-UX-057..059/080..084 |
 
 ## 4. Cross-cutting concerns
 
@@ -1900,7 +2022,8 @@ preference falls back to its default individually.
 |-----------|---------|---------------|
 | **M1** Asset spike + engine core | `tools/verify-rig.ts` (bone names, hierarchy, bind poses across UBC, Outfits, Animation Library); asset build (`gltf-transform`, spec 011); `@csg/parts-schema` v1 incl. slot registry, rigs and clip manifests; built-in manifests; engine: renderer creation with fallback, registry, loaders, rebinding, hides, anatomy with child compensation, animation playback; unlit test page | Spike report committed: shared skeleton confirmed, or per-pack retarget map defined (fallback: KayKit Adventurers). A fixture `CharacterSpec` renders with an animation on both backends. **Outcome (2026-10-09):** spike `mapped`, resolved by skeleton groups + runtime retargeting (ADR-0008); three Quaternius packs built; preview renders the default character with idle/walk on WebGPU and WebGL2 (E2E, §4.7 caveat). |
 | **M2** Pixel pipeline | Low-res RT, toon ramp (material), screen-space rim (post), MRT pass, outline (depth/normal/partId), palette LUT, Bayer dither, alpha cutoff, texel snapping, camera presets, directions, frame sampler | Golden images for side, 3/4, isometric at 32/64/128 px pass on WebGPU and WebGL2; determinism test passes. Post stages are implemented as functions with the same shape as node emitters so M4 can wrap them. **Status (2026-10-09):** pipeline, stages, framing and sampler implemented and GPU-tested on both backends in the canonical container (ADR-0009); default look approved by the user (D2); renderer wiring (M2-17), golden matrix frozen on both backends (M2-18), P-07 budgets met on the reference machine (M2-19: export 0.64–0.79 s, settings rebuild 88–116 ms, 60 fps preview, initial JS 104.6 kB gz) and the web preview (M2-20) done; review fix wave and final QA (M2-24) in progress. |
-| **M3** Composer UI + export | apps/web shell (single history, shortcut registry), part picker, anatomy sliders, tints, animation picker, look panel, randomize, save/load, URL share, sprite sheet + metadata + CREDITS export, license warnings | E2E: compose, randomize, export a sheet; binding budgets in 4.3 met for preview and export. |
+| **M3** Composer UI + export | apps/web shell (fragment views `#home`/`#new`/`#p=<id>`, single history, shortcut registry, command palette, IndexedDB autosave and recovery, prefs v2), home lineup from pre-rendered idle frames, 8-step new-character wizard, Easy and Pro workspaces over one `ProjectDocument`, part picker and option tiles, anatomy presets and body shapes, tints and swatches, Realistic/Chibi styles (`CharacterSpec` v2, `SUPPORTED_STYLE_COMBOS`), animation picker and timeline, Look panel over typed render settings, randomize, save/load, `#c=` share, sprite sheet + Aseprite JSON + manifest + CREDITS export in a worker, license warnings, ground-contact fix (issue #10). Plan: `.tagconn/work/m3-plan.md` | E2E: compose, randomize, export a sheet; home and wizard paint without the engine chunk (AC-UX-083.1); keyboard-only flow (AC-UX-101.1) and zero axe violations (AC-UX-102.1); binding budgets in 4.3 met for preview and export; AC-PIX-008.1 passes. **Status (2026-10-10):** implemented and verified: lint, typecheck, unit (1503), e2e (185, both backends), GPU goldens 0 px (231), bundle/CSP gates, site build. Deferred: graph canvas/safe mode to M4 (AC-UX-037.2, 049.x), Phaser load check (AC-EXP-010.1), timeline cell sprites, chibi clip exclusion review (content, later). |
+| **M3.5** Styles & species | Stickman and voxel styles, body composition (weight, muscle) as a CPU bind-space bake, animal and monster species (species heads cut at asset build, tails, procedural ears and paws), socket and slot `tail`; `SUPPORTED_STYLE_COMBOS` grows to the 8 spec 013 pairs; gating rule unchanged (REQ-CMP-045) | Spec 013 P1 ACs met; each pair passes REQ-STY-029 before it joins `SUPPORTED_STYLE_COMBOS`; per-backend goldens for every new pair. Depends on M3 (v2 schema, wizard, gating). Planned, not started. |
 | **M4** Shader graph | Graph model, schema, migrations, compiler to TSL, built-in material/post graphs as documents (output identical to M2 goldens), React Flow editor, search popup, groups, reroutes, frames, blackboard, previews, undo/redo via the shared history, copy/paste, presets | Default graphs reproduce M2 goldens pixel-exact; param slider updates without recompile; compile errors shown on nodes. |
 | **M5** Custom upload | Worker analysis, validator, budgets, VRM, FBX/OBJ beta, bone map presets + auto-map + manual mapping UI (extending the M1 retargeter), static prop gizmo, OPFS/IndexedDB storage, licensing UX | Mixamo and VRM fixtures retarget built-in clips without visible twisting (golden images); malicious fixture suite rejected; no network requests during upload (E2E asserts). |
 | **M6** 2D lighting maps | Auxiliary maps from the same single scene render: normal map (`_n`) and albedo (unlit) colour sheet, with their metadata (spec 012). Planned: `ExportSettings.maps?: LightingMapSettings` (spec 005). Later: mask, specular, UV lookup (P2); depth, emission, options (P3) | Spec 012 P1 acceptance criteria met. Depends on M3 export; independent of M4 and M5. Planned, not started (spec 012 is draft). |
@@ -1948,7 +2071,7 @@ preference falls back to its default individually.
 | Risk | Mitigation |
 |------|-----------|
 | ~~Quaternius packs may not share one 65-joint skeleton with identical bind poses~~ Resolved by the M1 spike: shared names and hierarchy, four bind-pose groups (outcome `mapped`) | Skeleton groups + runtime retargeting (ADR-0008); fallback for visible `superhero-m` seams: leg-only rebake of that mesh |
-| Residual shear on rotated-rest bones under anatomy scaling (about 0.5–0.7 %) | Accepted for M1; revisit if visible in M2 goldens (AC-ANA-006.1 golden) |
+| ~~Residual shear on rotated-rest bones under anatomy scaling (about 0.5–0.7 %)~~ Resolved in M3: the diagonal compensation sheared far more on the Quaternius rig (foot 70° from the calf: chibi feet stretched 1.9×, knees and arms sheared) | Segment-scale compensation: `Bone.scale` carries only the uniform propagating factors; the compensated factors scale each joint's skin through its inverse bind matrices (`applyAnatomyToSkins`) and its children's joint offsets, never a child's frame (spec 002 REQ-ANA-003, AC-ANA-003.4) |
 | TSL / RenderPipeline API changes between three releases | Exact pin; upgrade PRs with goldens on both backends; r186 workarounds re-checked, node-frame lookup throws if internals move (ADR-0009 §6) |
 | WebGL2 fallback differences (Firefox/Linux quirks) | Per-backend goldens; Firefox E2E on WebGL2; `pick` instead of `select` over texture fetches; `EXT_color_buffer_float` detected at pipeline creation (`PIX_BACKEND_UNAVAILABLE`) |
 | ~~CI runners without a GPU adapter (SwiftShader reports `webgpu` but renders blank)~~ Resolved for engine GPU and golden tests by the M2-02 spike: SwiftShader WebGPU renders deterministically in the pinned container with `--enable-unsafe-webgpu` | Canonical container (ADR-0009); harness fails on a wrong backend or adapter; `apps/web` E2E skip on software adapters re-checked in M2-20 (§4.7) |

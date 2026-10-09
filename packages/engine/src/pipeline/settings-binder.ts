@@ -345,6 +345,46 @@ export function isUniformOnly(diff: RenderSettingsDiff): boolean {
   return !diff.post && !diff.material && !diff.resize && !diff.reframe;
 }
 
+/** Appends `path=value` for every leaf whose change would rebuild the post chain. */
+function collectPostLeaves(value: unknown, path: string, out: string[]): void {
+  const classes = rulesFor(path);
+  const post = classes === undefined || classes.includes('post');
+  if (typeof value === 'object' && value !== null) {
+    const keys = Object.keys(value).sort();
+    // The shape itself (array length, empty object) is structural too.
+    if (post)
+      out.push(`${path}${Array.isArray(value) ? '[]' : '{}'}${keys.length}`);
+    for (const key of keys) {
+      collectPostLeaves(
+        (value as Record<string, unknown>)[key],
+        path === '' ? key : `${path}.${key}`,
+        out,
+      );
+    }
+    return;
+  }
+  if (value !== undefined && post) {
+    out.push(`${path}=${JSON.stringify(value)}`);
+  }
+}
+
+/**
+ * The structure of the post chain that `settings` compile to (REQ-PIX-034):
+ * a string built from every field whose change sets `diff.post` in
+ * {@link diffRenderSettings} (the `post` rules and the fields without a rule),
+ * plus whether a palette is active. Two settings with the same key compile to
+ * the same post node, so a compiled chain can be reused for them; uniform,
+ * palette, resize and reframe fields never enter the key.
+ *
+ * @param settings - Validated settings.
+ * @returns A deterministic key.
+ */
+export function postStructureKey(settings: RenderSettings): string {
+  const out: string[] = [`paletteOn=${settings.palette.id !== 'none'}`];
+  collectPostLeaves(settings, '', out);
+  return out.join('\n');
+}
+
 type AnyUniform = UniformNode<string, unknown>;
 
 /** One registered uniform. */

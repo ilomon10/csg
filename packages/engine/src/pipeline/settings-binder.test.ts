@@ -18,6 +18,7 @@ import {
   diffRenderSettings,
   isUniformOnly,
   lightDirection,
+  postStructureKey,
   reservedUniformValues,
   toonThresholds,
 } from './settings-binder';
@@ -264,6 +265,27 @@ describe('diffRenderSettings (REQ-PIX-034, m2-plan 2.7)', () => {
         fallback: false,
       });
     }
+  });
+
+  it('AC-PIX-034.2: postStructureKey changes exactly when diff.post is set, for every settings leaf', () => {
+    const full = settings({
+      camera: {preset: 'custom'},
+      toon: {thresholds: [0.3, 0.6]},
+      outline: {color: '#102030'},
+      palette: {id: 'custom', colors: ['#ffffff']},
+    });
+    const key = postStructureKey(full);
+    expect(postStructureKey(structuredClone(full))).toBe(key);
+    for (const path of leafPaths(full)) {
+      const next = setLeaf(full, path);
+      expect({
+        path,
+        keyChanged: postStructureKey(next) !== key,
+      }).toEqual({path, keyChanged: diffRenderSettings(full, next).post});
+    }
+    const none = {...full, palette: {...full.palette, id: 'none' as const}};
+    expect(diffRenderSettings(full, none).post).toBe(true);
+    expect(postStructureKey(none)).not.toBe(key);
   });
 
   it('classifies uniform-only changes', () => {

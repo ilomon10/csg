@@ -6,6 +6,9 @@ import type {AnimationClip, Group} from 'three';
 import type {
   AssetLicense,
   AssetRef,
+  CharacterSpec,
+  CharacterSpecies,
+  CharacterStyle,
   ClipEntry,
   ClipManifest,
   ClipRef,
@@ -15,6 +18,7 @@ import type {
   RigId,
   SkeletonGroupId,
   SlotId,
+  StyleDefinition,
 } from '@csg/parts-schema';
 import type {RestPose} from '../retarget/types';
 import type {EngineError, Result} from './errors';
@@ -31,8 +35,18 @@ export type ClipEntryView = ClipEntry & {
   readonly source: 'builtin' | 'user';
 };
 
-/** Reason a part does not fit a body (REQ-CMP-008). */
-export type IncompatibleReason = 'rig' | 'body' | 'body-type';
+/**
+ * Reason a part does not fit a character: rules (a)-(c) of REQ-CMP-008 and
+ * (d) style, (e) species of REQ-CMP-048.
+ */
+export type IncompatibleReason =
+  'rig' | 'body' | 'body-type' | 'style' | 'species';
+
+/** The (style, species) of a character, as compatibility rules (d)/(e) read it (REQ-CMP-048). */
+export type CharacterKind = Pick<CharacterSpec, 'style' | 'species'>;
+
+/** A (style, species) pair (REQ-CMP-043/045). */
+export type StyleCombo = readonly [CharacterStyle, CharacterSpecies];
 
 /** Result of {@link CompatibilityCheck}. */
 export type Compatibility =
@@ -40,13 +54,16 @@ export type Compatibility =
   | {readonly ok: false; readonly reason: IncompatibleReason};
 
 /**
- * Compatibility of a part with a body (REQ-CMP-008). A skinned part whose
- * `skeletonGroup` differs from the character skeleton group is NOT incompatible
- * on that basis (REQ-CMP-037): each mesh keeps its own inverse bind matrices.
+ * Compatibility of a part with a body (REQ-CMP-008) and, when `character` is
+ * given, with the character's style and species (REQ-CMP-048 rules (d), (e),
+ * checked after (a)-(c)). A skinned part whose `skeletonGroup` differs from
+ * the character skeleton group is NOT incompatible on that basis
+ * (REQ-CMP-037): each mesh keeps its own inverse bind matrices.
  */
 export type CompatibilityCheck = (
   part: PartEntry,
   body: PartEntry,
+  character?: CharacterKind,
 ) => Compatibility;
 
 /** A part GLB loaded by the registry; internals are three.js objects. */
@@ -103,6 +120,21 @@ export interface AssetRegistry {
   licenseOf(ref: AssetRef | ClipRef): AssetLicense;
   /** Rig of a registered part or clip, or `undefined` when unknown. */
   rigOf(ref: AssetRef | ClipRef): RigDefinition | undefined;
+  /**
+   * Registers the style data files of the loaded packs
+   * (`presets/styles/<style>.json`, spec 002 REQ-ANA-024). A later file for
+   * the same style replaces the earlier one. The first call turns on content
+   * gating of {@link availableStyleCombos} (REQ-CMP-045 condition 2).
+   */
+  registerStyles(defs: readonly StyleDefinition[]): void;
+  /**
+   * The (style, species) pairs that are available: in
+   * `SUPPORTED_STYLE_COMBOS` and provided by the loaded content
+   * (`availableStyleCombos` of `@csg/parts-schema`, REQ-CMP-043/045). Before
+   * the first {@link registerStyles} call no content is known and the result
+   * is `SUPPORTED_STYLE_COMBOS` unchanged. Deterministic: supported-list order.
+   */
+  availableStyleCombos(): readonly StyleCombo[];
 }
 
 /**

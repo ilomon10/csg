@@ -1,0 +1,64 @@
+{
+  "format": "sprite-swatch-set",
+  "version": 1,
+  "id": "general",
+  "channels": ["primary", "secondary", "metal", "leather"],
+  "swatches": [
+    {
+      "hex": "#ffffff",
+      "nameKey": "ux.swatch.general.white"
+    },
+    {
+      "hex": "#b3262e",
+      "nameKey": "ux.swatch.general.crimson"
+    },
+    {
+      "hex": "#e07a1f",
+      "nameKey": "ux.swatch.general.orange"
+    },
+    {
+      "hex": "#e8b923",
+      "nameKey": "ux.swatch.general.gold"
+    },
+    {
+      "hex": "#6bb83a",
+      "nameKey": "ux.swatch.general.lime-green"
+    },
+    {
+      "hex": "#2f6b3c",
+      "nameKey": "ux.swatch.general.forest-green"
+    },
+    {
+      "hex": "#1f8a8a",
+      "nameKey": "ux.swatch.general.teal"
+    },
+    {
+      "hex": "#4aa3e0",
+      "nameKey": "ux.swatch.general.sky-blue"
+    },
+    {
+      "hex": "#1f3a7a",
+      "nameKey": "ux.swatch.general.navy"
+    },
+    {
+      "hex": "#7a4fb3",
+      "nameKey": "ux.swatch.general.violet"
+    },
+    {
+      "hex": "#e0709a",
+      "nameKey": "ux.swatch.general.pink"
+    },
+    {
+      "hex": "#6b4a2f",
+      "nameKey": "ux.swatch.general.brown"
+    },
+    {
+      "hex": "#3a3a40",
+      "nameKey": "ux.swatch.general.charcoal"
+    },
+    {
+      "hex": "#b8bcc4",
+      "nameKey": "ux.swatch.general.silver"
+    }
+  ]
+}

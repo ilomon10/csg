@@ -1,0 +1,18 @@
+{
+  "format": "sprite-body-shape-preset",
+  "version": 1,
+  "id": "athletic",
+  "label": "ux.shape.athletic",
+  "order": 30,
+  "factors": {
+    "height": 1.02,
+    "head": 1,
+    "torsoWidth": 1.05,
+    "shoulders": 1.15,
+    "armLength": 1,
+    "legLength": 1.03,
+    "hands": 1,
+    "feet": 1,
+    "limbThickness": 1.1
+  }
+}

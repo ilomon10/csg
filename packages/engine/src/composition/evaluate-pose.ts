@@ -7,8 +7,9 @@
  * 6) skinning, which the renderer does when it draws.
  */
 import {
-  applyAnatomy,
+  anatomyUniformScales,
   applyAnatomyToPose,
+  applyAnatomyToSkins,
   computeGroundOffset,
   resetBodyToRest,
 } from '../anatomy/apply';
@@ -27,9 +28,13 @@ import {updateSockets} from './sockets';
  * - Step 2: the root-motion policy is part of the clip the player holds:
  *   `in-place` clips are stripped (or replaced by their in-place variant) once
  *   at `setClip`, so there is nothing to do per frame.
- * - Step 3: `applyAnatomyToPose`.
+ * - Step 3: `applyAnatomyToPose`, then `applyAnatomyToSkins` (the
+ *   compensated factors scale each joint's skin through its inverse bind
+ *   matrices; rewritten only when the anatomy values change).
  * - Step 4: `body.root.position.y` is set to the cached bind-pose ground offset.
- * - Step 5: `updateSockets` refreshes world matrices and places the props.
+ * - Step 5: `updateSockets` refreshes world matrices and places the props;
+ *   a prop that inherits scale takes its joint's uniform anatomy world
+ *   factor (`anatomyUniformScales`, REQ-ANA-007), which includes `height`.
  *
  * Deterministic: no wall clock, no randomness (P-04). Allocates nothing once
  * the anatomy parameters have been evaluated (the anatomy module caches per
@@ -44,6 +49,7 @@ export const evaluatePose: EvaluatePose = (context, timeSec) => {
   player.seek(timeSec); // 1
   // 2: applied at setClip (see TSDoc).
   applyAnatomyToPose(anatomy, params); // 3
+  applyAnatomyToSkins(anatomy, params, body.root); // 3: own-frame skin scales
   body.root.position.y = computeGroundOffset(anatomy, params); // 4
-  updateSockets(body, props, applyAnatomy(anatomy, params)); // 5
+  updateSockets(body, props, anatomyUniformScales(anatomy, params)); // 5
 };

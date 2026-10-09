@@ -1,6 +1,6 @@
 import {resolve} from 'node:path';
 import {ESLint} from 'eslint';
-import {describe, expect, it} from 'vitest';
+import {beforeAll, describe, expect, it} from 'vitest';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 /** An existing worker path (so the type-aware project service accepts it); the text is virtual so the `**\/*.worker.{ts,tsx}` override applies. */
@@ -32,6 +32,12 @@ const BANNED: ReadonlyArray<[string, string]> = [
 ];
 
 describe('worker-hygiene lint rule', () => {
+  // The first type-aware lint builds the TypeScript program (several seconds on a busy machine);
+  // pay that once here so each test measures only its own lint call.
+  beforeAll(async () => {
+    await lint('export {};\n');
+  }, 120_000);
+
   for (const [name, line] of BANNED) {
     it(`AC-GEN-015.1: ${name} in a *.worker.ts file reports an error on its line`, async () => {
       const messages = await lint(`export {};\n${line}\n`);

@@ -20,12 +20,11 @@ test('AC-GEN-007.3: on a cold load the engine chunk is requested after first con
       }
     }).observe({type: 'paint', buffered: true});
   });
-  await page.goto('/');
-  await expect(page.locator('.preview-stage')).toHaveAttribute(
-    'data-status',
-    'ready',
-    {timeout: 60_000},
-  );
+  await page.goto('/#home');
+  // The home lineup renders through the engine: the selected character animates once ready.
+  await expect(
+    page.locator('[data-testid="home-lineup"] canvas[data-animated]').first(),
+  ).toBeVisible({timeout: 90_000});
   const fcp = await page.evaluate(
     () => (window as unknown as {__fcp: number}).__fcp,
   );

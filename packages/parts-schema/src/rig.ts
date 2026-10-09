@@ -33,6 +33,23 @@ export type RestTransform = z.infer<typeof restTransformSchema>;
 export const skeletonGroupSchema = z.object({
   id: skeletonGroupIdSchema,
   restPose: z.record(jointNameSchema, restTransformSchema),
+  /**
+   * Metres from the lowest foot joint to the sole of the group's feet (spec 002 REQ-ANA-008,
+   * spec 011 REQ-AST-030). Finite, -0.1..0.1, a whole multiple of 0.0001; absent means 0.
+   * Written by `assets:verify-rig --write-canonical` (REQ-AST-034), never by hand.
+   */
+  soleOffsetM: z
+    .number()
+    .finite()
+    .min(-0.1)
+    .max(0.1)
+    .refine(
+      value => Math.abs(value * 10000 - Math.round(value * 10000)) < 1e-6,
+      {
+        error: 'must be a whole multiple of 0.0001',
+      },
+    )
+    .optional(),
 });
 
 /** Inferred type of {@link skeletonGroupSchema}. */

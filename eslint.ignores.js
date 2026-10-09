@@ -1,6 +1,7 @@
 // Shared ignore list for eslint.config.js (gts defaults plus build outputs).
 export const ignores = [
   '**/dist/',
+  '**/dist-e2e/',
   '**/coverage/',
   '**/node_modules/',
   '**/playwright-report/',

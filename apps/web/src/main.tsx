@@ -5,13 +5,15 @@ import './app/csp-setup';
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import {App} from './app/app';
+import {FramedNotice, isFramed} from './app/shell';
 
 const root = document.getElementById('root');
 if (!root) {
   throw new Error('Missing #root element');
 }
+// REQ-GEN-012: a framed editor renders only an "Open in a new tab" link and touches no storage.
 createRoot(root).render(
   <StrictMode>
-    <App />
+    {isFramed() ? <FramedNotice href={window.location.href} /> : <App />}
   </StrictMode>,
 );

@@ -1,0 +1,8 @@
+{
+  "format": "sprite-style",
+  "version": 1,
+  "style": "chibi",
+  "anatomyPreset": "chibi",
+  "excludedClips": [],
+  "reviewNote": "Initial exclusion list is empty: the M3 visual review of all 43 bundled clips at the chibi preset (AC-ANA-025.2) is not done yet. Candidates to check first: hit-head, idle-talking, pistol-aim-up, pistol-aim-neutral, pistol-reload, spell-simple-idle, swim-fwd, swim-idle. Each excluded clip needs a written reason."
+}

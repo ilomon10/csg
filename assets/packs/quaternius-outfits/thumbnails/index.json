@@ -1,0 +1,186 @@
+{
+  "format": "sprite-thumbnail-index",
+  "thumbnails": [
+    {
+      "height": 128,
+      "id": "female-peasant-arms",
+      "inputs": "0e7b5943d42319ad4febb833a2b8b2e8cae0fff785a690491d673d7ad9bb58e0",
+      "kind": "part",
+      "path": "thumbnails/female-peasant-arms.webp",
+      "sha256": "01a6cf63bf4d6f147c20e990afe5bbfb187455b030bf56f7980455133a15f47e",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "female-peasant-feet",
+      "inputs": "7893d82d730cde2c974ab7f352f6c658d998fcab3da7cf512372cc98c0bccb2a",
+      "kind": "part",
+      "path": "thumbnails/female-peasant-feet.webp",
+      "sha256": "6b8eb568a73edcd7aef9e1d1f7098d1fc9c9fb324c35edce9aea10ccd2e7087c",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "female-peasant-legs",
+      "inputs": "c34ff4c7502c69593edf5c225b58c10ebdc9be5b8a08114dceb42fcac25f4696",
+      "kind": "part",
+      "path": "thumbnails/female-peasant-legs.webp",
+      "sha256": "845576e2b14aff98613f3a7f0df886860013b04e90aa499f5d2a79d6995e94cc",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "female-peasant-torso",
+      "inputs": "06a6d9d34f361c7774fb8caaedd883e56c43691af5a3ccf241c5142c9ddbcb87",
+      "kind": "part",
+      "path": "thumbnails/female-peasant-torso.webp",
+      "sha256": "32c381144064dcc414b91b0ba15d7e92ae31b1e1b2b9be77b6954663cfac0ba6",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "female-ranger-arms",
+      "inputs": "13dcdee2fd08f4680543cee19d51405abfbf4e57003f8b9538b4b9b551d4f193",
+      "kind": "part",
+      "path": "thumbnails/female-ranger-arms.webp",
+      "sha256": "c5128bcea7bc55e966bcf956a341432781f31f10377188a4d9995e2efa6bcb52",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "female-ranger-boots",
+      "inputs": "4d9c2016b2eeb8e9552b6cb817a81f67051fdc3fb96ed7f18a20d8e25b4a8dfb",
+      "kind": "part",
+      "path": "thumbnails/female-ranger-boots.webp",
+      "sha256": "89f46edf49c08163f9f7ae4aceac5af25e479892e2e4e9ebc85abd4c84689a8d",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "female-ranger-hood",
+      "inputs": "20021909cf29739b5c3be5382518b125540d8241fe373a35d9b31d75aa2d8d16",
+      "kind": "part",
+      "path": "thumbnails/female-ranger-hood.webp",
+      "sha256": "d23880d28f35123a008e524e7180e32aa5ceaaf61bbdb8556c2f66260c5b7910",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "female-ranger-legs",
+      "inputs": "d19b4cb036591d3854ccc20a3afe5fd8c2dcc8a46562b2798d3a8362b570c6ba",
+      "kind": "part",
+      "path": "thumbnails/female-ranger-legs.webp",
+      "sha256": "54a0316bb6385a1e0569aee878f380564e2ac8499ba42c9511d53f66328b0669",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "female-ranger-pauldrons",
+      "inputs": "b830b152f410848541a13f7b48ae76d4cd226d5c1b0fae4124f5f484cc8e925a",
+      "kind": "part",
+      "path": "thumbnails/female-ranger-pauldrons.webp",
+      "sha256": "ea0f0e360e88976d9365339ef40746e59bdb48f2ce33918c972c0d677c6cce51",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "female-ranger-torso",
+      "inputs": "2288f4624acd4b7b1fe06162c5d86f278bfff5fe23d7cf247175cc5d76825993",
+      "kind": "part",
+      "path": "thumbnails/female-ranger-torso.webp",
+      "sha256": "e1d83b37bdf07bdf7c191ca5d75206a866d9e7baabe8ddb59f34dc809edf4096",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "male-peasant-arms",
+      "inputs": "c1e52c9cd3c9422949f26f442deddfa79451e8f08681c1b392adcde6bb2b08ca",
+      "kind": "part",
+      "path": "thumbnails/male-peasant-arms.webp",
+      "sha256": "7c5e98bb7a8018759a4b2883be66ac4b08e6f258c6b660c92c8005f8fd6be19e",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "male-peasant-feet",
+      "inputs": "c7d607b831f7bdf68d3c592b024df3f89279382e8f45fc020a9704d67e4721d2",
+      "kind": "part",
+      "path": "thumbnails/male-peasant-feet.webp",
+      "sha256": "0b28c21511a17a70cf8a2ba99a198af64c0349f283b759794a8a7fb4f1a855ea",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "male-peasant-legs",
+      "inputs": "9b4218178b487d2f492245e76b7c4e11e68f87f82ccba23da355493ce06bf25f",
+      "kind": "part",
+      "path": "thumbnails/male-peasant-legs.webp",
+      "sha256": "3212b022085935eb3d1a7819400e6aebb3c5dfe4040a4aace299ad45069361bf",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "male-peasant-torso",
+      "inputs": "1252905de1addcb8e717de549943f10810e9629d4f2e47280d1968c10da42bf3",
+      "kind": "part",
+      "path": "thumbnails/male-peasant-torso.webp",
+      "sha256": "c174e73bf7c9c6c5166a24e71b9eafc58fcea67ccfc7702dea399597c4bf33a2",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "male-ranger-arms",
+      "inputs": "af45814594e3a0227b815c30c9e5acdca1bcf40c2cd5d4a4a5242fe88b8ba9a7",
+      "kind": "part",
+      "path": "thumbnails/male-ranger-arms.webp",
+      "sha256": "eb7dfc5f7d8021fc411dfcf55e301f28717a828f4bd02afc55031397c754e94c",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "male-ranger-boots",
+      "inputs": "c91246a4cd9dde33e329d5bfa118e2fdd929da1a80beb66a0d5043486e791af3",
+      "kind": "part",
+      "path": "thumbnails/male-ranger-boots.webp",
+      "sha256": "303d1e6f748c75273f29ff973290b75fe2fe3909c3fe919339b2d3c48e4cab86",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "male-ranger-hood",
+      "inputs": "07ac04cc75d2bbfdf8ce575a99aca9e1057d8c326576eeb88a95dd78696b9125",
+      "kind": "part",
+      "path": "thumbnails/male-ranger-hood.webp",
+      "sha256": "01f2fe4936cf04c3ce4975e967b869bfe6b87dc1aa077273aa3e0f7e4e01e7f8",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "male-ranger-legs",
+      "inputs": "89553505a00360376df3221f42b94a2ab1228693833574e4a05d74b1da67b218",
+      "kind": "part",
+      "path": "thumbnails/male-ranger-legs.webp",
+      "sha256": "685c510a3cbf2d35b007d639782f3e6591416423cf3a38831c5e934f7e30c26d",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "male-ranger-pauldron",
+      "inputs": "86276d614840c7886bad2fcee08c7b5b7f86a0ab24474b3d3b407eea39d07da9",
+      "kind": "part",
+      "path": "thumbnails/male-ranger-pauldron.webp",
+      "sha256": "61f1b238f07072f33be3410408410e08304a1c2b28113fa4004375a3125d6f31",
+      "width": 128
+    },
+    {
+      "height": 128,
+      "id": "male-ranger-torso",
+      "inputs": "9b2e73e1079175df48cc876735fb8ddf8958ff529510455b149485ddd6fe1198",
+      "kind": "part",
+      "path": "thumbnails/male-ranger-torso.webp",
+      "sha256": "be6899d76a33961b0c9b18914535c77a8f47168e07a5a0a7c53be4fbcb99dffb",
+      "width": 128
+    }
+  ],
+  "version": 1
+}

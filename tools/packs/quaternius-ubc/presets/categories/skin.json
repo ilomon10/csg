@@ -1,0 +1,10 @@
+{
+  "format": "sprite-easy-category",
+  "version": 1,
+  "id": "skin",
+  "labelKey": "ux.easy.skin",
+  "icon": "palette",
+  "slots": [],
+  "tintChannels": ["skin"],
+  "anatomyPresets": false
+}

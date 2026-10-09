@@ -168,6 +168,24 @@ describe('rigDefinitionSchema', () => {
   });
 });
 
+describe('skeleton group soleOffsetM', () => {
+  it('AC-ANA-021.9: soleOffsetM accepts absent, 0 and 0.0213 and rejects out-of-range, off-grid and non-numbers', () => {
+    const soleIssues = (value: unknown) => {
+      const rig = makeRig();
+      (rig.skeletonGroups[0] as Record<string, unknown>)['soleOffsetM'] = value;
+      const result = rigDefinitionSchema.safeParse(rig);
+      return result.success
+        ? []
+        : result.error.issues.map(issue => issue.path.join('.'));
+    };
+    expect(rigDefinitionSchema.safeParse(makeRig()).success).toBe(true);
+    for (const ok of [0.0213, 0, -0.1, 0.1]) expect(soleIssues(ok)).toEqual([]);
+    for (const bad of [0.15, -0.2, 0.02134, Number.NaN, '0.02']) {
+      expect(soleIssues(bad)).toContain('skeletonGroups.0.soleOffsetM');
+    }
+  });
+});
+
 function paths(rig: unknown): string[] {
   const result = rigDefinitionSchema.safeParse(rig);
   return result.success ? [] : result.error.issues.map(i => i.path.join('.'));

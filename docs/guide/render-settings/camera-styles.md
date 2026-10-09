@@ -7,8 +7,7 @@ description: Choose a side, three-quarter or isometric camera, and understand ho
 
 The camera decides how your character looks from the outside. All three styles use a flat, orthographic projection. Nothing gets smaller with distance.
 
-> [!NOTE]
-> **Planned.** The camera controls are planned with the Render tab. The values on this page are the ones the pipeline uses.
+Set the camera in the **Render** tab of the Pro workspace. The values on this page are the ones the pipeline uses.
 
 ## Choose a camera
 

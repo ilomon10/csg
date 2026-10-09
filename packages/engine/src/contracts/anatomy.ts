@@ -32,7 +32,11 @@ export type ApplyAnatomy = (
   params: AnatomyParams,
 ) => AnatomyScales;
 
-/** Pipeline step 4: vertical offset that puts the feet on y = 0; bind pose, cached. */
+/**
+ * Pipeline step 4 (REQ-ANA-008): vertical offset that puts the sole on y = 0
+ * in the bind pose: the lowest feet joint, lowered by the character skeleton
+ * group's `soleOffsetM` scaled by `height × feet`. Joint-only, cached.
+ */
 export type ComputeGroundOffset = (
   binding: AnatomyBinding,
   params: AnatomyParams,

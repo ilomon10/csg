@@ -1,0 +1,131 @@
+{
+  "format": "sprite-project",
+  "version": 1,
+  "character": {
+    "format": "sprite-character",
+    "version": 1,
+    "name": "New character",
+    "seed": 0,
+    "body": {
+      "ref": "builtin:quaternius-ubc/superhero-m"
+    },
+    "parts": {
+      "hair": {
+        "ref": "builtin:quaternius-ubc/hair-simple-parted"
+      },
+      "eyebrows": {
+        "ref": "builtin:quaternius-ubc/eyebrows-regular"
+      },
+      "torso": {
+        "ref": "builtin:quaternius-outfits/male-ranger-torso"
+      },
+      "arms": {
+        "ref": "builtin:quaternius-outfits/male-ranger-arms"
+      },
+      "legs": {
+        "ref": "builtin:quaternius-outfits/male-ranger-legs"
+      },
+      "feet": {
+        "ref": "builtin:quaternius-outfits/male-ranger-boots"
+      }
+    },
+    "anatomy": {
+      "height": 1,
+      "head": 1,
+      "torsoWidth": 1,
+      "shoulders": 1,
+      "armLength": 1,
+      "legLength": 1,
+      "hands": 1,
+      "feet": 1,
+      "limbThickness": 1
+    },
+    "morphs": {},
+    "tints": {
+      "skin": "#ffffff",
+      "hair": "#7a4a26",
+      "eyes": "#ffffff",
+      "primary": "#ffffff",
+      "secondary": "#ffffff",
+      "metal": "#ffffff",
+      "leather": "#ffffff"
+    }
+  },
+  "render": {
+    "resolution": {
+      "width": 64,
+      "height": 64
+    },
+    "camera": {
+      "preset": "three-quarter",
+      "elevationDeg": 35,
+      "framing": "auto",
+      "pivotRowPx": 12
+    },
+    "directions": 8,
+    "singleFacing": "s",
+    "mirrorWest": false,
+    "animations": [],
+    "lighting": {
+      "azimuthDeg": 135,
+      "elevationDeg": 45,
+      "ambient": 0.1
+    },
+    "toon": {
+      "bands": 3,
+      "rim": {
+        "enabled": true,
+        "strength": 0.5
+      }
+    },
+    "outline": {
+      "outer": {
+        "enabled": true,
+        "widthPx": 1
+      },
+      "inner": {
+        "enabled": true,
+        "partId": true,
+        "depth": false,
+        "normal": false,
+        "depthThresholdPx": 4,
+        "normalThresholdDeg": 60,
+        "colorMode": "darken"
+      },
+      "colorMode": "black",
+      "darkenAmount": 0.6
+    },
+    "materialGraph": "builtin:material-toon",
+    "postGraph": "builtin:post-default",
+    "params": {},
+    "palette": {
+      "id": "none",
+      "metric": "oklab",
+      "dither": {
+        "mode": "none",
+        "strength": 0.5
+      }
+    },
+    "alphaCutoff": 0.5
+  },
+  "export": {
+    "layout": "grid-by-animation",
+    "rowOrder": "clip-major",
+    "maxColumns": null,
+    "scales": [1],
+    "paddingPx": 0,
+    "marginPx": 0,
+    "powerOfTwo": false,
+    "extrudePx": 0,
+    "metadata": "aseprite-json",
+    "pngColorType": "rgba",
+    "enginePreset": "none",
+    "previews": {
+      "gif": false,
+      "apng": false,
+      "scale": 2
+    },
+    "includeCredits": true
+  },
+  "graphs": {}
+}

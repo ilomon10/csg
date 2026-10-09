@@ -1,0 +1,19 @@
+{
+  "format": "sprite-easy-category",
+  "version": 1,
+  "id": "accessories",
+  "labelKey": "ux.easy.accessories",
+  "icon": "sword",
+  "slots": [
+    "accessory",
+    "back",
+    "hands",
+    "prop-main-hand",
+    "prop-off-hand"
+  ],
+  "tintChannels": [
+    "metal",
+    "leather"
+  ],
+  "anatomyPresets": false
+}

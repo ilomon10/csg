@@ -1,0 +1,188 @@
+/* Character viewport (REQ-UX-003, REQ-UX-057..059) and the preview lab. Tokens: shared/ui. */
+.cv {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  --cv-stage: var(--panel-sunk, #d9dde6);
+}
+.cv__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--cv-stage);
+  /* Horizontal drags turn the character; vertical panning stays with the page. */
+  touch-action: pan-y;
+  cursor: ew-resize;
+  outline-offset: -3px;
+}
+.cv__stage:focus-visible {
+  outline: 3px solid var(--focus, currentColor);
+}
+.cv__stage[data-dragging='true'] {
+  cursor: grabbing;
+}
+.cv__canvas,
+.preview-canvas {
+  display: block;
+  /* Engine drawing buffer = cell size; the session sets the integer-scaled CSS size. */
+  image-rendering: pixelated;
+  flex: none;
+}
+/* 3D view: the drawing buffer is the viewport at device pixels, so no pixelated upscale. */
+.cv__stage[data-view='3d'] {
+  cursor: grab;
+  touch-action: none;
+}
+.cv__stage[data-view='3d'][data-dragging='true'] {
+  cursor: grabbing;
+}
+.cv__stage[data-view='3d'] .cv__canvas,
+.preview-stage[data-view='3d'] .preview-canvas {
+  image-rendering: auto;
+}
+.cv__notice {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line, var(--edge));
+  pointer-events: none;
+}
+.cv__placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.cv__note,
+.preview-note {
+  position: absolute;
+  inset: auto 0 50% 0;
+  text-align: center;
+  color: var(--muted);
+  margin: 0;
+  pointer-events: none;
+}
+.cv__error,
+.preview-error {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--danger, #8a1c1c);
+  border: 2px solid var(--danger, #8a1c1c);
+}
+.cv__error button,
+.preview-error button {
+  font: inherit;
+  padding: 4px 10px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.cv__error button:focus-visible,
+.preview-error button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.cv__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--line, var(--edge));
+}
+.cv__group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.cv__readout {
+  min-width: 3.5ch;
+  text-align: center;
+  font-family: var(--font-mono, monospace);
+}
+.cv__clip-name {
+  color: var(--muted);
+}
+.cv__hint {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+/* Preview lab (dev harness, kept from M1). */
+.preview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+}
+.preview-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--panel-sunk, #d9dde6);
+  overflow: hidden;
+}
+.backend-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line, var(--edge));
+  font-size: 12px;
+}
+.preview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line, var(--edge));
+  background: var(--panel);
+}
+.preview-controls label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.preview-controls button,
+.preview-controls select {
+  font: inherit;
+  padding: 4px 10px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line, var(--edge));
+  border-radius: 4px;
+}
+.preview-controls button:focus-visible,
+.preview-controls select:focus-visible,
+.preview-controls input:focus-visible {
+  outline: 2px solid var(--focus, currentColor);
+  outline-offset: 2px;
+}

@@ -1,3 +1,4 @@
+import {existsSync} from 'node:fs';
 import {mkdir, readdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import type {PackConfig, RigDefinition} from '@csg/parts-schema';
@@ -6,8 +7,9 @@ import {buildClipManifest} from './clips-manifest.js';
 import type {BuiltClipInput} from './clips-manifest.js';
 import {buildPartManifest, sha256Hex} from './manifest.js';
 import type {BuiltPartInput} from './manifest.js';
+import {thumbnailFor} from '../thumbnails/register.js';
 
-/** A part to emit: manifest inputs plus the optional thumbnail bytes are not handled here. */
+/** A part to emit (the `thumbnail` field is filled from the pack's existing thumbnail files). */
 export type EmitPart = BuiltPartInput;
 /** A clip to emit. */
 export type EmitClip = BuiltClipInput;
@@ -50,17 +52,25 @@ export async function emitPack(args: {
   retiredIds?: readonly string[];
 }): Promise<EmitResult> {
   const {config} = args;
+  const packRoot = join(args.outRoot, config.packId);
+  // The computed `thumbnail` field follows the files of `pnpm assets:thumbnails` (AC-AST-015.1).
+  const parts = args.parts.map(part => ({
+    ...part,
+    thumbnail:
+      part.thumbnail ??
+      thumbnailFor(part.id, rel => existsSync(join(packRoot, rel))),
+  }));
   const manifest = buildPartManifest({
     config,
     rig: args.rig,
-    parts: args.parts,
+    parts,
   });
   const clipManifest =
     args.clips.length > 0 || config.clips.length > 0
       ? buildClipManifest({config, clips: args.clips})
       : undefined;
 
-  const packDir = join(args.outRoot, config.packId);
+  const packDir = packRoot;
   const files: EmittedFile[] = [];
   const write = async (rel: string, data: Uint8Array | string) => {
     await mkdir(join(packDir, rel, '..'), {recursive: true});

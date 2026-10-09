@@ -1,6 +1,6 @@
 ---
 title: Colors and tints
-description: Recolor skin, hair, eyes and outfits with seven tint slots, using hex values, color swatches and the active palette.
+description: Recolor skin, hair, eyes and outfits with seven tint channels, using Easy swatches or the Pro color picker with hex and HSV.
 ---
 
 # Colors and tints
@@ -19,22 +19,34 @@ A character has seven tints. Each tint recolors every part whose material is lin
 
 Changing a tint updates every equipped part at once. You do not reload the parts.
 
-## Change a tint
+## Change a tint in Easy
+
+1. Open the **Colors** category, or the category of the part you want to recolor.
+2. Choose a swatch in the row under the tiles. The row is labelled with the part name, for example "Color: Ponytail".
+3. Use the arrow keys to move through the swatches. Each check changes the color once.
+
+A run of quick presses on one swatch row is one undo step.
+
+If the color is not in the swatch set, Easy shows it as a **Custom** swatch named with its hex value. Choose **Edit in Pro** to change it exactly. See [Easy workspace](../getting-started/easy-workspace.md).
+
+## Change a tint in Pro
 
 1. Open the **Colors** tab in the inspector.
-2. Click a tint, such as **primary**.
-3. Pick a swatch, or type a hex color in the text field.
+2. Choose a tint, such as **primary**.
+3. Pick a color with the color picker. You can type a hex value, move the hue, saturation and value controls, or choose a swatch.
 
 Hex colors have six digits and start with `#`, for example `#3a5fcd`. Uppercase letters are accepted and saved in lowercase. A value such as `123456` or `#12G` is rejected, and the message tells you the format.
 
-<!-- TODO(screenshot): Colors tab with the color picker open on primary -->
+While you drag in the picker, the preview updates live. The whole drag is one undo step, recorded when you let go.
+
+<!-- TODO(screenshot): Pro Colors tab with the color picker open on primary -->
 
 ## Swatches
 
 The picker offers three kinds of swatches:
 
-- **Palette colors**, when a palette is active in the **Render** tab. Choosing one sets the tint to that exact color. This swatch group is planned with the Render tab.
-- **Skin tones**, **hair colors** and **general** swatches.
+- **Skin tones**, **hair colors** and **general** colors.
+- **Palette colors**, when a palette is active in the **Render** tab. Choosing one sets the tint to that exact color.
 
 ## How a tint is applied
 
@@ -47,11 +59,13 @@ In both modes, transparent areas of a part stay transparent. A material that is 
 
 ## Keyboard use
 
-Press `Enter` on a tint to open its picker. Move between swatches with the arrow keys. Each swatch announces its hex value. Press `Escape` to close the picker. Focus returns to the tint you opened it from.
+In Easy, move through a swatch row with the arrow keys and check a swatch with the same keys, as the radio pattern describes. Each swatch announces its name.
 
-> [!NOTE]
-> **Planned.** Dragging in the color picker updating the preview live, with one undo step at the end, and per-part tint overrides are planned for a later release.
+In Pro, press `Enter` on a tint to open its picker. Move between swatches with the arrow keys. Each swatch announces its hex value. Press `Escape` to close the picker. Focus returns to the tint you opened it from.
 
 <!-- spec: REQ-CMP-013 -->
 <!-- spec: REQ-CMP-014 -->
 <!-- spec: REQ-CMP-016 -->
+<!-- spec: REQ-CMP-017 -->
+<!-- spec: REQ-UX-062 -->
+<!-- spec: REQ-UX-055 -->

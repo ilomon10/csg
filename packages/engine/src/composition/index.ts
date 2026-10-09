@@ -7,12 +7,14 @@
 export type {
   AttachSkinnedOptions,
   AttachSkinnedPart,
+  AttachStaticOptions,
   AttachStaticPart,
   AttachedPart,
   ApplyTintMaterial,
   BodySkeleton,
   CreateBodySkeleton,
   CreateTintUniforms,
+  MaterialLinker,
   RegionMask,
   RegionMaskOf,
   TintUniforms,
@@ -34,9 +36,16 @@ export {
   DEFAULT_TINT_MODE,
   TINT_SLOT_USER_DATA,
   applyTintMaterial,
+  createPartMaterials,
+  createTintUniform,
   createTintUniforms,
   restoreMaterials,
   setTint,
+} from './tint-material';
+export type {
+  PartMaterials,
+  PartMaterialsOptions,
+  TintMaterialOptions,
 } from './tint-material';
 export {
   HAIR_SLOT,
@@ -59,5 +68,6 @@ export type {
   AssemblyRegistry,
   CharacterAssembly,
   CharacterAssemblyOptions,
+  HiddenSlot,
 } from './character-assembly';
 export {evaluatePose} from './evaluate-pose';

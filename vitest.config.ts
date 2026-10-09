@@ -56,6 +56,9 @@ const goldenCommands =
 const gpuProjects =
   playwright !== null
     ? (['webgpu', 'webgl2'] as const).map(backend => ({
+        // `fflate` is imported only by the export worker (M3 perf export case). Discovered
+        // mid-run, Vite re-optimizes it and reloads the browser, which fails the other files.
+        optimizeDeps: {include: ['fflate']},
         test: {
           name: `gpu-${backend}`,
           root: 'packages/engine',
@@ -89,7 +92,7 @@ export default defineConfig({
         test: {
           name: 'web',
           root: 'apps/web',
-          include: ['src/**/*.test.{ts,tsx}'],
+          include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.ts'],
         },
       },
       {test: {name: 'tools', root: 'tools'}},

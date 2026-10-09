@@ -261,6 +261,49 @@ describe('character assembly (M1-25)', () => {
     expect(assembly.parts.get('torso')?.attached).toBe(shirt);
   });
 
+  it('AC-CMP-004.2: while a newly selected part loads, the previous part stays attached and visible; it is swapped when the load completes', async () => {
+    const registry = createTestRegistry();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    let gated = false;
+    const assembly = createCharacterAssembly({
+      registry: {
+        ...registry,
+        async resolve(r) {
+          if (gated && r === ref('fixture-hair')) await gate;
+          return registry.resolve(r);
+        },
+      },
+    });
+    const spec = fixtureSpec();
+    expect(await assembly.setCharacter(spec)).toEqual({
+      ok: true,
+      value: undefined,
+    });
+    const shirt = assembly.parts.get('torso')?.attached;
+    gated = true;
+    const pending = assembly.setCharacter(
+      withSpec(spec, {
+        parts: {...spec.parts, hair: {ref: ref('fixture-hair')}},
+      }),
+    );
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(settled).toBe(false);
+    expect(assembly.spec).toBe(spec);
+    expect(assembly.parts.has('hair')).toBe(false);
+    expect(assembly.parts.get('torso')?.attached).toBe(shirt);
+    expect(shirt?.object.parent).not.toBeNull();
+    release();
+    expect((await pending).ok).toBe(true);
+    expect(assembly.parts.has('hair')).toBe(true);
+  });
+
   it('REQ-CMP-003: a part in a slot it does not declare fails with CMP_SLOT_MISMATCH', async () => {
     const {assembly, spec} = await built();
     const result = await assembly.setCharacter(
@@ -393,6 +436,56 @@ describe('character assembly (M1-25)', () => {
     // Step 1: the clip is sampled (the pose differs between two times).
     assembly.evaluate(0.25);
     expect(boneMatrices(assembly)).not.toEqual(afterHistory);
+  });
+
+  async function withHat(height: number) {
+    const {assembly, spec} = await built();
+    const parts = {...spec.parts, headwear: {ref: ref('fixture-hat')}};
+    await assembly.setCharacter(
+      withSpec(spec, {parts, anatomy: {...spec.anatomy, height}}),
+    );
+    assembly.evaluate(0);
+    const attached = (slot: string) =>
+      assembly.parts.get(slot)?.attached.object as Object3D;
+    return {
+      assembly,
+      sword: attached('prop-main-hand'),
+      hat: attached('headwear'),
+    };
+  }
+  const worldScaleOf = (o: Object3D) =>
+    new Vector3().setFromMatrixScale(o.matrixWorld);
+
+  it('AC-ANA-007.3: under height 1.2 the sword on hand_r keeps world scale 1 and its grip at the joint', async () => {
+    const {assembly, sword} = await withHat(1.2);
+    const hand = new Vector3().setFromMatrixPosition(
+      bone(assembly, 'hand_r').matrixWorld,
+    );
+    expect(worldScaleOf(sword).distanceTo(new Vector3(1, 1, 1))).toBeLessThan(
+      1e-4,
+    );
+    expect(
+      new Vector3().setFromMatrixPosition(sword.matrixWorld).distanceTo(hand),
+    ).toBeLessThan(1e-4);
+  });
+
+  it('AC-ANA-007.3: under height 1.2 a hat on the head socket has world scale 1.2', async () => {
+    const {hat} = await withHat(1.2);
+    expect(
+      worldScaleOf(hat).distanceTo(new Vector3(1.2, 1.2, 1.2)),
+    ).toBeLessThan(1e-4);
+  });
+
+  it('AC-ANA-007.4: with the character container scaled by 2 and default anatomy the sword and the hat both have world scale 2', async () => {
+    const {assembly, sword, hat} = await withHat(1);
+    assembly.root.scale.setScalar(2);
+    assembly.root.updateMatrixWorld(true);
+    assembly.evaluate(0);
+    for (const prop of [sword, hat]) {
+      expect(worldScaleOf(prop).distanceTo(new Vector3(2, 2, 2))).toBeLessThan(
+        1e-4,
+      );
+    }
   });
 
   it('AC-ANM-014.1: in-place resolves the in-place variant before it reaches the player', async () => {

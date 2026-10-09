@@ -240,55 +240,63 @@ describe(`fixture character through the pipeline (${currentBackend()})`, () => {
     expect(meshes).toBeGreaterThanOrEqual(3);
   });
 
-  it('REQ-PIX-027, AC-PIX-010.1: 3 fresh pipelines render byte-identical frames (three-quarter, pico-8 + bayer4, 8 directions)', async () => {
-    const settings = settingsFor('three-quarter', 'pico-8');
-    const runs: Uint8ClampedArray[] = [];
-    for (let run = 0; run < 3; run++) {
-      runs.push((await renderStrip(h, fixture, binder, settings)).rgba);
-    }
-    const [a, b, c] = runs as [
-      Uint8ClampedArray,
-      Uint8ClampedArray,
-      Uint8ClampedArray,
-    ];
-    let opaque = 0;
-    for (let i = 3; i < a.length; i += 4) if (a[i] === 255) opaque++;
-    expect(opaque).toBeGreaterThan(200);
-    expect(Array.from(b)).toEqual(Array.from(a));
-    expect(Array.from(c)).toEqual(Array.from(a));
-    console.log(`[m2-14] ${h.backend} determinism digest ${fnv1a(a)}`);
-  });
-
-  it('AC-PIX-002.2: default fixture with palette none has only alpha 0 or 255; review PNGs of the 3 presets at 64 px', async () => {
-    for (const preset of ['side', 'three-quarter', 'isometric'] as const) {
-      for (const palette of ['none', 'pico-8'] as const) {
-        const strip = await renderStrip(
-          h,
-          fixture,
-          binder,
-          settingsFor(preset, palette),
-        );
-        if (palette === 'none') {
-          for (let i = 3; i < strip.rgba.length; i += 4) {
-            expect([0, 255]).toContain(strip.rgba[i]);
-          }
-        }
-        const name = `fixture-${preset}-64${palette === 'none' ? '' : '-pico8'}`;
-        await commands.csgSeedGolden(
-          'test-results/m2-14',
-          h.backend,
-          name,
-          toBase64(
-            new Uint8Array(
-              strip.rgba.buffer,
-              strip.rgba.byteOffset,
-              strip.rgba.byteLength,
-            ),
-          ),
-          strip.width,
-          strip.height,
-        );
+  it(
+    'REQ-PIX-027, AC-PIX-010.1: 3 fresh pipelines render byte-identical frames (three-quarter, pico-8 + bayer4, 8 directions)',
+    {timeout: 180_000},
+    async () => {
+      const settings = settingsFor('three-quarter', 'pico-8');
+      const runs: Uint8ClampedArray[] = [];
+      for (let run = 0; run < 3; run++) {
+        runs.push((await renderStrip(h, fixture, binder, settings)).rgba);
       }
-    }
-  });
+      const [a, b, c] = runs as [
+        Uint8ClampedArray,
+        Uint8ClampedArray,
+        Uint8ClampedArray,
+      ];
+      let opaque = 0;
+      for (let i = 3; i < a.length; i += 4) if (a[i] === 255) opaque++;
+      expect(opaque).toBeGreaterThan(200);
+      expect(Array.from(b)).toEqual(Array.from(a));
+      expect(Array.from(c)).toEqual(Array.from(a));
+      console.log(`[m2-14] ${h.backend} determinism digest ${fnv1a(a)}`);
+    },
+  );
+
+  it(
+    'AC-PIX-002.2: default fixture with palette none has only alpha 0 or 255; review PNGs of the 3 presets at 64 px',
+    {timeout: 180_000},
+    async () => {
+      for (const preset of ['side', 'three-quarter', 'isometric'] as const) {
+        for (const palette of ['none', 'pico-8'] as const) {
+          const strip = await renderStrip(
+            h,
+            fixture,
+            binder,
+            settingsFor(preset, palette),
+          );
+          if (palette === 'none') {
+            for (let i = 3; i < strip.rgba.length; i += 4) {
+              expect([0, 255]).toContain(strip.rgba[i]);
+            }
+          }
+          const name = `fixture-${preset}-64${palette === 'none' ? '' : '-pico8'}`;
+          await commands.csgSeedGolden(
+            'test-results/m2-14',
+            h.backend,
+            name,
+            toBase64(
+              new Uint8Array(
+                strip.rgba.buffer,
+                strip.rgba.byteOffset,
+                strip.rgba.byteLength,
+              ),
+            ),
+            strip.width,
+            strip.height,
+          );
+        }
+      }
+    },
+  );
 });

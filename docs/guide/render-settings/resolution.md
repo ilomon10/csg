@@ -7,8 +7,7 @@ description: Set the width and height of each sprite frame from 32 to 128 pixels
 
 Resolution is the size of one frame, in pixels. You can set the width and height separately, from 32 to 128 pixels each. The default is 64 by 64.
 
-> [!NOTE]
-> **Planned.** The resolution fields are planned with the Render tab.
+Set the size in the **Render** tab of the Pro workspace.
 
 <!-- TODO(screenshot): Resolution fields in the Render tab with a 32 by 48 frame in Pixel view -->
 

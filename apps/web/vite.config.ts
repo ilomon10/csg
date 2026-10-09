@@ -170,9 +170,18 @@ function packsAndCsp(): Plugin {
   };
 }
 
+/** The app version shell diagnostics show, from this package's `package.json`. */
+const APP_VERSION = (
+  JSON.parse(readFileSync(resolve(HERE, 'package.json'), 'utf8')) as {
+    version: string;
+  }
+).version;
+
 export default defineConfig({
   plugins: [react(), packsAndCsp()],
-  build: {chunkSizeWarningLimit: 2500},
+  define: {'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION)},
+  // The manifest lets tools/web-build.test.ts walk static versus dynamic chunk edges.
+  build: {chunkSizeWarningLimit: 2500, manifest: true},
   // Module worker bundles must be ES modules: the host starts them with `{type: 'module'}`.
   worker: {format: 'es'},
   server: {

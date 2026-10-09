@@ -1,0 +1,14 @@
+{
+  "format": "sprite-easy-category",
+  "version": 1,
+  "id": "body",
+  "labelKey": "ux.easy.body",
+  "icon": "user",
+  "slots": [
+    "body"
+  ],
+  "tintChannels": [
+    "skin"
+  ],
+  "anatomyPresets": true
+}

@@ -27,9 +27,9 @@ export interface OptimizeOptions {
   maxTextureSize?: number;
 }
 
-/** Max texture side: 1024 for bodies, 512 for parts and props (REQ-AST-010). */
+/** Max texture side: 512 for bodies, 256 for every other part or prop (AC-AST-010.3). */
 export function textureLimit(kind: OptimizeKind): number {
-  return kind === 'body' ? 1024 : 512;
+  return kind === 'body' ? 512 : 256;
 }
 
 /** Optimizes `doc` in place; deterministic for equal input. */

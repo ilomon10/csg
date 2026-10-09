@@ -52,13 +52,16 @@ Fixed decisions are in `.tagconn/work/research.md` and `docs/adr/*`. This file i
 
 | Milestone | Scope | Specs |
 |-----------|-------|-------|
-| **M1: Asset spike + engine core** | Verify that the Quaternius assets share one skeleton (`tools/verify-rig.ts`, spec 011). Parts schema + manifest. Engine loads base body, rebinds skinned parts by bone name, attaches props to sockets. `CharacterSpec` save/load. Anatomy bone scales. Animation playback. Headless tests. | 001, 002, 004 (core), 011 |
-| **M2: Pixel pipeline** | Low-res render target, toon ramp + rim, outlines (depth/normal/part-ID), palette LUT + Bayer dither, alpha cutoff, texel snapping, camera presets (side, 3/4, isometric) and 1/2/4/8 directions. | 003 |
-| **M3: Composer UI + export** | React editor shell, part picker, tints, anatomy sliders, animation picker, live preview. Sprite-sheet export (PNG + JSON metadata + `CREDITS.txt`), deterministic output. | 001 (UI), 005, 009 |
+| **M1: Asset spike + engine core** (done, 2026-10-09) | Verify that the Quaternius assets share one skeleton (`tools/verify-rig.ts`, spec 011). Parts schema + manifest. Engine loads base body, rebinds skinned parts by bone name, attaches props to sockets. `CharacterSpec` save/load. Anatomy bone scales. Animation playback. Headless tests. | 001, 002, 004 (core), 011 |
+| **M2: Pixel pipeline** (done, 2026-10-09) | Low-res render target, toon ramp + rim, outlines (depth/normal/part-ID), palette LUT + Bayer dither, alpha cutoff, texel snapping, camera presets (side, 3/4, isometric) and 1/2/4/8 directions. | 003 |
+| **M3: Editor shell, composer + export** | ~~React editor shell, part picker, tints, anatomy sliders, animation picker, live preview. Sprite-sheet export (PNG + JSON metadata + `CREDITS.txt`), deterministic output.~~ Editor shell with home screen, new-avatar wizard, Easy and Pro workspaces, composer, realistic and chibi styles, export (PNG + JSON metadata + `CREDITS.txt`, deterministic). `CharacterSpec` v2 (style, species). *(Amended 2026-10-09 (STY), PM decision.)* | 001, 002, 005, 009 |
+| **M3.5: Styles & species** | Stickman and voxel (blocky) styles, body composition (weight, muscle), animal and monster species (heads, tails, ears, horns), wizard and editor gating. *(Added 2026-10-09 (STY), PM decision.)* | 013, 002 (composition hooks) |
 | **M4: Shader graph** | Graph model and compiler to TSL, material and post-process graphs, built-in stages as editable subgraphs, React Flow editor, blackboard, presets. | 006, 007 |
 | **M5: Custom upload** | GLB/glTF + VRM upload in a worker, validation and budgets, bone auto-map + manual mapping, retargeting, socket props, OPFS storage, license capture. FBX/OBJ beta. | 008 |
 | **Website track** (parallel, from M1) | Next.js landing page, Fumadocs user guide built from `docs/guide/**`, perf/a11y bars. | 010 |
 | **M6: 2D lighting maps** | Auxiliary maps for dynamic lighting in 2D engines, from the same single scene render. Depends on M3 export; independent of M4/M5. P1 scope: normal map (`_n`), albedo (unlit) colour sheet and their metadata. Later: mask, specular, UV lookup map, engine presets (P2); depth, emission, options (P3). *(Added 2026-10-09 (LIT).)* | 012 |
+
+*(Note 2026-10-09 (STY), PM decision.)* M1 and M2 are done: the M1 rig spike reported `mapped` (ADR-0008) and the M2 pixel pipeline is merged. "Done" means the milestone's scope shipped. P1 ACs that still lack tests are listed by `pnpm spec:trace`. M3 now also covers the home screen, the new-avatar wizard, the Easy and Pro workspaces (spec 009) and the realistic and chibi styles (specs 001, 002). The other styles, species and body composition move to the new M3.5 (spec 013). Later milestones keep their numbers.
 
 ## Feature map
 
@@ -72,10 +75,12 @@ Fixed decisions are in `.tagconn/work/research.md` and `docs/adr/*`. This file i
 | 006 | [006-shader-graph-editor.md](./006-shader-graph-editor.md) | EDT | Node editor UX, search, groups, previews, blackboard, Look panel and presets, error display, v1 node catalog |
 | 007 | [007-shader-graph-format.md](./007-shader-graph-format.md) | SGF | Versioned graph JSON, migrations, validation, type system, TSL compiler, reserved built-in param IDs |
 | 008 | [008-custom-model-upload.md](./008-custom-model-upload.md) | UPL | Upload formats, security, retargeting, bone maps, OPFS storage, licensing |
-| 009 | [009-editor-shell-ux.md](./009-editor-shell-ux.md) | UX | Layout, panels, canonical shortcut registry, command palette, single shared undo history, projects/autosave, multi-tab policy, notifications, theming, a11y, crash recovery |
+| 009 | [009-editor-shell-ux.md](./009-editor-shell-ux.md) | UX | Layout, panels, canonical shortcut registry, command palette, single shared undo history, projects/autosave, multi-tab policy, notifications, theming, a11y, crash recovery. Easy, home and wizard moved to 014 *(2026-10-09)* |
 | 010 | [010-website.md](./010-website.md) | WEB | Landing page, Fumadocs guide, docs IA, perf/a11y |
 | 011 | [011-asset-pipeline.md](./011-asset-pipeline.md) | AST | Source packs, `verify-rig` (M1 spike), `build-parts`, manifests, thumbnails, licensing, fixtures, contributions |
 | 012 | [012-lighting-maps.md](./012-lighting-maps.md) | LIT | Normal, albedo, mask, specular, UV lookup, depth and emission maps for 2D engine lighting; map metadata; Godot/Unity/Phaser lighting presets *(added 2026-10-09 (LIT))* |
+| 013 | [013-body-styles-and-species.md](./013-body-styles-and-species.md) | STY | Stickman and voxel (blocky) styles, body composition (weight, muscle), animal and monster species, tails, style gating, licensing limits *(added 2026-10-09 (STY))* |
+| 014 | [014-easy-home-wizard.md](./014-easy-home-wizard.md) | UX | Easy and Pro workspaces, Easy workspace, home screen and view routing, new-character wizard, their accessibility, M3 home presets; split from 009, same UX prefix and IDs *(added 2026-10-09)* |
 
 ## Area-prefix registry
 
@@ -92,10 +97,11 @@ Each prefix is owned by exactly one spec file. You can only add a new prefix by 
 | EDT | Shader graph editor (UI) | 006-shader-graph-editor.md | React Flow UI, blackboard |
 | SGF | Shader graph format + compiler | 007-shader-graph-format.md | JSON format, migrations, TSL compilation |
 | UPL | Custom model upload | 008-custom-model-upload.md | Import, validation, retarget, storage |
-| UX | Editor shell UX | 009-editor-shell-ux.md | Layout, shortcuts, undo, persistence |
+| UX | Editor shell UX | 009-editor-shell-ux.md, 014-easy-home-wizard.md | Layout, shortcuts, undo, persistence |
 | WEB | Website | 010-website.md | Landing, docs site |
 | AST | Asset pipeline | 011-asset-pipeline.md | Bundled asset ingestion, rig verification, manifests, licensing records (PM decision 2026-10-08) |
 | LIT | 2D lighting maps | 012-lighting-maps.md | Auxiliary export maps (normal, albedo, mask, specular, UV, depth, emission) and their metadata/presets (PM decision 2026-10-09; added 2026-10-09 (LIT)) |
+| STY | Body styles and species | 013-body-styles-and-species.md | Procedural stickman and voxel styles, body composition, animal and monster species, style/species gating (PM decision 2026-10-09; added 2026-10-09 (STY)) |
 
 ## Glossary
 
@@ -104,16 +110,19 @@ Each prefix is owned by exactly one spec file. You can only add a new prefix by 
 | **Slot** | A named place on a character that holds at most one part at a time (e.g. `hair`, `torso`, `legs`, `feet`, `prop-main-hand`). Defined in the slot registry (spec 001 REQ-CMP-001). |
 | **Part** | One selectable asset (skinned mesh or static prop) that fills a slot. It has an ID, a slot, tint slots, `hides` flags and license info. |
 | **Socket** | A skeleton joint that static props attach to, with an offset transform. Parts name it by its socket ID (`hand_r`, `hand_l`, `head`, `spine_03`, `pelvis`), not by the joint name (spec 002 REQ-ANA-019). |
-| **Socket ID** | Semantic, rig-independent name of a socket (`hand_r`, `hand_l`, `head`, `spine_03`, `pelvis`) used in part manifests and the slot registry. `RigDefinition.socketBones` maps each socket ID to an exact source joint name, e.g. socket `head` → joint `Head` in the Quaternius rig (spec 002 REQ-ANA-019/020). *(Added 2026-10-09 (M1-33).)* |
+| **Socket ID** | Semantic, rig-independent name of a socket (`hand_r`, `hand_l`, `head`, `spine_03`, `pelvis`) used in part manifests and the slot registry. `RigDefinition.socketBones` maps each socket ID to an exact source joint name, e.g. socket `head` → joint `Head` in the Quaternius rig (spec 002 REQ-ANA-019/020). *(Added 2026-10-09 (M1-33).)* M3.5 adds socket `tail` → joint `pelvis` (spec 013 REQ-STY-019). *(Added 2026-10-09 (STY).)* |
 | **Skeleton group** | A set of bundled files (bodies, parts, clips) that share one rig (same joint names and hierarchy) **and** the same rest pose within the verify-rig tolerances. One rig has one or more groups, stored in `RigDefinition.skeletonGroups` with their rest poses. The character skeleton uses the body's group (spec 001 REQ-CMP-037); meshes from other groups keep their own inverse bind matrices, and clips from other groups are rest-pose retargeted (spec 004 REQ-ANM-023). The group does not affect part compatibility (spec 001 REQ-CMP-008). Classified by spec 011 REQ-AST-026. *(Added 2026-10-09 (M1-33).)* |
+| **Style** | The body style of a character, `CharacterSpec.style`: `realistic` (authored proportions), `chibi` (big head, short limbs; an anatomy preset), `stickman` (procedural lines) or `voxel` (procedural boxes, labelled "Voxel" and described "Blocky, built from cubes" in the UI). Specs 001, 002, 013. *(Added 2026-10-09 (STY).)* |
+| **Species** | `CharacterSpec.species`: `human`, `animal` (anthropomorphic, human posture, animal head, tail, ears) or `monster` (humanoid body with horns, spikes, tail, monster head). Spec 013. *(Added 2026-10-09 (STY).)* |
+| **Body composition** | `CharacterSpec.composition`: `weight` and `muscle` (−1..1), applied as a CPU-baked bind-space normal inflation of body and outfit meshes. Spec 013 (M3.5). *(Added 2026-10-09 (STY).)* |
 | **Hides flags** | A part's list of body regions hidden while it is equipped, to avoid clipping. |
 | **Tint slot** | A named recolorable channel (skin, hair, eyes, primary, secondary, metal, leather) mapped to material regions of parts. |
 | **Parts manifest** | Data file (validated by `packages/parts-schema`) that lists slots, parts, sockets and tint slots. |
 | **Shared skeleton** | The single 65-joint UE5-style rig (`quaternius-ue5-65`) that bundled bodies, outfits and clips share. M1 result (amended 2026-10-09 (M1-33)): joint names, hierarchy and length axis are shared; bind poses differ and form skeleton groups (outcome `mapped`, spec 011 REQ-AST-007, ADR-0008). |
 | **Rebind** | Binding a skinned part to the character's shared skeleton by matching bone names. |
-| **CharacterSpec** | Versioned, serializable JSON that is the source of truth for a character: name, seed, body, parts per slot, tints, anatomy and morph values, face decal. It does **not** contain clip selection; selected clips live in the render settings (`RenderSettings.animations`, spec 004). Used for save, load, share and randomize. |
+| **CharacterSpec** | Versioned, serializable JSON that is the source of truth for a character: name, seed, body, parts per slot, tints, anatomy and morph values, face decal, and from version 2 (2026-10-09 (STY)) style, species and optional body composition. It does **not** contain clip selection; selected clips live in the render settings (`RenderSettings.animations`, spec 004). Used for save, load, share and randomize. |
 | **Anatomy** | User-adjustable proportions (height, head/chibi, torso, shoulders, limbs, hands, feet), applied as bone scales with child compensation and/or morph targets. |
-| **Child compensation** | Applying the inverse scale on child bones so that scaling a bone does not cascade down the hierarchy. |
+| **Child compensation** | ~~Applying the inverse scale on child bones so that scaling a bone does not cascade down the hierarchy.~~ Scaling a segment so the change does not cascade down the hierarchy: children keep their world scale and orientation and only their joint positions follow. Amended 2026-10-09 (FX-CHIBI): done through the segment's skin (inverse bind) matrices, not inverse scales on child bones; see spec 002 REQ-ANA-003. |
 | **Render settings** | Output resolution (32–128 px), camera preset, direction count, selected clips (`animations`, spec 004), lighting, toon bands, outline, palette, dither and pipeline graphs (spec 003). Serialized with the project and recorded in the export manifest. |
 | **Camera preset** | Orthographic camera setup: `side` (elevation 0°), `three-quarter` (35°), `isometric` (30°, 2:1 pixels) or `custom` (0–90°). Spec 003 REQ-PIX-003/004. |
 | **Direction** | One facing of the character produced by model yaw. A sheet has 1, 2, 4 or 8 directions, labelled and ordered by `DIRECTION_ORDER` = `e, ne, n, nw, w, sw, s, se` (spec 003). |
@@ -301,6 +310,7 @@ See constitution P-03 (privacy), P-04 (determinism), P-05 (stability), P-06 (acc
 - MDN, Trusted Types API (`createPolicy`, default policy, `TrustedScriptURL` for `Worker`): https://developer.mozilla.org/en-US/docs/Web/API/Trusted_Types_API (accessed 2026-10-09)
 - M2-19 performance measurements and PM decisions, 2026-10-09 (origin of REQ-GEN-014 and AC-GEN-007.3)
 - Security review M2-23s and PM decisions A+B, 2026-10-09 (origin of the REQ-GEN-010/014 amendments and REQ-GEN-015/016)
+- PM decision 2026-10-09 (STY): styles and species, M3 scope, M3.5 milestone, STY prefix, M1/M2 done
 - MDN, CSP `trusted-types` directive (policy-name allowlist, `'allow-duplicates'`): https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/trusted-types (accessed 2026-10-09)
 - MDN, CSP for workers (workers get their own policy from the worker script's response headers): https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP (accessed 2026-10-09)
 - `require-trusted-types-for` reference: https://next.centralcsp.com/en/docs/web-security/policies/content-security-policy/directives/require-trusted-types-for (accessed 2026-10-08)
