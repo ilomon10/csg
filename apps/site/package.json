@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",
-    "fumadocs-core": "16.16.2",
+    "fumadocs-core": "16.17.1",
     "fumadocs-mdx": "15.4.6",
     "fumadocs-ui": "16.16.2",
     "next": "16.4.0",
